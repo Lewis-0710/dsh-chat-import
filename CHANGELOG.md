@@ -13,6 +13,8 @@ from the matching section below.
 
 ## [Unreleased]
 
+## [0.11.5] - 2026-09-15
+
 ### Fixed
 
 - **导入 DSH 自身会话按格式代次识别工件名（#44）** — 宿主 `sessionFormatLogFilename()` 的代次口径是：v0 写 `session.jsonl`，vN（N≥1）写 `session.vN.jsonl`，压缩再加 `.zstd`。插件四处判定此前只认 v0（`/session\.jsonl(?:\.zstd)?$/`），当前代次的会话日志整批扫不出来——dsh 自身作为导入源因此基本不可用，只是恰好有少数 v0 旧会话让它看起来能用（贡献者本机 52 个工件里 v0 仅 4 个）。现在代次解析收敛为 `lib/dsh.mjs` 的 `dshSessionLogVersion()` 供四处共用（目录扫描过滤 / 路径形态识别 / 单文件格式判定 / `isDshSessionFile`），口径与宿主 `@deepseek-ai/dsh-session-format` 的 `CANONICAL_LOG_FILENAME` 一致：`session.v0.jsonl` 这类非规范写法仍不认。
