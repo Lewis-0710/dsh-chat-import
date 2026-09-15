@@ -13,6 +13,8 @@ from the matching section below.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-15
+
 ### Added
 
 - **新源：Cline 会话适配（第 22 种格式，REQ-65）** — 读 `~/.cline/data/sessions/<sessionId>/<sessionId>.messages.json`（路径优先级与上游一致：`$CLINE_SESSION_DATA_DIR` → `$CLINE_DATA_DIR` → `$CLINE_DIR` → `~/.cline`），**元数据 DB 优先**：`<dataDir>/db/sessions.db` 的 `sessions` 表给出权威会话清单与 `cwd`/`started_at`/`updated_at`，标题取 `metadata_json.title`、为空才读同目录 manifest（上游 `listSessions` 同样以 manifest 的 `metadata.title` 覆盖 DB 行——两者不一致时以 manifest 为准）；DB 不可用（老库缺列、锁定、非 Cline 库、只给了目录）自动回退扫目录并读 manifest。转写是 v1 契约的**单个 JSON 对象**（`version` 声明版本、增量字段不升版）：消息是 Anthropic 原生块形状，**没有 tool/system 角色**——工具结果是挂在 user 消息上的 `tool_result` 块，故 user 消息要区分「人类提问」与「结果载体」（只有不带 tool_result 块且文本非空的才开新轮）；`tool_result.content` 允许字符串，字符串形态若只取数组分支会把整段工具输出吞成空结果（已按文本块归一）。一轮里可能有多条 assistant 消息（上游 retry 语义：前一条保留自身 modelInfo/metrics、只有末条带该轮 metrics）→ 一条 assistant = 一步、不做失败重发折叠；但同一 `tool_use.id` 重复出现会**丢弃后出现的重复块并计数**（DSH 折叠器对同一 callId 只允许一次 start，第二处会硬异常并吞掉其后整段轨迹）。子代理/团队任务会话（`agent != 'lead'`，消息写在主会话目录内而非独立目录）默认不单独成会话，与 reasonix 子代理、kilocode 子会话语义一致。`redacted_thinking` 密文与 image/file/media 附件块不读。
