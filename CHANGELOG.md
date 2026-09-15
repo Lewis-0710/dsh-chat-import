@@ -15,6 +15,7 @@ from the matching section below.
 
 ### Fixed
 
+- **导入 DSH 自身会话：项目目录名的 `~XXXX` 转义按宿主口径还原（#46）** — DSH 的工作区编码目录名（`$DSH_HOME/sessions/--<encoded>--/…`）把安全字符之外的每个 UTF-16 code unit 写成 `~XXXX`（宿主 `projectKey()` 的转义口径），插件此前用 `decodeURIComponent` 解，于是 `~0020` 被解成 `U+0000` + `20`——含空格的工作区名在面板里显示成控制字符。现在逐 4 位十六进制还原（大小写兼容、`~` 字面量无歧义、畸形串原样保留），与宿主 `projectKey()` / `encodeSegment()` 一致。
 - **导入撞宿主写句柄占用时不做幽灵 id 重试，长驻宿主上同源导入永久失败** — 宿主为「会话 id 已被占用」并列定义了两个错误类型（`@deepseek-ai/dsh-session-persistence`）：`SessionAlreadyExistsError`（`session "<id>" already exists`）与 `SessionAlreadyOwnedError`（`session "<id>" is already owned by an active write handle`，写句柄唯一性由**进程内** tracker 强制）。插件此前只按文案匹配前者的措辞，第二种漏判 → 错误直接上抛；而同源导入的默认 id 恒为 `import-<源 id>`，于是**桌面端这类长驻宿主上同源重复导入一直失败到重启宿主为止**（换个进程就正常，因为占用是进程内状态）。现在判定优先按 `err.name`（两个类名都认），文案（`already exists` / `duplicate session` / `already owned by an active write handle`）只作兜底——宿主将来再新增同类措辞不必再追文案；命中即按既有语义另铸后缀新 id 重试（`import-<id>-<n>`），与 #22 / 0.11.1 的「撞会话已存在」处理一致。
 
 ## [0.11.5] - 2026-09-15
