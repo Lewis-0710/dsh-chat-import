@@ -487,13 +487,13 @@ test('convertCodexJsonl: function_call + function_call_output 按 call_id 跨行
   assertMessageOrderLegal(out.events)
 })
 
-test('convertCodexJsonl: 注入块被过滤、reasoning 加密被跳过、custom_tool_call 用 input', () => {
+test('convertCodexJsonl: 注入块被过滤、无 summary 的 reasoning 不产生块、custom_tool_call 用 input', () => {
   const out = convertCodexJsonl(load('codex-custom-tool.jsonl'))
   assert.equal(out.turns.length, 1)
   // 注入的 <environment_context> 不进入 prompt
   const user = out.events.find((e) => e.type === 'user/message' && e.data.source.kind === 'user').data
   assert.equal(user.content[0].text, '帮我修这个 bug')
-  // 加密 reasoning 不产生 reasoning 块
+  // reasoning 的 summary 为空 → 不产生 reasoning 块，也不塞空文本（密文 encrypted_content 不读）
   assert.equal(out.events.filter((e) => e.type === 'assistant/message').length, 2)
   const asst = out.events.filter((e) => e.type === 'assistant/message').map((e) => e.data.message)
   for (const m of asst) {
@@ -771,6 +771,16 @@ test('codex：没有 turn_aborted 时回合照常标记完成', () => {
   const out = convertCodexJsonl(load('codex-simple.jsonl'))
   const ends = out.events.filter((e) => e.type === 'turn/end').map((e) => e.data.reason)
   assert.deepEqual(ends, [{ kind: 'completed' }])
+})
+
+// 生产导入恒走预算裁剪（resolveImportBudget 恒返回数字），因此「中断标记」必须在裁剪后
+// 仍然存在：trimTurns 的 L1 克隆只取 { prompt, steps } 时会把 aborted 丢掉，被裁的会话
+// 会静默变回「正常完成」——这里用与生产同口径的 budget 参数锁定该不变量。
+test('codex：走预算裁剪后仍标 aborted（裁剪不得丢掉回合级标记）', () => {
+  const raw = load('codex-turn-aborted.jsonl')
+  const budgeted = convertCodexJsonl(raw, { budget: 550000 })
+  const ends = budgeted.events.filter((e) => e.type === 'turn/end').map((e) => e.data.reason)
+  assert.deepEqual(ends, [{ kind: 'aborted', reason: { kind: 'legacy' } }, { kind: 'completed' }])
 })
 
 // ---- ChatGPT 网页导出 conversations.json ----

@@ -13,6 +13,11 @@ from the matching section below.
 
 ## [Unreleased]
 
+### Added
+
+- **导入 Codex 会话保留 reasoning 的可读部分（#48）** — Codex rollout 的 `reasoning` 记录里 `encrypted_content` 是不透明密文（实测占该记录字节 97.5%，既不读也不搬），但 `summary` 是可读块数组（本机 1243 条 reasoning 全部带 summary）。此前整类跳过、推理内容全丢；现在把 summary 文本作为 reasoning 块导入（与 pi/claude/gemini/hermes/kimi 同形的 `{ type: 'reasoning', text }`），无 summary 时不产生空块、也不自开步骤。能力矩阵 `SOURCE_CAPABILITIES.codex.reasoning` 由 false 改为 true，`docs/INTERCHANGE.md` 的能力表与 `reasoning-encrypted` 降级说明同步改为「summary 可读、密文不可读」。
+- **导入 Codex 会话时如实标记被中断的回合（#52）** — `event_msg/turn_aborted`（本机 16 条实测 `reason` 恒为 `interrupted`，不区分用户 / hook / 销毁）此前被当作正常完成。现在该回合的 `turn/end` 记为 `{ kind: 'aborted', reason: { kind: 'legacy' } }`——`legacy` 正是宿主为「导入且原始粗粒度记录未携带原因」预留的原因类型；后续回合不受影响。预算裁剪不丢该标记（`trimTurns` 的 L1 克隆此前只取 `{ prompt, steps }`，而生产导入恒走裁剪，会把中断静默说回「正常完成」）。
+
 ### Fixed
 
 - **导入 DSH 自身会话：项目目录名的 `~XXXX` 转义按宿主口径还原（#46）** — DSH 的工作区编码目录名（`$DSH_HOME/sessions/--<encoded>--/…`）把安全字符之外的每个 UTF-16 code unit 写成 `~XXXX`（宿主 `projectKey()` 的转义口径），插件此前用 `decodeURIComponent` 解，于是 `~0020` 被解成 `U+0000` + `20`——含空格的工作区名在面板里显示成控制字符。现在逐 4 位十六进制还原（大小写兼容、`~` 字面量无歧义、畸形串原样保留），与宿主 `projectKey()` / `encodeSegment()` 一致。
