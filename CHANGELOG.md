@@ -13,6 +13,12 @@ from the matching section below.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-09-15
+
+### Fixed
+
+- **文档内指向 `INTERCHANGE.md` 的相对链接失效（#56）** — `docs/USAGE.md` 与 `docs/USAGE.zh-CN.md` 里的链接目标写成 `docs/INTERCHANGE.md`，而这两个文件本身就在 `docs/` 下，解析成 `docs/docs/INTERCHANGE.md`（GitHub 上 404、本地也打不开）；显示文字保留（它标的是协议文档在仓库里的位置），只把目标改成同目录的 `INTERCHANGE.md`。同时新增文档相对链接护栏 `npm run check:links`（扫描受版本管理的 `*.md` 的相对链接，含图片，跳过外链/锚点/围栏代码块）并接入 CI——这类失效此前单测、lint、双语标题同步护栏都看不见。
+
 ## [0.12.0] - 2026-09-15
 
 ### Added
