@@ -13,6 +13,10 @@ from the matching section below.
 
 ## [Unreleased]
 
+### Added
+
+- **新源：Crush（Charm）会话适配（第 25 种格式，REQ-70）** — 读 `crush.db`（SQLite，WAL + `secure_delete`）。这个源的**库不在用户 home**：默认数据目录是 `<项目>/.crush`（配置键 `options.data_directory`，解析规则是「从 cwd 向上找最近的 `.crush`、边界为 git 工作树根，找不到才 `<cwd>/.crush`」），用户级目录（`$CRUSH_GLOBAL_DATA` > `$XDG_DATA_HOME/crush` > Win `%LOCALAPPDATA%\crush` > `~/.local/share/crush`）**只放 JSON 状态**。因此发现走三条线索：① 用户级 `projects.json`（`{"projects":[{path,data_dir,last_accessed}]}`，给出绝对库路径）；② 宿主工作区列表 → 逐个探测 `<工作区>/.crush/crush.db`（**仅在目标是用户级数据目录时探测**，用户显式指定某个项目目录时不会顺带扫进别的项目）；③ 显式 path（项目目录 / 数据目录 / `crush.db` 本身）。DB 里**没有 cwd 列**，会话项目取注册表的项目路径、回退「库目录以 `.crush` 结尾 → 父目录」。表读 `sessions` + `messages`（`files` 是每次 write/edit 的文件快照、`read_files` 是「已读」记账，都不读），签名判定用 `sessions(parent_session_id+summary_message_id+prompt_tokens)` × `messages(parts+is_summary_message+finished_at)` × `read_files` 三表组合。`parts` 是 **TEXT（JSON 字符串）**的 wrapper 数组 `[{"type":…,"data":{…}}]`（8 种判别式）：`tool_call.data.input` 是**原始 JSON 字符串**（不是对象）→ 原样作为参数；结果按 `tool_call.id` ↔ `tool_result.tool_call_id` 配对（通常在单独一条 `role='tool'` 消息里，但 part 层宽松，两处都收）；`finish` 是每个消息都有的结构块。时间戳全部 **Unix 秒**。子会话（`parent_session_id` 非空）与**标题生成会话**（id 前缀 `title-`、title "Generate a title"，不是真实对话）都不单独成会话；自动摘要消息（`is_summary_message=1`）挂成 reasoning 块还原压缩边界。`image_url`/`shell_command`/`binary` 不进对话但逐个计数（`skippedBlocks`）——与上游的一处**有意偏差**：未知判别式上游会让整条消息解析失败（丢消息），我们只跳过那个块并计数。会话标题钉成「Crush · 话题」。
+
 ## [0.16.0] - 2026-09-15
 
 ### Added

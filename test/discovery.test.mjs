@@ -899,6 +899,54 @@ test('zed：threads.db 经 host.readSessions 发现（标题/项目/时间）；
   assert.ok(/[\\/]threads$/.test(roots.zed))
 })
 
+test('crush：经 projects.json 与宿主工作区探测项目内 crush.db（DB 无 cwd → 项目取注册表路径）', async () => {
+  const projA = join(HOME, 'proj-a')
+  const projB = join(HOME, 'proj-b')
+  const dbA = join(projA, '.crush', 'crush.db')
+  const dbB = join(projB, '.crush', 'crush.db')
+  const userDir = join(HOME, '.local', 'share', 'crush')
+  const registry = join(userDir, 'projects.json')
+  const files = new Map([
+    [userDir, { type: 'dir' }],
+    [projA, { type: 'dir' }],
+    [projB, { type: 'dir' }],
+    [registry, {
+      type: 'file',
+      text: j({ projects: [{ path: projA, data_dir: join(projA, '.crush'), last_accessed: '2026-09-15T13:00:00Z' }] }),
+    }],
+    [dbA, { type: 'file', mtimeMs: 1786000010000, text: 'SQLite format 3' }],
+    [dbB, { type: 'file', mtimeMs: 1786000011000, text: 'SQLite format 3' }],
+  ])
+  const host = mockHost(files)
+  host.listWorkspaces = async () => [projB] // 宿主已知工作区 → 项目内探测
+  host.dbSessions = (kind, dbPath) => {
+    assert.equal(kind, 'crush')
+    if (dbPath === dbA) {
+      return [{ id: 'sess-a', title: 'Add retry to fetch', directory: null, createdAt: 1768000001000, lastActiveAt: 1768000123000, messageCount: 4 }]
+    }
+    return [{ id: 'sess-b', title: '别的项目', directory: null, createdAt: null, lastActiveAt: null, messageCount: null }]
+  }
+
+  const { sessions, total } = await discoverSessions({ path: userDir, format: 'crush', host, imports: {} })
+  assert.equal(total, 2)
+  const a = sessions.find((s) => s.sessionId === 'sess-a')
+  assert.equal(a.format, 'crush')
+  assert.equal(a.project, 'proj-a') // 注册表给出的项目路径（DB 里没有 cwd）
+  assert.equal(a.cwd, projA)
+  assert.equal(a.createdAt, 1768000001000)
+  assert.equal(a.messageCount, 4)
+  assert.equal(a.sourcePath, dbA)
+  const b = sessions.find((s) => s.sessionId === 'sess-b')
+  assert.equal(b.project, 'proj-b') // 宿主工作区探测到的项目
+  assert.equal(b.cwd, projB)
+
+  // 显式指向项目目录也能发现（<项目>/.crush/crush.db）
+  const direct = await discoverSessions({ path: projA, format: 'crush', host, imports: {} })
+  assert.equal(direct.total, 1)
+  assert.equal(direct.sessions[0].sessionId, 'sess-a')
+  assert.equal(direct.sessions[0].cwd, projA)
+})
+
 test('cline 默认根：$CLINE_SESSION_DATA_DIR / $CLINE_DATA_DIR / $CLINE_DIR 优先级', () => {
   const roots = defaultRoots({ home: HOME })
   const expected = process.env.CLINE_SESSION_DATA_DIR
@@ -1212,9 +1260,9 @@ test('cursor：slug 解码为真实工作区名分组，<timestamp> 解析时间
   assert.equal(numeric.cwd, null)
 })
 
-test('FORMATS 与工具 schema enum 一致（24 种）', () => {
-  assert.equal(FORMATS.length, 24)
-  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'cursor', 'dsh', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode', 'zed'])
+test('FORMATS 与工具 schema enum 一致（25 种）', () => {
+  assert.equal(FORMATS.length, 25)
+  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'crush', 'cursor', 'dsh', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode', 'zed'])
 })
 
 // ── git 状态（REQ-58）──────────────────────────────────────────────────────

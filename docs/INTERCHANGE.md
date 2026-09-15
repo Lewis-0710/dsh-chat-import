@@ -75,6 +75,7 @@
 | cline | ✅ | ✅ | ✅ | — | — | ✅（compaction 侧车不改写主转写） |
 | goose | ✅ | ✅ | ✅ | — | — | — |
 | zed | ✅ | ✅ | ✅ | — | — | ✅（Compaction 摘要挂 reasoning 块） |
+| crush | ✅ | ✅ | ✅ | — | — | ✅（自动摘要消息挂 reasoning 块） |
 | dsh | ✅ | ✅ | ✅ | — | ✅ | — |
 
 ## 3. 降级规则表（REQ-21）

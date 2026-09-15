@@ -144,6 +144,14 @@ export {
 } from './lib/convert/zed.mjs'
 
 export {
+  convertCrushJson,
+  crushUserDataDir,
+  crushRegistryPath,
+  crushProjectDbPath,
+  parseCrushProjects,
+} from './lib/convert/crush.mjs'
+
+export {
   convertDshJsonl,
 } from './lib/convert/dsh.mjs'
 
