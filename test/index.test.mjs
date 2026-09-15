@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { tmpdir, homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { isAbsolute, dirname, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { apply, readOpencodeDb, exportClaudeSession } from '../index.mjs'
@@ -16,7 +16,7 @@ import { clearScanCache } from '../lib/discovery.mjs'
 import { clearWorkspacePathCache, slugifyClaudeCwd } from '../lib/cwd-map.mjs'
 import { restampSession, sanitizeJsonValue, prepareHostMeta } from '../lib/import-core.mjs'
 import { SESSION_FORMAT_VERSION } from '../convert.mjs'
-import { IS_WINDOWS, hostAbs, hostAbsText } from './_support/host-path.mjs'
+import { hostAbs, hostAbsText } from './_support/host-path.mjs'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 // 夹具文本里的盘符路径按宿主平台改写：这些转录/元数据夹具带的是 Windows cwd，而宿主落盘
@@ -1113,10 +1113,15 @@ test('import_cursor agent-transcripts：slug 解码 meta.cwd 为真实项目路�
   assert.equal(value.alreadyImported, false)
   const saved = persistence.sessions.get('import-composer-abc')
   assert.ok(saved)
-  assert.equal(saved.meta.cwd, IS_WINDOWS ? realCwd : undefined)
+  // 分层断言（避免写死平台分支）：解码层与平台无关——cursor 的 slug 自带盘符，解码
+  // 走磁盘探测，直接断言解出的真实路径；落盘层是否保留 cwd 由宿主 isAbsolute 决定，
+  // 期望值用同一函数计算（AGENTS.md 跨平台路径纪律）。
+  const { resolveCursorSlugPath } = await import('../lib/cwd-map.mjs')
+  assert.equal(await resolveCursorSlugPath(ctx, slug), realCwd)
+  assert.equal(saved.meta.cwd, isAbsolute(realCwd) ? realCwd : undefined)
   // 无 cwd 时归组回退到源目录（lib/import-core.mjs 的 attachToWorkspace 回退），故仍有一条
   assert.equal(attached.length, 1)
-  if (IS_WINDOWS) assert.equal(attached[0].ws, realCwd)
+  if (isAbsolute(realCwd)) assert.equal(attached[0].ws, realCwd)
 })
 
 // ---- import_gemini 集成 ----
@@ -3357,7 +3362,11 @@ test('REQ-39 Claude 权威映射：转录无 cwd → ~/.claude.json projects 命
   assert.equal(value.status, 'imported')
   // meta.cwd = 权威映射结果（真实路径），非 slug 目录名
   const saved = persistence.sessions.get('import-sess-nocwd-001')
-  assert.equal(saved.meta.cwd, IS_WINDOWS ? 'D:\\work\\my-proj' : undefined)
+  // 分层断言：权威映射层（~/.claude.json projects）与平台无关——直接断言映射结果；
+  // 落盘层按宿主 isAbsolute 决定保留与否，期望值用同一函数计算。
+  const { resolveClaudeCwd } = await import('../lib/cwd-map.mjs')
+  assert.equal(await resolveClaudeCwd(ctx, 'D--work-my-proj'), 'D:\\work\\my-proj')
+  assert.equal(saved.meta.cwd, isAbsolute('D:\\work\\my-proj') ? 'D:\\work\\my-proj' : undefined)
 })
 
 // ---- REQ-22 Reasonix V2 WAL 合并 + Claude compacted 摘要导入（集成） ----
