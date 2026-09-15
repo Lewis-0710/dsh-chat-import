@@ -13,7 +13,7 @@
 
 | 能力 | dsh-chat-import | 生态内其他 |
 | --- | --- | --- |
-| 来源数 | 17 源 + 本地 JSONL（13 工具） | 单源 ~ 4 源 |
+| 来源数 | 20 源 + 本地 JSONL（13 工具） | 单源 ~ 4 源 |
 | 全保真（tool/result + thinking + sourceEventSeqs） | ✅ | 部分 |
 | 增量续写（append 新轮次） | ✅ | 部分（复制式） |
 | 上下文预算保护 | ✅ | — |
@@ -98,5 +98,6 @@
 | REQ-61 | P2 | Claude 资产持久化导入（memory / CLAUDE.md / skills → DSH 资产，扩展 import_agents） | ✅ |
 | REQ-62 | P2 | 便携 bundle 跨机器移动用例（对标 codex-claude-transfer） | ✅ 6ec5818 |
 | REQ-63 | P3 | 仓库社区健康（CONTRIBUTING + issue/PR 模板） | ✅ |
+| REQ-64 | P1 | 新源：Continue 适配（`~/.continue/sessions/<id>.json` + `sessions.json` 索引；VS Code / JetBrains / CLI 共用） | ✅ |
 
-**全部 63 项 ✅**（v0.5.0，2026-08-16 收口）——无未完成需求。
+**全部 64 项 ✅**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0）——无未完成需求。

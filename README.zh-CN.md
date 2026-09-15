@@ -25,7 +25,7 @@
 
 `DSH Chat Import` 从其他Agents导入含完整上下文的聊天历史，成为无缝继续的 DeepSeek Harness 会话。
 
-现已覆盖21种Agents的导入：Claude Code、Codex、ChatGPT、Cursor、Gemini、Antigravity CLI、Reasonix、opencode、MiMo Code、ZCode、Grok Build、OpenClaw、Pi Coding Agent、Hermes、Kimi CLI / Kimi Code、Kilo Code、Qoder CLI、WorkBuddy、千问办公（Qwen Work CN）与 DSH 会话日志；
+现已覆盖22种Agents的导入：Claude Code、Codex、ChatGPT、Cursor、Gemini、Antigravity CLI、Reasonix、opencode、MiMo Code、ZCode、Grok Build、OpenClaw、Pi Coding Agent、Hermes、Kimi CLI / Kimi Code、Kilo Code、Qoder CLI、WorkBuddy、千问办公（Qwen Work CN）、Continue 与 DSH 会话日志；
 
 下述工具的反向导入：Claude Code、Codex、Kimi Code。
 
@@ -37,7 +37,7 @@
 | [![Claude Code](./assets/agents/claude.svg)<br>**Claude Code**](https://github.com/anthropics/claude-code) | [![Codex](./assets/agents/codex.svg)<br>**Codex**](https://github.com/openai/codex) | [![ChatGPT](./assets/agents/chatgpt.svg)<br>**ChatGPT**](https://chatgpt.com) | [![Cursor](./assets/agents/cursor.svg)<br>**Cursor**](https://cursor.com) | [![Gemini](./assets/agents/gemini.svg)<br>**Gemini CLI**](https://github.com/google-gemini/gemini-cli) | [![Antigravity](./assets/agents/antigravity.svg)<br>**Antigravity CLI**](https://antigravity.google) |
 | [![Reasonix](./assets/agents/reasonix.svg)<br>**Reasonix**](https://github.com/esengine/DeepSeek-Reasonix) | [![OpenCode](./assets/agents/opencode.svg)<br>**OpenCode**](https://github.com/anomalyco/opencode) | [![MiMo Code](./assets/agents/mimocode.svg)<br>**MiMo Code**](https://github.com/XiaomiMiMo/MiMo-Code) | [![Kilo Code](./assets/agents/kilocode.svg)<br>**Kilo Code**](https://github.com/Kilo-Org/kilocode) | [![ZCode](./assets/agents/zcode.svg)<br>**ZCode**](https://z.ai) |  |
 | [![Grok Build](./assets/agents/grokbuild.svg)<br>**Grok Build**](https://github.com/xai-org/grok-build) | [![OpenClaw](./assets/agents/openclaw.svg)<br>**OpenClaw**](https://github.com/openclaw/openclaw) | [![Pi Coding Agent](./assets/agents/pi.svg)<br>**Pi Coding Agent**](https://github.com/badlogic/pi-mono) | [![Hermes](./assets/agents/hermes.svg)<br>**Hermes**](https://github.com/NousResearch/hermes-agent) | [![Kimi CLI](./assets/agents/kimi.svg)<br>**Kimi CLI**](https://github.com/MoonshotAI/kimi-cli) |  |
-| [![Qoder CLI](./assets/agents/qoder.svg)<br>**Qoder CLI**](https://github.com/qoderAI/qoder-cli) | [![WorkBuddy](./assets/agents/workbuddy.svg)<br>**WorkBuddy**](https://github.com/gabotechs/workbuddy) | [![千问办公](./assets/agents/qwen.svg)<br>**千问办公**](https://github.com/QwenLM/qwen-code) | [![DSH](./assets/agents/dsh.svg)<br>**DSH**](https://github.com/deepseek-ai/deepseek-harness) |  |  |
+| [![Qoder CLI](./assets/agents/qoder.svg)<br>**Qoder CLI**](https://github.com/qoderAI/qoder-cli) | [![WorkBuddy](./assets/agents/workbuddy.svg)<br>**WorkBuddy**](https://github.com/gabotechs/workbuddy) | [![千问办公](./assets/agents/qwen.svg)<br>**千问办公**](https://github.com/QwenLM/qwen-code) | [![Continue](./assets/agents/continue.svg)<br>**Continue**](https://github.com/continuedev/continue) | [![DSH](./assets/agents/dsh.svg)<br>**DSH**](https://github.com/deepseek-ai/deepseek-harness) |  |
 
 
 ## 安装
@@ -79,7 +79,7 @@ Reasonix 目录导入只会折叠同时满足“严格语义前缀”和明确 `
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
-| 批量导入 | `import_chat`（20 种格式）· `scan_discover` · 侧边栏面板 | 19+ 来源一键导入，每段对话成为独立会话 |
+| 批量导入 | `import_chat`（21 种格式）· `scan_discover` · 侧边栏面板 | 20+ 来源一键导入，每段对话成为独立会话 |
 | 导入历史与撤回 | 侧边栏面板「历史」页 | 展示 `imports.json` 记录；一键删除本插件创建的会话（需确认） |
 | 全保真续聊 | 导入即 DSH 会话 | 工具调用/结果、思考、标题、模型、时间戳原样保留 |
 | 反向导出 | `export_chat`（`format: claude` / `codex` / `kimi`） | DSH 会话序列化回 Claude / Codex / Kimi |

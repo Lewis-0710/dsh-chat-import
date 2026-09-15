@@ -119,6 +119,11 @@ export {
 } from './lib/convert/qwen.mjs'
 
 export {
+  convertContinueJson,
+  readContinueIndex,
+} from './lib/convert/continue.mjs'
+
+export {
   convertDshJsonl,
 } from './lib/convert/dsh.mjs'
 

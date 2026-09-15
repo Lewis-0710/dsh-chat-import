@@ -670,6 +670,84 @@ test('qwen：~/.qwenworkcn/projects 发现、humanInput 首问、workspace-direc
   assert.equal(elsewhere.total, 0)
 })
 
+test('continue：sessions.json 索引驱动发现（标题/创建时间/项目/消息数）、非会话文件自拒、无索引回退整读', async () => {
+  const root = join(HOME, '.continue', 'sessions')
+  const sid = '3f2b9c14-58a7-4f6d-9c31-0d5e7a1b2c34'
+  const file = join(root, sid + '.json')
+  const session = (title, history) => j({ sessionId: sid, title, workspaceDirectory: '/home/u/repo', history })
+  const files = new Map([
+    [root, { type: 'dir' }],
+    [join(root, 'sessions.json'), {
+      type: 'file',
+      text: j([{ sessionId: sid, title: '修登录页分页', dateCreated: '1787131157250', workspaceDirectory: '/home/u/repo', messageCount: 6 }]),
+    }],
+    [file, {
+      type: 'file', mtimeMs: 1786000002000,
+      text: session('修登录页分页', [
+        { message: { id: 'u1', role: 'user', content: '修分页' } },
+        { message: { id: 'a1', role: 'assistant', content: '已修' } },
+      ]),
+    }],
+    // 同目录混入的非会话 JSON（`{}` 空文件、索引本身）都不产出条目
+    [join(root, 'empty.json'), { type: 'file', text: '{}' }],
+  ])
+  const host = mockHost(files)
+
+  const { sessions, total } = await discoverSessions({ path: root, format: 'continue', host, imports: {} })
+  assert.equal(total, 1)
+  const s = sessions[0]
+  assert.equal(s.format, 'continue')
+  assert.equal(s.sessionId, sid)
+  assert.equal(s.title, '修登录页分页') // 索引里的显式标题
+  assert.equal(s.project, 'repo') // 记录内 workspaceDirectory basename
+  assert.equal(s.cwd, '/home/u/repo')
+  assert.equal(s.createdAt, 1787131157250) // 只有索引带 dateCreated（毫秒字符串）
+  assert.equal(s.messageCount, 6)
+  assert.equal(s.lastActiveAt, 1786000002000)
+
+  // 索引缺失（手工删改）→ 整读会话文件取标题/项目/消息数，创建时间留空由导入层兜底
+  const bare = join(HOME, 'cfg', 'continue', 'sessions')
+  const files2 = new Map([
+    [bare, { type: 'dir' }],
+    [join(bare, sid + '.json'), {
+      type: 'file', mtimeMs: 1786000003000,
+      text: session('裸目录会话', [
+        { message: { id: 'u1', role: 'user', content: '问' } },
+        { message: { id: 'a1', role: 'assistant', content: '答' } },
+        { message: { id: 't1', role: 'thinking', content: '想' } },
+      ]),
+    }],
+  ])
+  const fallback = await discoverSessions({ path: bare, format: 'continue', host: mockHost(files2), imports: {} })
+  assert.equal(fallback.total, 1)
+  assert.equal(fallback.sessions[0].title, '裸目录会话')
+  assert.equal(fallback.sessions[0].cwd, '/home/u/repo')
+  assert.equal(fallback.sessions[0].messageCount, 2) // user + assistant（thinking 不计）
+  assert.equal(fallback.sessions[0].createdAt, null)
+})
+
+test('continue：取消标题（默认 New Session）不冒充标题，交给首问兜底', async () => {
+  const root = join(HOME, '.continue', 'sessions')
+  const sid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+  const files = new Map([
+    [root, { type: 'dir' }],
+    [join(root, sid + '.json'), {
+      type: 'file', mtimeMs: 1786000004000,
+      text: j({ sessionId: sid, title: 'New Session', workspaceDirectory: '/home/u/repo', history: [] }),
+    }],
+  ])
+  const { sessions, total } = await discoverSessions({ path: root, format: 'continue', host: mockHost(files), imports: {} })
+  assert.equal(total, 1)
+  assert.equal(sessions[0].title, null)
+})
+
+test('continue 默认根：$CONTINUE_GLOBAL_DIR 优先，否则 ~/.continue/sessions', () => {
+  const roots = defaultRoots({ home: HOME })
+  assert.equal(roots.continue, process.env.CONTINUE_GLOBAL_DIR
+    ? join(process.env.CONTINUE_GLOBAL_DIR, 'sessions')
+    : join(HOME, '.continue', 'sessions'))
+})
+
 // ── 30s TTL 缓存（REQ-25/REQ-40：命中不重读，可观测计数断言）──────────────
 
 test('30s TTL 缓存：命中不重读、过期重扫（注入时钟）', async () => {
@@ -969,9 +1047,9 @@ test('cursor：slug 解码为真实工作区名分组，<timestamp> 解析时间
   assert.equal(numeric.cwd, null)
 })
 
-test('FORMATS 与工具 schema enum 一致（20 种）', () => {
-  assert.equal(FORMATS.length, 20)
-  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'codex', 'cursor', 'dsh', 'gemini', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode'])
+test('FORMATS 与工具 schema enum 一致（21 种）', () => {
+  assert.equal(FORMATS.length, 21)
+  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'codex', 'continue', 'cursor', 'dsh', 'gemini', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode'])
 })
 
 // ── git 状态（REQ-58）──────────────────────────────────────────────────────
