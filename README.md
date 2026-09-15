@@ -24,7 +24,7 @@
 
 `DSH Chat Import` imports conversation history with full context from other agents, turning it into a seamlessly resumable DeepSeek Harness session.
 
-**24 agents** plus any local JSONL are covered today — the full list is under [Supported Agents](#supported-agents). Export back to: Claude Code, Codex, Kimi Code.
+**25 agents** plus any local JSONL are covered today — the full list is under [Supported Agents](#supported-agents). Export back to: Claude Code, Codex, Kimi Code.
 
 ## Supported Agents
 
@@ -63,10 +63,11 @@ Every source below becomes an independent DSH session, with tool calls, tool res
 
 <table>
   <tr>
-    <td align="center" width="25%"><a href="https://cursor.com"><img src="./assets/agents/cursor.svg" width="56" height="56" alt="Cursor" /><br /><b>Cursor</b></a></td>
-    <td align="center" width="25%"><a href="https://github.com/cline/cline"><img src="./assets/agents/cline.svg" width="56" height="56" alt="Cline" /><br /><b>Cline</b></a></td>
-    <td align="center" width="25%"><a href="https://github.com/continuedev/continue"><img src="./assets/agents/continue.svg" width="56" height="56" alt="Continue" /><br /><b>Continue</b></a></td>
-    <td align="center" width="25%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity CLI" /><br /><b>Antigravity CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://cursor.com"><img src="./assets/agents/cursor.svg" width="56" height="56" alt="Cursor" /><br /><b>Cursor</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/cline/cline"><img src="./assets/agents/cline.svg" width="56" height="56" alt="Cline" /><br /><b>Cline</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/continuedev/continue"><img src="./assets/agents/continue.svg" width="56" height="56" alt="Continue" /><br /><b>Continue</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/zed-industries/zed"><img src="./assets/agents/zed.svg" width="56" height="56" alt="Zed" /><br /><b>Zed</b></a></td>
+    <td align="center" width="20%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity CLI" /><br /><b>Antigravity CLI</b></a></td>
   </tr>
 </table>
 
@@ -121,7 +122,7 @@ This plugin's `import_agents` is a lightweight asset mover (it persists pi/openc
 
 | Capability | Entry points | Description |
 | --- | --- | --- |
-| Batch import | `import_chat` (23 formats) · `scan_discover` · sidebar panel | Import 22+ sources with one tool; each conversation becomes its own session |
+| Batch import | `import_chat` (24 formats) · `scan_discover` · sidebar panel | Import 23+ sources with one tool; each conversation becomes its own session |
 | Import history & purge | sidebar panel **History** tab | View `imports.json` records; remove plugin-created sessions (with confirmation) |
 | Full-fidelity resume | Imported sessions | Tool calls & results, reasoning, titles, models and timestamps carry over |
 | Export back | `export_chat` (`format: claude` / `codex` / `kimi`) | Serialize DSH sessions back to Claude / Codex / Kimi |

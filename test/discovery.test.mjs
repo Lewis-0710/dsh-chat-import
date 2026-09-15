@@ -15,6 +15,7 @@ import {
 } from '../lib/discovery.mjs'
 import { resolveCursorSlugPath, clearWorkspacePathCache } from '../lib/cwd-map.mjs'
 import { gooseSessionsDir } from '../lib/convert/goose.mjs'
+import { zedThreadsDir } from '../lib/convert/zed.mjs'
 
 beforeEach(() => {
   clearScanCache()
@@ -862,6 +863,42 @@ test('goose 默认根：与 lib/convert/goose.mjs 的解析规则一致（含 $G
   assert.ok(/[\\/]sessions$/.test(roots.goose))
 })
 
+test('zed：threads.db 经 host.readSessions 发现（标题/项目/时间）；默认根与路径规则一致', async () => {
+  const dataDir = join(HOME, '.local', 'share', 'zed')
+  const threadsDir = join(dataDir, 'threads')
+  const dbPath = join(threadsDir, 'threads.db')
+  const files = new Map([
+    [threadsDir, { type: 'dir' }],
+    [dbPath, { type: 'file', mtimeMs: 1786000009000, text: 'SQLite format 3' }],
+  ])
+  const host = mockHost(files)
+  host.dbSessions = (kind) => {
+    assert.equal(kind, 'zed')
+    return [{
+      id: '2f8b1c6e-0000-4000-8000-000000000001',
+      title: '修登录页分页', directory: '/home/u/proj',
+      createdAt: Date.parse('2026-09-15T13:38:45.123Z'), lastActiveAt: Date.parse('2026-09-15T13:40:00.000Z'),
+      messageCount: null,
+    }]
+  }
+
+  const { sessions, total } = await discoverSessions({ path: threadsDir, format: 'zed', host, imports: {} })
+  assert.equal(total, 1)
+  const s = sessions[0]
+  assert.equal(s.format, 'zed')
+  assert.equal(s.title, '修登录页分页')
+  assert.equal(s.project, 'proj')
+  assert.equal(s.cwd, '/home/u/proj')
+  assert.equal(s.createdAt, Date.parse('2026-09-15T13:38:45.123Z'))
+  assert.equal(s.lastActiveAt, Date.parse('2026-09-15T13:40:00.000Z'))
+  assert.equal(s.messageCount, null)
+  assert.equal(s.sourcePath, dbPath)
+
+  const roots = defaultRoots({ home: HOME })
+  assert.equal(roots.zed, zedThreadsDir(HOME))
+  assert.ok(/[\\/]threads$/.test(roots.zed))
+})
+
 test('cline 默认根：$CLINE_SESSION_DATA_DIR / $CLINE_DATA_DIR / $CLINE_DIR 优先级', () => {
   const roots = defaultRoots({ home: HOME })
   const expected = process.env.CLINE_SESSION_DATA_DIR
@@ -1175,9 +1212,9 @@ test('cursor：slug 解码为真实工作区名分组，<timestamp> 解析时间
   assert.equal(numeric.cwd, null)
 })
 
-test('FORMATS 与工具 schema enum 一致（23 种）', () => {
-  assert.equal(FORMATS.length, 23)
-  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'cursor', 'dsh', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode'])
+test('FORMATS 与工具 schema enum 一致（24 种）', () => {
+  assert.equal(FORMATS.length, 24)
+  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'cursor', 'dsh', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode', 'zed'])
 })
 
 // ── git 状态（REQ-58）──────────────────────────────────────────────────────

@@ -25,7 +25,7 @@
 
 `DSH Chat Import` 从其他 Agents 导入含完整上下文的聊天历史，成为可无缝继续的 DeepSeek Harness 会话。
 
-现已覆盖 **24 种 Agents** 与任意本地 JSONL——完整列表见[支持的 Agents](#支持的-agents)。反向导出：Claude Code、Codex、Kimi Code。
+现已覆盖 **25 种 Agents** 与任意本地 JSONL——完整列表见[支持的 Agents](#支持的-agents)。反向导出：Claude Code、Codex、Kimi Code。
 
 
 ## 支持的 Agents
@@ -65,10 +65,11 @@
 
 <table>
   <tr>
-    <td align="center" width="25%"><a href="https://cursor.com"><img src="./assets/agents/cursor.svg" width="56" height="56" alt="Cursor" /><br /><b>Cursor</b></a></td>
-    <td align="center" width="25%"><a href="https://github.com/cline/cline"><img src="./assets/agents/cline.svg" width="56" height="56" alt="Cline" /><br /><b>Cline</b></a></td>
-    <td align="center" width="25%"><a href="https://github.com/continuedev/continue"><img src="./assets/agents/continue.svg" width="56" height="56" alt="Continue" /><br /><b>Continue</b></a></td>
-    <td align="center" width="25%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity CLI" /><br /><b>Antigravity CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://cursor.com"><img src="./assets/agents/cursor.svg" width="56" height="56" alt="Cursor" /><br /><b>Cursor</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/cline/cline"><img src="./assets/agents/cline.svg" width="56" height="56" alt="Cline" /><br /><b>Cline</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/continuedev/continue"><img src="./assets/agents/continue.svg" width="56" height="56" alt="Continue" /><br /><b>Continue</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/zed-industries/zed"><img src="./assets/agents/zed.svg" width="56" height="56" alt="Zed" /><br /><b>Zed</b></a></td>
+    <td align="center" width="20%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity CLI" /><br /><b>Antigravity CLI</b></a></td>
   </tr>
 </table>
 
@@ -124,7 +125,7 @@ Reasonix 目录导入只会折叠同时满足“严格语义前缀”和明确 `
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
-| 批量导入 | `import_chat`（23 种格式）· `scan_discover` · 侧边栏面板 | 22+ 来源一键导入，每段对话成为独立会话 |
+| 批量导入 | `import_chat`（24 种格式）· `scan_discover` · 侧边栏面板 | 23+ 来源一键导入，每段对话成为独立会话 |
 | 导入历史与撤回 | 侧边栏面板「历史」页 | 展示 `imports.json` 记录；一键删除本插件创建的会话（需确认） |
 | 全保真续聊 | 导入即 DSH 会话 | 工具调用/结果、思考、标题、模型、时间戳原样保留 |
 | 反向导出 | `export_chat`（`format: claude` / `codex` / `kimi`） | DSH 会话序列化回 Claude / Codex / Kimi |

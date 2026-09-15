@@ -13,6 +13,10 @@ from the matching section below.
 
 ## [Unreleased]
 
+### Added
+
+- **新源：Zed Agent 线程适配（第 24 种格式，REQ-69）** — 读 `<data_dir>/threads/threads.db`：单表 `threads`（`id`/`summary`/`updated_at`/`data_type`/`data BLOB` + `parent_id`/`folder_paths`/`folder_paths_order`/`created_at` 四列靠 `ALTER` 补，老库可能缺失）。data_dir 按平台（macOS `~/Library/Application Support/Zed`、Linux `$XDG_DATA_HOME/zed`、Windows `%LOCALAPPDATA%\Zed`；`--user-data-dir` 会整体改写，那种安装需显式传 path）。两处形态要点：① `data_type ∈ {json, zstd}` 而**上游写入端恒 zstd**（等级 3 标准帧、无自定义头），用 `fzstd` 解压（纯 JS，不依赖 Node 内置 zstd 的版本下限），`json` 是旧行兼容、未知 `data_type` 与损坏帧一律拒绝并**显式上报**（绝不半读）；② blob 顶层是 `DbThread + version`，当前 `'0.3.0'`，而 `version` 缺失或不同会走上游的 legacy 升级分支（`summary` + `segments`/`tool_uses`/`tool_results`）——**两种方言都实现**，老库不会因版本判错整条读不出来。消息是 serde 外部标签（`{"User"}`/`{"Agent"}`/裸字符串 `"Resume"`/`{"Compaction"}`）：v0.3.0 的工具结果挂在同一条 Agent 消息的 `tool_results` **对象**上（键 = `tool_use_id`），legacy 是消息上的数组；孤儿结果丢弃并计数，重复 `callId` 只保留首次（DSH 折叠器对同一 callId 第二次 start 会硬异常并吞掉其后整段轨迹）。`Compaction.Summary` 挂成 reasoning 块还原压缩边界，`ProviderNative`（不透明 items）只计数；`Mention`/`Image`/`RedactedThinking` 不进对话但逐个计数（`skippedBlocks`）；手工 `/compact` 会先压一条**空 content 的 User 消息**——不开轮也不报错。`folder_paths` 是多根工作区路径（`\n` 连接 + `,` 索引还原顺序）→ 会话 cwd 取首项；`parent_id` 非空的子代理线程不单独成会话（与上游 UI 过滤一致）。**线程内消息没有任何时间字段**，所以只用行级 `created_at`/`updated_at`，不伪造逐消息时间；会话标题钉成「Zed · 话题」。
+
 ## [0.15.0] - 2026-09-15
 
 ### Added

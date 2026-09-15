@@ -136,6 +136,14 @@ export {
 } from './lib/convert/goose.mjs'
 
 export {
+  convertZedJson,
+  zedDataDir,
+  zedThreadsDir,
+  zedThreadsDbPath,
+  zedFolderPaths,
+} from './lib/convert/zed.mjs'
+
+export {
   convertDshJsonl,
 } from './lib/convert/dsh.mjs'
 
