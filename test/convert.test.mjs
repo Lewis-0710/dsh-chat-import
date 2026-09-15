@@ -756,6 +756,23 @@ test('jsObjectLiteralToJson: 不支持的结构返回 null（尾逗号 / 注释 
   assert.equal(jsObjectLiteralToJson('{a: [], b: {c: "d"}, e: -1.5, f: 1e3, g: .5}'), '{"a":[],"b":{"c":"d"},"e":-1.5,"f":1000,"g":0.5}')
 })
 
+// codex：event_msg/turn_aborted 表示该回合被用户中断。实测 40 条真实记录里 reason 恒为
+// 'interrupted'，不区分用户 / hook / 销毁，故映射为宿主为「导入且原始粗粒度记录未携带
+// 原因」预留的 legacy 原因，而不是臆测一个更具体的原因。
+test('codex：turn_aborted 标为该回合中断，后续回合不受影响', () => {
+  const out = convertCodexJsonl(load('codex-turn-aborted.jsonl'))
+  const ends = out.events.filter((e) => e.type === 'turn/end').map((e) => e.data.reason)
+  assert.equal(ends.length, 2)
+  assert.deepEqual(ends[0], { kind: 'aborted', reason: { kind: 'legacy' } })
+  assert.deepEqual(ends[1], { kind: 'completed' }, '中断只影响它所在的回合')
+})
+
+test('codex：没有 turn_aborted 时回合照常标记完成', () => {
+  const out = convertCodexJsonl(load('codex-simple.jsonl'))
+  const ends = out.events.filter((e) => e.type === 'turn/end').map((e) => e.data.reason)
+  assert.deepEqual(ends, [{ kind: 'completed' }])
+})
+
 // ---- ChatGPT 网页导出 conversations.json ----
 
 test('convertChatgptJson: 一文件多会话、多轮、mapping 主线程', () => {
