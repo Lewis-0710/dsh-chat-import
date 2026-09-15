@@ -13,6 +13,8 @@ from the matching section below.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-15
+
 ### Added
 
 - **新源：Goose 会话适配（第 23 种格式，REQ-67）** — 读 `sessions.db`（SQLite WAL；v1.10.0 起取代旧的 `sessions/*.jsonl`）：`<dataDir>/sessions/sessions.db`，dataDir 与上游同序解析（`$GOOSE_PATH_ROOT` 为绝对路径时优先 → `<root>/data`；否则 Windows `%APPDATA%\Block\goose\data`、macOS `~/Library/Application Support/Block/goose`、Linux `~/.local/share/goose`）。**旧 jsonl 一律不读**：上游只在首次建库时全量迁移一次且不删除旧文件，读它们会把同一批会话二次导入。两表读取：`sessions`（标题取 `name`，空则回退遗留列 `description`；cwd 取 `working_dir`）× `messages`（一条消息一行，`content_json` 是整个 content 块数组），列全部按 `PRAGMA` 自适应（上游靠 `ALTER TABLE` 逐列迁移，老库会缺列）。保真度与三处非平凡语义：① 块词汇是 `text`/`thinking`/`toolRequest`/`toolResponse`，其中 `toolRequest`/`toolResponse` 外面套着 `{status, value|error}` **信封**（id 在 `toolRequest.id` ↔ `toolResponse.id` 上，不在信封里），请求在 assistant 消息、结果在 **user** 消息里——所以 user 消息同样要区分「人类提问」与「结果载体」，载体里附带的人类正文挂到该步而不开新轮；② `metadata_json.userVisible === false` 的 agent-only 消息不进对话（与上游 `message_count` 同口径，消息数也按此计）；③ 时间戳两种格式混存——`messages.created_timestamp` 是 Unix 整数（秒，历史库可能毫秒），`sessions.created_at/updated_at` 是 SQLite `CURRENT_TIMESTAMP` 文本（**UTC 但不带时区**，必须按 UTC 解析，否则按本地时区偏几小时），而 `import_session` 路径会写 RFC3339，两种都认。子代理会话（`session_type='sub_agent'` 或 `parent_session_id` 非空）与 `hidden` 会话不单独成会话；`redactedThinking` 密文、`image`/`document` 附件、`toolConfirmationRequest`/`actionRequired` 交互块与 `systemNotification`/`error` 横幅不进对话但逐个计数（`skippedBlocks`，绝不静默吞掉）。本源的会话标题同样钉成「Goose · 话题」（与 cline/continue/hermes 一致，避免 DSH 回退成工作区目录名）。
