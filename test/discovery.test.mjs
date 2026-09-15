@@ -14,6 +14,7 @@ import {
   isInjectedTitle, normalizeTitle, layoutProject, resolveImportStatus,
 } from '../lib/discovery.mjs'
 import { resolveCursorSlugPath, clearWorkspacePathCache } from '../lib/cwd-map.mjs'
+import { gooseSessionsDir } from '../lib/convert/goose.mjs'
 
 beforeEach(() => {
   clearScanCache()
@@ -816,6 +817,51 @@ test('cline：DB 不可用时回退扫目录（manifest 取标题/项目；子�
   assert.equal(s.lastActiveAt, Date.parse('2026-04-22T17:42:10.123Z'))
 })
 
+test('goose：sessions.db 经 host.readSessions 发现（标题/项目/时间/消息数），旧 jsonl 不当作来源', async () => {
+  const dataDir = join(HOME, '.local', 'share', 'goose')
+  const sessionsDir = join(dataDir, 'sessions')
+  const dbPath = join(sessionsDir, 'sessions.db')
+  const files = new Map([
+    [sessionsDir, { type: 'dir' }],
+    [dbPath, { type: 'file', mtimeMs: 1786000008000, text: 'SQLite format 3' }],
+    // 旧版 jsonl 还在磁盘上（上游迁移后不删）→ 绝不能扫出来重复导入
+    [join(sessionsDir, '20260301_1.jsonl'), { type: 'file', text: '{"id":"20260301_1"}\n' }],
+  ])
+  const host = mockHost(files)
+  host.dbSessions = (kind) => {
+    assert.equal(kind, 'goose')
+    return [
+      {
+        id: '20260422_1', title: '修登录页分页', directory: '/home/u/repo',
+        createdAt: 1776879600000, lastActiveAt: 1776879730000, messageCount: 4,
+      },
+      {
+        id: '20260422_2', title: '', directory: '/home/u/other',
+        createdAt: null, lastActiveAt: null, messageCount: null,
+      },
+    ]
+  }
+
+  const { sessions, total } = await discoverSessions({ path: sessionsDir, format: 'goose', host, imports: {} })
+  assert.equal(total, 2) // 只有库里的会话；jsonl 不计
+  const first = sessions.find((s) => s.sessionId === '20260422_1')
+  assert.equal(first.format, 'goose')
+  assert.equal(first.title, '修登录页分页')
+  assert.equal(first.project, 'repo')
+  assert.equal(first.cwd, '/home/u/repo')
+  assert.equal(first.createdAt, 1776879600000)
+  assert.equal(first.lastActiveAt, 1776879730000)
+  assert.equal(first.messageCount, 4)
+  assert.equal(first.sourcePath, dbPath)
+  assert.equal(sessions.some((s) => String(s.sourcePath).endsWith('.jsonl')), false)
+})
+
+test('goose 默认根：与 lib/convert/goose.mjs 的解析规则一致（含 $GOOSE_PATH_ROOT / 平台分支）', () => {
+  const roots = defaultRoots({ home: HOME })
+  assert.equal(roots.goose, gooseSessionsDir(HOME))
+  assert.ok(/[\\/]sessions$/.test(roots.goose))
+})
+
 test('cline 默认根：$CLINE_SESSION_DATA_DIR / $CLINE_DATA_DIR / $CLINE_DIR 优先级', () => {
   const roots = defaultRoots({ home: HOME })
   const expected = process.env.CLINE_SESSION_DATA_DIR
@@ -1129,9 +1175,9 @@ test('cursor：slug 解码为真实工作区名分组，<timestamp> 解析时间
   assert.equal(numeric.cwd, null)
 })
 
-test('FORMATS 与工具 schema enum 一致（22 种）', () => {
-  assert.equal(FORMATS.length, 22)
-  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'cursor', 'dsh', 'gemini', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode'])
+test('FORMATS 与工具 schema enum 一致（23 种）', () => {
+  assert.equal(FORMATS.length, 23)
+  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'cursor', 'dsh', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode'])
 })
 
 // ── git 状态（REQ-58）──────────────────────────────────────────────────────

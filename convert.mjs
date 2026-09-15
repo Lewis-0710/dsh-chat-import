@@ -129,6 +129,13 @@ export {
 } from './lib/convert/cline.mjs'
 
 export {
+  convertGooseJson,
+  gooseDataDir,
+  gooseSessionsDir,
+  gooseDefaultDbPath,
+} from './lib/convert/goose.mjs'
+
+export {
   convertDshJsonl,
 } from './lib/convert/dsh.mjs'
 

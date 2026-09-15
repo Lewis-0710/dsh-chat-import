@@ -73,6 +73,7 @@
 | workbuddy | ✅ | ✅ | ✅ | — | — | — |
 | continue | ✅ | ✅ | ✅ | — | — | ✅（history 不裁剪，摘要挂 reasoning 块） |
 | cline | ✅ | ✅ | ✅ | — | — | ✅（compaction 侧车不改写主转写） |
+| goose | ✅ | ✅ | ✅ | — | — | — |
 | dsh | ✅ | ✅ | ✅ | — | ✅ | — |
 
 ## 3. 降级规则表（REQ-21）

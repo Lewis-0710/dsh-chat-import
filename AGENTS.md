@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`dsh-chat-import` 是 DeepSeek Harness（DSH）插件：把 21 种外部 Agent 工具的聊天记录
+`dsh-chat-import` 是 DeepSeek Harness（DSH）插件：把 23 种外部 Agent 工具的聊天记录
 **全保真**导入为**可继续**的 DSH 会话，支持反向导出（Claude / Codex / Kimi）与双向增量同步。
 
 ## 背景
@@ -34,6 +34,31 @@ dsh web 侧边栏「导入会话」面板与设置页「会话导入」分区。
   其余 `lib/*.mjs` 消费 ctx（host 面）；`index.mjs` 为入口，`lib/tools.mjs` 注册全部工具，
   `lib/client.js` 为 Browser 侧面板与设置分区，`bin/dsh-chat-import.mjs` 为 CLI。
 - **永不提交**：`dev/`、`node_modules/`、`.prev-session*.jsonl`、`.dsh-file-claim/`、真实用户 transcript、任何凭据/密钥。
+
+## 新增一个来源（按序走完，缺一项就会漂）
+
+1. `lib/convert/<src>.mjs` 转换器（纯函数）：文件头写清**存储契约**（路径优先级、文件形态、
+   字段语义、与其它源的差异），取证链接可留注释；不读磁盘、不 import 宿主服务。
+2. `convert.mjs` 里 re-export 该转换器与它对外需要的纯函数（发现层复用的解析器也放这里，
+   以保持 `lib/discovery.mjs` 不依赖 `node:sqlite`）。
+3. 数据库来源额外加 `lib/<src>.mjs`（host 面）：`node:sqlite` 只读打开，列用 `PRAGMA table_info`
+   自适应（老库缺列只丢该字段、不抛错），读不到即返回 `null`；在 `lib/discovery-host.mjs` 的
+   `readSessions` 里登记，导入参数派生（`<src>DeriveArgs`）与目录收集器也放这个文件。
+4. `lib/discovery.mjs`：`FORMATS`、`defaultRoots()`（**跟上游 env 优先级**）、扫描器与 `SCANNERS`
+   登记、`fileFormatsForPath()` 的扩展名/路径特征（同名文件要能同时命中多个候选格式，靠内容自拒）。
+5. `lib/tools.mjs`：`IMPORT_SOURCES` 登记 spec（`convert` / `registry` / `derive.args` / 需要时
+   `derive.collect`）。
+6. `lib/toolkit.mjs`：`CHAT_FORMATS` 加一行即可——工具描述里的格式数由它实时推导，不要手写数字。
+7. `lib/panel.mjs`（`SOURCE_FORMAT`）、`lib/command.mjs`（`TOOL_FORMAT` + `SOURCE_NAMES`）、
+   `lib/sourced-title.mjs`（来源标签）、`lib/convert/interchange.mjs`（`SOURCE_CAPABILITIES`）。
+8. `lib/client.js`：`SOURCES` / `FORMAT_SOURCE` / `SOURCE_LABELS` / `SOURCE_BADGES`
+   （无公开矢量品牌标就用品牌色缩写卡，与 `assets/agents/<src>.svg` 同款）。
+9. 资源与文档：`assets/agents/<src>.svg`、README 双语（简介计数、来源表格所属分组加一格、Features
+   表的格式数）、`docs/INTERCHANGE.md` 能力表、`CHANGELOG.md`、`ROADMAP.md`（REQ 行 + 来源数）。
+10. 测试：转换器单测、发现层单测（默认根 + 路径自拒/结构自拒）、工具层集成测试（单文件 + 幂等）；
+    SQLite 来源用真实临时库（`mkdtemp` + `node:sqlite`）造夹具，不掺真实 transcript。
+11. 门禁：`npm test` / `lint` / `check:linux` / `check:links` / `check:readme-sync` / `build` 全绿，
+    并在 WSL 复跑一次测试（CI 跑 Linux，本机是 Windows）。
 
 ## 编码
 

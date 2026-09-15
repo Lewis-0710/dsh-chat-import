@@ -13,7 +13,7 @@
 
 | 能力 | dsh-chat-import | 生态内其他 |
 | --- | --- | --- |
-| 来源数 | 21 源 + 本地 JSONL（13 工具） | 单源 ~ 4 源 |
+| 来源数 | 22 源 + 本地 JSONL（13 工具） | 单源 ~ 4 源 |
 | 全保真（tool/result + thinking + sourceEventSeqs） | ✅ | 部分 |
 | 增量续写（append 新轮次） | ✅ | 部分（复制式） |
 | 上下文预算保护 | ✅ | — |
@@ -101,5 +101,7 @@
 | REQ-64 | P1 | 新源：Continue 适配（`~/.continue/sessions/<id>.json` + `sessions.json` 索引；VS Code / JetBrains / CLI 共用） | ✅ |
 | REQ-65 | P1 | 新源：Cline 适配（`~/.cline/data/sessions/<id>/<id>.messages.json` + `db/sessions.db` 元数据索引，DB 优先 / manifest 兜底） | ✅ |
 | REQ-66 | P2 | Cline legacy `tasks/` 适配（VS Code globalStorage 的 `api_conversation_history.json` + `ui_messages.json` + `taskHistory.json` 索引；新版 SDK 存储尚未迁移它） | ☐ |
+| REQ-67 | P1 | 新源：Goose 适配（`sessions.db` 两表 + `$GOOSE_PATH_ROOT`/三平台路径；旧 jsonl 不读以免重复导入） | ✅ |
+| REQ-68 | P2 | 缺陷：数据库类批量来源（opencode / mimocode / kilocode / zcode）的会话标题未钉「来源 · 话题」，DSH 可能回退成工作区目录名 | ☐ |
 
-**全部 65 项 ✅ + REQ-66 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0）——REQ-66 为已识别但未开工的需求。
+**全部 66 项 ✅ + REQ-66 / REQ-68 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0）——REQ-66 / REQ-68 为已识别但未开工的需求。
