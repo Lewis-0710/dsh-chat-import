@@ -1167,3 +1167,20 @@ test('dsh：单文件路径自动探测（不给 format）—— 代次工件名
     assert.equal(sessions[0].sourcePath, file)
   }
 })
+
+// 项目目录名的 ~XXXX 是宿主 projectKey() 的 code-unit 转义（四位大写十六进制）。
+// 此前按 decodeURIComponent('%XXXX') 解，得到控制字符加字面量余数。
+test('layoutProject(dsh)：~XXXX 转义按 code unit 还原，不再解成控制字符', () => {
+  assert.equal(
+    layoutProject('/h/sessions/--Users-u-Documents-Github-DSH~0020Repo--/sid/session.jsonl', 'dsh'),
+    '--Users-u-Documents-Github-DSH Repo--',
+  )
+  assert.equal(
+    layoutProject('/h/sessions/--a~002Eb--/sid/session.jsonl.zstd', 'dsh'),
+    '--a.b--',
+  )
+  // 无转义的目录名原样返回
+  assert.equal(layoutProject('/h/sessions/--plain-name--/sid/session.jsonl', 'dsh'), '--plain-name--')
+  // 非会话文件名不认
+  assert.equal(layoutProject('/h/sessions/--x--/sid/other.jsonl', 'dsh'), null)
+})
