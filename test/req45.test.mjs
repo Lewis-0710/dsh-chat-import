@@ -5,9 +5,9 @@ import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { discoverSessions, createScanCache, clearScanCache } from '../lib/discovery.mjs'
-import { IS_WINDOWS, hostAbs } from './_support/host-path.mjs'
+import { hostAbs } from './_support/host-path.mjs'
 
 const j = (o) => JSON.stringify(o)
 
@@ -186,10 +186,16 @@ test('REQ-45 import_reasonix 桌面版：标题走 .titles.json、cwd 走 slug �
   const value = await def.execute({ format: 'reasonix', path: sessDir + '\\abc123.jsonl' })
   assert.equal(value.status, 'imported')
   const saved = persistence.sessions.get(value.sessionId)
-  // slug 贪心解码（磁盘存在）给出的是 `C:\users\alice\work`——这套 slug 带盘符（见
-  // lib/cwd-map.mjs 的盘符边界约定）：Windows 上原样落 header，POSIX 上它跨平台、被按
-  // 宿主 isAbsolute 剔除（会话退化为未分组）
-  assert.equal(saved.meta.cwd, IS_WINDOWS ? 'C:\\users\\alice\\work' : undefined)
+  // slug 贪心解码本身与平台无关：盘符形态的 slug 一律解成 Windows 路径（'c' → 'C:\'）。
+  // 单测这层，解码是否真的命中磁盘不受运行平台影响。
+  const { greedyDecodeSlugPath } = await import('../lib/cwd-map.mjs')
+  const decoded = await greedyDecodeSlugPath(ctx, slug)
+  assert.equal(decoded, 'C:\\users\\alice\\work')
+  // 落盘层另按平台相关的 isAbsolute 校验 header.cwd（dsh-session/lib/index.js:786）：
+  // 该 Windows 路径在 POSIX 上不是绝对路径，会被剔除，会话退化为未分组——这是
+  // lib/import-core.mjs:261 的既定行为，不是缺陷。期望值按同一函数计算，不写死
+  // 盘符字面量（AGENTS.md 跨平台路径纪律）。
+  assert.equal(saved.meta.cwd, isAbsolute(decoded) ? decoded : undefined)
   const titleEv = saved.events.find((e) => e.type === 'session/title')
   assert.equal(titleEv.data.title, 'Reasonix · 桌面版会话标题') // .titles.json 权威 + 来源前缀
 })
