@@ -13,6 +13,12 @@ from the matching section below.
 
 ## [Unreleased]
 
+### Fixed
+
+- **导入 DSH 自身会话按格式代次识别工件名（#44）** — 宿主 `sessionFormatLogFilename()` 的代次口径是：v0 写 `session.jsonl`，vN（N≥1）写 `session.vN.jsonl`，压缩再加 `.zstd`。插件四处判定此前只认 v0（`/session\.jsonl(?:\.zstd)?$/`），当前代次的会话日志整批扫不出来——dsh 自身作为导入源因此基本不可用，只是恰好有少数 v0 旧会话让它看起来能用（贡献者本机 52 个工件里 v0 仅 4 个）。现在代次解析收敛为 `lib/dsh.mjs` 的 `dshSessionLogVersion()` 供四处共用（目录扫描过滤 / 路径形态识别 / 单文件格式判定 / `isDshSessionFile`），口径与宿主 `@deepseek-ai/dsh-session-format` 的 `CANONICAL_LOG_FILENAME` 一致：`session.v0.jsonl` 这类非规范写法仍不认。
+- **导入 codex 归档会话：默认根补上扁平的 `archived_sessions/`（#45）** — codex rollout 有两个根：`~/.codex/sessions/YYYY/MM/DD/` 与扁平的 `~/.codex/archived_sessions/`，默认根此前只给了前者，归档 rollout 完全扫不到（本机实测 `sessions` 12 个文件、`archived_sessions` 52 个）。按 grokbuild 的既有双根形态补齐，发现层其余部分（递归遍历、`session_meta` 元数据）无需改动。
+- **单文件路径的发现恢复可用** — `fileFormatsForPath()` 判出候选格式后，目录形态的扫描器（dsh / claude / codex…）此前对**文件**目标恒返回空：`walkFiles()` 只遍历目录，`discoverSessions({ path: '<某个会话日志>' })` 因此始终 0 条（`scan_discover` 与面板按路径查询同样如此）。现在遍历器在读不到目录项时按目标文件名匹配一次，单文件路径照常交给对应扫描器。同一处还修掉 dsh 路径特征只写 POSIX 分隔符的问题（同函数其余特征早就写成 `[\\/]`，Windows 路径整条判据都不命中）。
+
 ## [0.11.4] - 2026-09-15
 
 ### Fixed
