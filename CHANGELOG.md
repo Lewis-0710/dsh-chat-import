@@ -15,6 +15,10 @@ from the matching section below.
 
 ### Added
 
+- **可选 cwd 重映射 `cwdRemap`：跨机迁移把源前缀改写到本机（#53）** — 宿主按本平台 `isAbsolute` 剔除跨平台 cwd（刻意取舍：绝不因 cwd 拒绝整次导入），所以从另一台机器搬来的会话会退化为未分组。新增可选参数 `cwdRemap: [{ from, to }]`（按 `from` 长度降序匹配、最长前缀优先、要求落在分隔符边界上），把源前缀改写成**本机**前缀；改写结果仍要过同一道绝对性校验，默认不启用、既有行为不变。落盘后的 cwd 与归组用改写值，dry-run 预览与落盘同口径（预览也走重映射，不再出现「预览一个值、落盘另一个值」）。参数/规则畸形（非数组、缺 `from`/`to`）**大声报错**而不是静默不生效；源转录不可信，余段含 `..` 的改写会被拒绝并在返回值的 `cwdRemap.reason` 里记为 `parent-traversal`。注意：重映射只对**新导入**生效——已导入的源按既有幂等语义跳过，需要 `force` 才会另建副本。
+
+### Added
+
 - **导入 Codex 会话保留 reasoning 的可读部分（#48）** — Codex rollout 的 `reasoning` 记录里 `encrypted_content` 是不透明密文（实测占该记录字节 97.5%，既不读也不搬），但 `summary` 是可读块数组（本机 1243 条 reasoning 全部带 summary）。此前整类跳过、推理内容全丢；现在把 summary 文本作为 reasoning 块导入（与 pi/claude/gemini/hermes/kimi 同形的 `{ type: 'reasoning', text }`），无 summary 时不产生空块、也不自开步骤。能力矩阵 `SOURCE_CAPABILITIES.codex.reasoning` 由 false 改为 true，`docs/INTERCHANGE.md` 的能力表与 `reasoning-encrypted` 降级说明同步改为「summary 可读、密文不可读」。
 - **导入 Codex 会话时如实标记被中断的回合（#52）** — `event_msg/turn_aborted`（本机 16 条实测 `reason` 恒为 `interrupted`，不区分用户 / hook / 销毁）此前被当作正常完成。现在该回合的 `turn/end` 记为 `{ kind: 'aborted', reason: { kind: 'legacy' } }`——`legacy` 正是宿主为「导入且原始粗粒度记录未携带原因」预留的原因类型；后续回合不受影响。预算裁剪不丢该标记（`trimTurns` 的 L1 克隆此前只取 `{ prompt, steps }`，而生产导入恒走裁剪，会把中断静默说回「正常完成」）。
 

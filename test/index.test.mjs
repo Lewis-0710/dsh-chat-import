@@ -4944,3 +4944,19 @@ test('issue #41 持久化适配层：list 元素形状、readSessionRecord、wri
   await writeSession(ctxOf(legacy), { id: 'import-c' }, [{ seq: 0 }])
   assert.equal(store.sessions.get('import-c').events.length, 1)
 })
+
+// cwdRemap（PR #53）：dry-run 预览必须与落盘同口径——预览显示的 cwd 就是最终 header.cwd。
+// 预览此前不走重映射，会给出一个与落盘不同的 cwd（dry-run 撒谎）。
+test('cwdRemap：dry-run 预览与落盘的 cwd 同口径', async () => {
+  const file = 'D:\\demo\\proj\\sess-simple-001.jsonl'
+  const from = hostAbs('D:/demo/proj')
+  const to = hostAbs('D:/host/work')
+  const { ctx, persistence } = makeCtx({ [file]: load('sess-simple-001.jsonl') })
+  apply(ctx)
+  const def = chatDef(ctx, 'claude')
+  const preview = await def.execute({ path: file, preview: true, cwdRemap: [{ from, to }] })
+  assert.equal(preview.cwd, to, '预览即重映射后的 cwd')
+  const value = await def.execute({ path: file, cwdRemap: [{ from, to }] })
+  assert.equal(value.cwdRemap.mapped, to)
+  assert.equal(persistence.sessions.get(value.sessionId).meta.cwd, to, '落盘与预览一致')
+})

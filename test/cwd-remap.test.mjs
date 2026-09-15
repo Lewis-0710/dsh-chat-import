@@ -8,86 +8,107 @@
 // 本文件只覆盖重映射本身的语义与接线，不重复既有导入流程的用例。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { join } from 'node:path'
 
 import { applyCwdRemap, attachReq26, finalizeConvertedSession } from '../lib/import-core.mjs'
 
 const conv = (cwd) => ({ meta: { id: 'import-x', cwd }, turns: [], events: [] })
+// 期望值用与产品同口径的 node:path join 计算（AGENTS.md 跨平台路径纪律）：
+// applyCwdRemap 内部就是 join(to, ...rest)，写死 '/' 会在 Windows 上得到 '\local\demo\proj'
+const mapped = (to, ...rest) => join(to, ...rest)
+// 源机路径故意用 Windows 形态（跨机迁移的真实场景）：这些常量是被测**输入**，
+// 不是「本机 cwd 断言」，因此不走 hostAbs——那会把要测的场景抹掉。
+const SRC = {
+  proj: 'D:\\demo\\proj',
+  demo: 'D:\\demo',
+  src: 'D:\\demo\\proj\\src',
+  demolition: 'D:\\demolition\\x',
+  traversal: 'D:\\demo\\..\\etc',
+}
 
 test('未传 cwdRemap 时完全不碰 meta（默认不启用，既有行为不变）', () => {
-  for (const args of [{}, { cwdRemap: undefined }, { cwdRemap: [] }, { cwdRemap: null }, { cwdRemap: 'x' }]) {
-    const out = conv('D:\\demo\\proj')
+  for (const args of [{}, { cwdRemap: undefined }, { cwdRemap: [] }, { cwdRemap: null }]) {
+    const out = conv(SRC.proj)
     applyCwdRemap(out, args)
-    assert.equal(out.meta.cwd, 'D:\\demo\\proj')
+    assert.equal(out.meta.cwd, SRC.proj)
     assert.equal(out.cwdRemap, undefined)
   }
 })
 
+// 参数来自模型/用户，静默忽略会让人以为已经重映射了（仓库「失败要大声」纪律）
+test('畸形 cwdRemap 大声失败，而不是静默不生效', () => {
+  assert.throws(() => applyCwdRemap(conv(SRC.proj), { cwdRemap: 'x' }), /cwdRemap 必须是/)
+  assert.throws(() => applyCwdRemap(conv(SRC.proj), { cwdRemap: [null] }), /cwdRemap\[0\]/)
+  assert.throws(() => applyCwdRemap(conv(SRC.proj), { cwdRemap: [{ from: SRC.demo }] }), /cwdRemap\[0\]/)
+  assert.throws(() => applyCwdRemap(conv(SRC.proj), { cwdRemap: [{ from: ' ', to: '/x' }] }), /cwdRemap\[0\]/)
+})
+
 test('命中规则：前缀被改写为 to，其余部分按本机分隔符拼接', () => {
-  const out = conv('D:\\demo\\proj')
-  applyCwdRemap(out, { cwdRemap: [{ from: 'D:\\demo', to: '/Users/me/demo' }] })
-  assert.equal(out.meta.cwd, '/Users/me/demo/proj')
+  const out = conv(SRC.proj)
+  applyCwdRemap(out, { cwdRemap: [{ from: SRC.demo, to: '/Users/me/demo' }] })
+  assert.equal(out.meta.cwd, mapped('/Users/me/demo', 'proj'))
   assert.deepEqual(out.cwdRemap, {
-    from: 'D:\\demo',
+    from: SRC.demo,
     to: '/Users/me/demo',
-    original: 'D:\\demo\\proj',
-    mapped: '/Users/me/demo/proj',
+    original: SRC.proj,
+    mapped: mapped('/Users/me/demo', 'proj'),
     absolute: true,
   })
 })
 
-test('cwd 恰好等于 from 时映射为 to 本身', () => {
-  const out = conv('D:\\demo')
-  applyCwdRemap(out, { cwdRemap: [{ from: 'D:\\demo', to: '/Users/me/demo' }] })
+test('cwd 恰好等于 from 时映射为 to 本身（不经过 join，原样落 to）', () => {
+  const out = conv(SRC.demo)
+  applyCwdRemap(out, { cwdRemap: [{ from: SRC.demo, to: '/Users/me/demo' }] })
   assert.equal(out.meta.cwd, '/Users/me/demo')
 })
 
 test('长前缀优先：/a 不得抢先命中 /a/b 下的路径', () => {
-  const out = conv('D:\\demo\\proj\\src')
+  const out = conv(SRC.src)
   applyCwdRemap(out, {
     cwdRemap: [
-      { from: 'D:\\demo', to: '/short' },
-      { from: 'D:\\demo\\proj', to: '/long' },
+      { from: SRC.demo, to: '/short' },
+      { from: SRC.proj, to: '/long' },
     ],
   })
-  assert.equal(out.meta.cwd, '/long/src', '规则按 from 长度降序匹配')
+  assert.equal(out.meta.cwd, mapped('/long', 'src'), '规则按 from 长度降序匹配')
 })
 
 test('前缀边界：from 必须落在分隔符上，D:\\demo 不得命中 D:\\demolition', () => {
-  const out = conv('D:\\demolition\\x')
-  applyCwdRemap(out, { cwdRemap: [{ from: 'D:\\demo', to: '/x' }] })
-  assert.equal(out.meta.cwd, 'D:\\demolition\\x', '未命中则原样保留')
+  const out = conv(SRC.demolition)
+  applyCwdRemap(out, { cwdRemap: [{ from: SRC.demo, to: '/x' }] })
+  assert.equal(out.meta.cwd, SRC.demolition, '未命中则原样保留')
   assert.equal(out.cwdRemap, undefined)
 })
 
 test('未命中任何规则时不做任何改动', () => {
   const out = conv('/already/local/proj')
-  applyCwdRemap(out, { cwdRemap: [{ from: 'D:\\demo', to: '/x' }] })
+  applyCwdRemap(out, { cwdRemap: [{ from: SRC.demo, to: '/x' }] })
   assert.equal(out.meta.cwd, '/already/local/proj')
   assert.equal(out.cwdRemap, undefined)
 })
 
 test('规则里的首尾分隔符与正斜杠写法都能用', () => {
-  const a = conv('D:\\demo\\proj')
+  const a = conv(SRC.proj)
   applyCwdRemap(a, { cwdRemap: [{ from: 'D:\\demo\\', to: '/local/demo/' }] })
-  assert.equal(a.meta.cwd, '/local/demo/proj', '尾部斜杠被归一')
+  assert.equal(a.meta.cwd, mapped('/local/demo', 'proj'), '尾部斜杠被归一')
 
   const b = conv('D:/demo/proj')
   applyCwdRemap(b, { cwdRemap: [{ from: 'D:/demo', to: '/local/demo' }] })
-  assert.equal(b.meta.cwd, '/local/demo/proj', '正斜杠写法同样命中')
+  assert.equal(b.meta.cwd, mapped('/local/demo', 'proj'), '正斜杠写法同样命中')
 })
 
-test('畸形规则被忽略，不影响合法规则', () => {
-  const out = conv('D:\\demo\\proj')
-  applyCwdRemap(out, {
-    cwdRemap: [null, {}, { from: '' }, { from: 'D:\\demo' }, { to: '/x' }, { from: 'D:\\demo', to: '' },
-      { from: 'D:\\demo', to: '/ok' }],
-  })
-  assert.equal(out.meta.cwd, '/ok/proj')
+// 源转录是不可信输入：余段含 '..' 时改写会把结果推出 to（改写后的 cwd 决定归组），
+// 因此拒绝改写并如实记下原因，而不是静默拼出一个越界路径。
+test('余段含 .. 时拒绝改写，并记录 parent-traversal', () => {
+  const out = conv(SRC.traversal)
+  applyCwdRemap(out, { cwdRemap: [{ from: SRC.demo, to: '/local/demo' }] })
+  assert.equal(out.meta.cwd, SRC.traversal, '不应用会越界的改写')
+  assert.equal(out.cwdRemap.reason, 'parent-traversal')
 })
 
 test('幂等：重复调用保持首次结果，不叠加', () => {
-  const out = conv('D:\\demo\\proj')
-  const args = { cwdRemap: [{ from: 'D:\\demo', to: '/local/demo' }] }
+  const out = conv(SRC.proj)
+  const args = { cwdRemap: [{ from: SRC.demo, to: '/local/demo' }] }
   applyCwdRemap(out, args)
   const first = out.meta.cwd
   applyCwdRemap(out, args)
@@ -95,28 +116,26 @@ test('幂等：重复调用保持首次结果，不叠加', () => {
   assert.equal(out.meta.cwd, first, '第二次改写不再生效')
 })
 
-test('to 用外来分隔符时结果非本机绝对，如实记为 absolute:false（随后由 prepareHostMeta 剔除）', () => {
-  // to 应当是**本机**路径。这里故意给一个 Windows 形式，验证两件事：
-  // 1) 余下部分按本机 join 拼接，所以出现混合分隔符（E:\other/proj）——这是 join 的
-  //    既有行为，不是本选项引入的；
-  // 2) 结果过不了 isAbsolute（POSIX 上为 false），于是照旧被 prepareHostMeta 剔除、
-  //    会话退化未分组。重映射不绕过宿主校验，把事实记进 cwdRemap.absolute 供上报。
-  const out = conv('D:\\demo\\proj')
-  applyCwdRemap(out, { cwdRemap: [{ from: 'D:\\demo', to: 'E:\\other' }] })
-  assert.equal(out.meta.cwd, 'E:\\other/proj')
+test('to 写成相对路径时结果非本机绝对，如实记为 absolute:false（随后由 prepareHostMeta 剔除）', () => {
+  // to 应当是**本机绝对**路径。这里故意给一个相对路径，验证：重映射不绕过宿主校验——
+  // 结果过不了 isAbsolute，于是照旧被 prepareHostMeta 剔除、会话退化为未分组；而
+  // 「非绝对」这个事实被记进 cwdRemap.absolute 供结果层上报（不静默改写）。
+  const out = conv(SRC.proj)
+  applyCwdRemap(out, { cwdRemap: [{ from: SRC.demo, to: 'relative/other' }] })
+  assert.equal(out.meta.cwd, mapped('relative/other', 'proj'))
   assert.equal(out.cwdRemap.absolute, false, '不静默：非绝对的事实要被记下')
 })
 
 test('meta 缺失或 cwd 非字符串时安全返回', () => {
   for (const out of [{}, { meta: {} }, { meta: { cwd: 42 } }, { meta: { cwd: '' } }, null]) {
-    assert.doesNotThrow(() => applyCwdRemap(out, { cwdRemap: [{ from: 'D:\\demo', to: '/x' }] }))
+    assert.doesNotThrow(() => applyCwdRemap(out, { cwdRemap: [{ from: SRC.demo, to: '/x' }] }))
   }
 })
 
 test('接线：finalizeConvertedSession 应用重映射；attachReq26 把结果透出到返回值', () => {
-  const out = conv('D:\\demo\\proj')
-  finalizeConvertedSession(out, { cwdRemap: [{ from: 'D:\\demo', to: '/local/demo' }] })
-  assert.equal(out.meta.cwd, '/local/demo/proj', 'finalize 阶段即改写（早于落盘与归组）')
+  const out = conv(SRC.proj)
+  finalizeConvertedSession(out, { cwdRemap: [{ from: SRC.demo, to: '/local/demo' }] })
+  assert.equal(out.meta.cwd, mapped('/local/demo', 'proj'), 'finalize 阶段即改写（早于落盘与归组）')
 
   const res = attachReq26(out, { sessionId: 'import-x', turns: 0, messages: 0, toolCalls: 0, skipped: 0 })
   assert.deepEqual(res.cwdRemap, out.cwdRemap, '重映射事实进入返回值，可被观察')
