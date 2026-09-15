@@ -1,3 +1,13 @@
+> [!NOTE]
+> **Fork 维护版本** | 本仓库是 [Nwflower/dsh-chat-import](https://github.com/Nwflower/dsh-chat-import) 的维护分支。
+> 
+> **与上游差异**：
+> 1. 扩展 lib/client.js 导入面板，支持单个及批量删除源文件与已导入记录
+> 2. 优化侧边栏 Tab 集成，增强在 DSH Desktop 环境下的兼容性
+> 3. 新增 /api-import/delete-source 路由与清理工具
+> 
+> 详见 [sync.patch](./sync.patch)。
+
 <div align="center">
 
 <img src="./assets/dci-promo.png" alt="DSH Chat Import" width="100%" />
