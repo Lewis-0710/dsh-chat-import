@@ -4825,6 +4825,43 @@ test('issue #41 幽灵 id：agents.create 报 already exists 时不回退，另�
   assert.ok(persistence.sessions.has('import-sess-simple-001-1'))
 })
 
+// 宿主为「id 被占」并列定义了两个错误类型（@deepseek-ai/dsh-session-persistence）：
+// SessionAlreadyExistsError（`session "<id>" already exists`）与 SessionAlreadyOwnedError
+// （`session "<id>" is already owned by an active write handle`，进程内写句柄唯一性——长驻
+// 宿主上必现，另起进程的同名会话则正常）。两种措辞都必须触发「另铸后缀新 id 重试」，否则
+// 错误直接上抛、同源导入在宿主重启前永久失败（issue #55）。
+// 判定优先按 err.name：宿主再新增措辞时不必追文案；文案仅作兜底（老宿主 / mock host）。
+test('issue #55 会话 id 被宿主写句柄占用时，同样另铸后缀新 id 重试', async () => {
+  const cases = [
+    // 按 err.name 命中（文案故意写成无关内容，锁定「名字优先」）
+    { label: 'SessionAlreadyOwnedError（按 err.name）', make: (id) => Object.assign(new Error('见 err.name'), { name: 'SessionAlreadyOwnedError', sessionId: id }) },
+    // 文案兜底：老宿主 / 被包了一层的错误没有 name
+    { label: '仅文案（already owned by an active write handle）', make: (id) => new Error('session "' + id + '" is already owned by an active write handle') },
+  ]
+  for (const c of cases) {
+    const calls = []
+    const services = {
+      agents: {
+        async create({ sessionId, meta, seed }) {
+          calls.push(sessionId)
+          if (calls.length === 1) throw c.make(sessionId)
+          await persistence.create(meta)
+          await persistence.append(sessionId, seed)
+        },
+      },
+    }
+    const simple = load('sess-simple-001.jsonl')
+    const { ctx, persistence } = makeCtx({ 'D:\\demo\\proj\\sess-simple-001.jsonl': simple }, { services })
+    apply(ctx)
+    const value = await chatDef(ctx, 'claude').execute({ path: 'D:\\demo\\proj\\sess-simple-001.jsonl' })
+    assert.equal(value.status, 'imported', c.label)
+    assert.equal(value.sessionId, 'import-sess-simple-001-1', c.label)
+    assert.deepEqual(calls, ['import-sess-simple-001', 'import-sess-simple-001-1'], c.label)
+    assert.equal(persistence.sessions.has('import-sess-simple-001'), false, c.label)
+    assert.ok(persistence.sessions.has('import-sess-simple-001-1'), c.label)
+  }
+})
+
 test('issue #41 sanitizeJsonValue 剥离不可无损 JSON 序列化的值并上报路径', () => {
   const stripped = []
   const cyclic = { name: 'loop' }
