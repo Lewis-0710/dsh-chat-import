@@ -13,6 +13,8 @@ from the matching section below.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-15
+
 ### Added
 
 - **新源：Continue 会话适配（第 21 种格式）** — 读 `<global>/sessions/<sessionId>.json`，`global` 取 `$CONTINUE_GLOBAL_DIR`、否则 `~/.continue`；VS Code / JetBrains / CLI 三端共用同一份目录，故一次适配三端通吃。会话文件是**单个 JSON 对象**（不是 JSONL）：平面消息列表（user / assistant / thinking / system / tool），工具调用挂在 assistant 消息的 `toolCalls` 上、结果在紧随其后的独立 `tool` 消息里按 `toolCallId` 配对——转换器据此重建回合/步骤，孤儿结果（转录中途开始、调用来自更早的压缩段）丢弃并计数，绝不挂最近一步。保真度：推理取 `thinking` 消息与 `item.reasoning.text` 两处来源（同一段文本时去重，避免整段重复）、工具结果缺失时用 `toolCallStates[].output` 兜底且 `status: 'errored'` 记为错误、cwd 取 `workspaceDirectory`。噪声字段（`contextItems` 内嵌所引用文件全文、`editorState`、`promptLogs`、`appliedRules`、`toolCallStates[].tool`）一律丢弃：它们是 UI 态与检索上下文，不是对话。压缩（`conversationSummary`）**不裁剪 history**（上游只在某条 item 上记摘要，原文全在文件里），因此导入保留全文，并把摘要挂为该步的 reasoning 块以还原压缩边界。创建时间只存在于同目录 `sessions.json` 索引（会话文件内部没有时间戳）：发现层与单文件导入都优先读索引，索引缺失时回退整读会话文件；默认标题 `New Session` 不冒充标题，交给首问兜底。
