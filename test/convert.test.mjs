@@ -2192,3 +2192,39 @@ test('所有源的 assistant/message 都带 settlement 字段 stream（issue #41
     }
   }
 })
+
+// codex reasoning：可读部分在 summary 块里（实测 81 条真实记录：content 恒为 null，
+// summary 是 [{type:'summary_text',text}] 数组）。encrypted_content 是不透明密文
+// （占 reasoning 的 85.2%），既不读也不搬。
+test('codex：reasoning 的 summary 块转成 reasoning 内容块，密文不进产物', () => {
+  const out = convertCodexJsonl(load('codex-reasoning.jsonl'))
+  const steps = out.turns.flatMap((t) => t.steps)
+  const blocks = steps.flatMap((s) => s.content).filter((c) => c.type === 'reasoning')
+  assert.equal(blocks.length, 2)
+  assert.equal(blocks[0].text, '**Planning a project structure scan**')
+  // 同一条记录里的多个 summary 块按序合并
+  assert.equal(blocks[1].text, '**Reading the manifest**\n**Then listing the tree**')
+  // reasoning 出现在其所属 assistant 步骤之前，必须并入该步而非另开一步
+  assert.equal(steps.length, 1, 'reasoning 不得自开一步')
+  assert.equal(out.messages, 2, 'messages 不得因 reasoning 虚增')
+  assert.equal(out.turns.length, 1)
+  // 密文绝不出现
+  assert.ok(!JSON.stringify(out).includes('fixture-blob'), 'encrypted_content 不得进入转换产物')
+})
+
+test('codex：无 summary 的 reasoning 不产生空块，也不自开步骤', () => {
+  const recs = [
+    '{"timestamp":"2026-05-18T13:21:30.751Z","type":"session_meta","payload":{"id":"x","cwd":"/p"}}',
+    '{"timestamp":"2026-05-18T13:21:30.754Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"hi"}]}}',
+    '{"timestamp":"2026-05-18T13:21:31.000Z","type":"response_item","payload":{"type":"reasoning","id":"r","summary":[],"encrypted_content":"gAAAAAB-fixture-blob-3"}}',
+    '{"timestamp":"2026-05-18T13:21:31.100Z","type":"response_item","payload":{"type":"reasoning","id":"r2","encrypted_content":"gAAAAAB-fixture-blob-4"}}',
+    '{"timestamp":"2026-05-18T13:21:32.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}}',
+  ].join('\n')
+  const out = convertCodexJsonl(recs)
+  const steps = out.turns.flatMap((t) => t.steps)
+  const blocks = steps.flatMap((s) => s.content).filter((c) => c.type === 'reasoning')
+  assert.equal(blocks.length, 0, '没有可读文本时不推空块')
+  assert.equal(steps.length, 1, '不因空 reasoning 自开步骤')
+  assert.equal(out.messages, 2)
+  assert.ok(!JSON.stringify(out).includes('fixture-blob'))
+})
