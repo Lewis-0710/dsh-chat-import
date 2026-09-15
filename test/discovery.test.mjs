@@ -1146,3 +1146,24 @@ test('codex：扁平 archived_sessions/ 下的 rollout 可被发现', async () =
   assert.equal(sessions[0].title, '归档会话也要能导入')
   assert.equal(sessions[0].sourcePath, archived)
 })
+
+// 单文件目标（显式给出某个会话日志路径）要走通「路径特征判格式 → 目录形态扫描器消费」：
+// 目录形态的扫描器此前对文件目标恒返回空（walkFiles 只遍历目录），自动探测因此形同虚设。
+// 这里同时覆盖代次工件名（session.v3.jsonl）与 Windows 分隔符（Linux CI 上也能验证）。
+test('dsh：单文件路径自动探测（不给 format）—— 代次工件名 + Windows 分隔符', async () => {
+  const winFile = 'D:\\demo\\dsh-home\\sessions\\--D-Build--\\session-abc\\session.v3.jsonl'
+  const posixFile = '/demo/dsh-home/sessions/--D-Build--/session-def/session.v3.jsonl'
+  const body = (id) => [
+    j({ type: 'session', id, cwd: '/demo/proj', createdAt: 1700000000000 }),
+    j({ type: 'user/message', seq: 1, data: { content: [{ type: 'text', text: '单文件路径也要能探测' }] } }),
+  ].join('\n')
+
+  for (const [file, id] of [[winFile, 'session-abc'], [posixFile, 'session-def']]) {
+    const host = mockHost(new Map([[file, { type: 'file', mtimeMs: 1786000002000, text: body(id) }]]))
+    const { sessions, total } = await discoverSessions({ path: file, host, imports: {} })
+    assert.equal(total, 1, '单文件目标应产出 1 条（' + file + '）')
+    assert.equal(sessions[0].format, 'dsh', file)
+    assert.equal(sessions[0].sessionId, id)
+    assert.equal(sessions[0].sourcePath, file)
+  }
+})
