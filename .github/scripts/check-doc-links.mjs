@@ -7,7 +7,10 @@
 // 规则：受版本管理的 `*.md` 里所有相对链接（含图片）必须解析到存在的路径。
 //   - 跳过外链（http/https/mailto）、页内锚点（#…）、尖括号包裹的目标；
 //   - 跳过 ``` 围栏代码块内的内容（示例代码里的 `[..](..)` 不是链接）；
-//   - 目标带锚点/查询串时只校验路径部分。
+//   - 目标带锚点/查询串时只校验路径部分；
+//   - Markdown 语法（`[文字](目标)` / `![图](目标)`）与 **HTML 属性**（`src=`/`href=`，
+//     README 的来源图标墙用 HTML 表格排版）两种写法都查 —— 少查一种就等于给链接失效
+//     留后门。
 //
 // 用法：node .github/scripts/check-doc-links.mjs（无参数，扫描 `git ls-files "*.md"`）。
 
@@ -35,13 +38,21 @@ function stripFenced(text) {
   return out
 }
 
+// 一行里的所有相对目标：Markdown 链接/图片 + HTML src/href 属性（两种引号都认）。
+function targetsIn(line) {
+  const out = []
+  for (const m of line.matchAll(/!?\[[^\]]*\]\(([^)\s]+)\)/g)) out.push(m[1])
+  for (const m of line.matchAll(/(?:src|href)\s*=\s*("([^"]*)"|'([^']*)')/gi)) out.push(m[2] !== undefined ? m[2] : m[3])
+  return out
+}
+
 for (const file of files) {
   if (!existsSync(file)) continue
   const lines = stripFenced(readFileSync(file, 'utf8'))
   for (let i = 0; i < lines.length; i += 1) {
-    for (const m of lines[i].matchAll(/!?\[[^\]]*\]\(([^)\s]+)\)/g)) {
-      const target = m[1].trim()
-      if (/^(https?:|mailto:|#|<)/i.test(target)) continue
+    for (const raw of targetsIn(lines[i])) {
+      const target = String(raw).trim()
+      if (!target || /^(https?:|mailto:|#|<|data:)/i.test(target)) continue
       const clean = target.split('#')[0].split('?')[0]
       if (!clean) continue
       checked += 1

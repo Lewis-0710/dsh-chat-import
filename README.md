@@ -24,18 +24,60 @@
 
 `DSH Chat Import` imports conversation history with full context from other agents, turning it into a seamlessly resumable DeepSeek Harness session.
 
-Now covers import from 23 agents: Claude Code, Codex, ChatGPT, Cursor, Gemini, Antigravity CLI, Reasonix, opencode, MiMo Code, ZCode, Grok Build, OpenClaw, Pi Coding Agent, Hermes, Kimi CLI / Kimi Code, Kilo Code, Qoder CLI, WorkBuddy, Qwen Work CN (千问办公), Continue, Cline and DSH session logs.
-
-Export back to: Claude Code, Codex, Kimi Code.
+**23 agents** plus any local JSONL are covered today — the full list is under [Supported Agents](#supported-agents). Export back to: Claude Code, Codex, Kimi Code.
 
 ## Supported Agents
 
-|  |  |  |  |  |  |
-| --- | --- | --- | --- | --- | --- |
-| [![Claude Code](./assets/agents/claude.svg)<br>**Claude Code**](https://github.com/anthropics/claude-code) | [![Codex](./assets/agents/codex.svg)<br>**Codex**](https://github.com/openai/codex) | [![ChatGPT](./assets/agents/chatgpt.svg)<br>**ChatGPT**](https://chatgpt.com) | [![Cursor](./assets/agents/cursor.svg)<br>**Cursor**](https://cursor.com) | [![Gemini](./assets/agents/gemini.svg)<br>**Gemini CLI**](https://github.com/google-gemini/gemini-cli) | [![Antigravity](./assets/agents/antigravity.svg)<br>**Antigravity CLI**](https://antigravity.google) |
-| [![Reasonix](./assets/agents/reasonix.svg)<br>**Reasonix**](https://github.com/esengine/DeepSeek-Reasonix) | [![OpenCode](./assets/agents/opencode.svg)<br>**OpenCode**](https://github.com/anomalyco/opencode) | [![MiMo Code](./assets/agents/mimocode.svg)<br>**MiMo Code**](https://github.com/XiaomiMiMo/MiMo-Code) | [![Kilo Code](./assets/agents/kilocode.svg)<br>**Kilo Code**](https://github.com/Kilo-Org/kilocode) | [![ZCode](./assets/agents/zcode.svg)<br>**ZCode**](https://z.ai) |  |
-| [![Grok Build](./assets/agents/grokbuild.svg)<br>**Grok Build**](https://github.com/xai-org/grok-build) | [![OpenClaw](./assets/agents/openclaw.svg)<br>**OpenClaw**](https://github.com/openclaw/openclaw) | [![Pi Coding Agent](./assets/agents/pi.svg)<br>**Pi Coding Agent**](https://github.com/badlogic/pi-mono) | [![Hermes](./assets/agents/hermes.svg)<br>**Hermes**](https://github.com/NousResearch/hermes-agent) | [![Kimi CLI](./assets/agents/kimi.svg)<br>**Kimi CLI**](https://github.com/MoonshotAI/kimi-cli) |  |
-| [![Qoder CLI](./assets/agents/qoder.svg)<br>**Qoder CLI**](https://github.com/qoderAI/qoder-cli) | [![WorkBuddy](./assets/agents/workbuddy.svg)<br>**WorkBuddy**](https://github.com/gabotechs/workbuddy) | [![Qwen Work CN](./assets/agents/qwen.svg)<br>**Qwen Work CN**](https://github.com/QwenLM/qwen-code) | [![Continue](./assets/agents/continue.svg)<br>**Continue**](https://github.com/continuedev/continue) | [![Cline](./assets/agents/cline.svg)<br>**Cline**](https://github.com/cline/cline) | [![DSH](./assets/agents/dsh.svg)<br>**DSH**](https://github.com/deepseek-ai/deepseek-harness) |
+Every source below becomes an independent DSH session, with tool calls, tool results and reasoning kept intact.
+
+**Terminal agents**
+
+<table>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/anthropics/claude-code"><img src="./assets/agents/claude.svg" width="56" height="56" alt="Claude Code" /><br /><b>Claude Code</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/openai/codex"><img src="./assets/agents/codex.svg" width="56" height="56" alt="Codex" /><br /><b>Codex</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/google-gemini/gemini-cli"><img src="./assets/agents/gemini.svg" width="56" height="56" alt="Gemini CLI" /><br /><b>Gemini CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/qoderAI/qoder-cli"><img src="./assets/agents/qoder.svg" width="56" height="56" alt="Qoder CLI" /><br /><b>Qoder CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/MoonshotAI/kimi-cli"><img src="./assets/agents/kimi.svg" width="56" height="56" alt="Kimi CLI" /><br /><b>Kimi CLI</b></a></td>
+  </tr>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/MoonshotAI/kimi-code"><img src="./assets/agents/kimi.svg" width="56" height="56" alt="Kimi Code" /><br /><b>Kimi Code</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/esengine/DeepSeek-Reasonix"><img src="./assets/agents/reasonix.svg" width="56" height="56" alt="Reasonix" /><br /><b>Reasonix</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/anomalyco/opencode"><img src="./assets/agents/opencode.svg" width="56" height="56" alt="OpenCode" /><br /><b>OpenCode</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/XiaomiMiMo/MiMo-Code"><img src="./assets/agents/mimocode.svg" width="56" height="56" alt="MiMo Code" /><br /><b>MiMo Code</b></a></td>
+    <td align="center" width="20%"><a href="https://z.ai"><img src="./assets/agents/zcode.svg" width="56" height="56" alt="ZCode" /><br /><b>ZCode</b></a></td>
+  </tr>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/xai-org/grok-build"><img src="./assets/agents/grokbuild.svg" width="56" height="56" alt="Grok Build" /><br /><b>Grok Build</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/openclaw/openclaw"><img src="./assets/agents/openclaw.svg" width="56" height="56" alt="OpenClaw" /><br /><b>OpenClaw</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/Kilo-Org/kilocode"><img src="./assets/agents/kilocode.svg" width="56" height="56" alt="Kilo Code" /><br /><b>Kilo Code</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/badlogic/pi-mono"><img src="./assets/agents/pi.svg" width="56" height="56" alt="Pi Coding Agent" /><br /><b>Pi Coding Agent</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/NousResearch/hermes-agent"><img src="./assets/agents/hermes.svg" width="56" height="56" alt="Hermes" /><br /><b>Hermes</b></a></td>
+  </tr>
+</table>
+
+**IDE & editor agents**
+
+<table>
+  <tr>
+    <td align="center" width="25%"><a href="https://cursor.com"><img src="./assets/agents/cursor.svg" width="56" height="56" alt="Cursor" /><br /><b>Cursor</b></a></td>
+    <td align="center" width="25%"><a href="https://github.com/cline/cline"><img src="./assets/agents/cline.svg" width="56" height="56" alt="Cline" /><br /><b>Cline</b></a></td>
+    <td align="center" width="25%"><a href="https://github.com/continuedev/continue"><img src="./assets/agents/continue.svg" width="56" height="56" alt="Continue" /><br /><b>Continue</b></a></td>
+    <td align="center" width="25%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity CLI" /><br /><b>Antigravity CLI</b></a></td>
+  </tr>
+</table>
+
+**Chat, office tools & harness**
+
+<table>
+  <tr>
+    <td align="center" width="20%"><a href="https://chatgpt.com"><img src="./assets/agents/chatgpt.svg" width="56" height="56" alt="ChatGPT" /><br /><b>ChatGPT</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/gabotechs/workbuddy"><img src="./assets/agents/workbuddy.svg" width="56" height="56" alt="WorkBuddy" /><br /><b>WorkBuddy</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/QwenLM/qwen-code"><img src="./assets/agents/qwen.svg" width="56" height="56" alt="Qwen Work CN" /><br /><b>Qwen Work CN</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/deepseek-ai/deepseek-harness"><img src="./assets/agents/dsh.svg" width="56" height="56" alt="DSH" /><br /><b>DSH</b></a></td>
+    <td align="center" width="20%"><a href="#usage"><img src="./assets/agents/local-jsonl.svg" width="56" height="56" alt="Local JSONL" /><br /><b>Local JSONL</b></a></td>
+  </tr>
+</table>
 
 ## Install
 
