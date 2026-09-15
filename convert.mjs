@@ -4,9 +4,8 @@
 // 本文件只做 re-export，保持 convert.mjs 的既有 public export 名与相对顺序不变，
 // index.mjs / lib/ / test/ 等既有 import 路径无需改动。各源格式的 `convertXxx(raw, args)`
 // 把原始 transcript 文本解析成统一的回合中间结构，再交给共享的 synthesizeSession
-// 合成 DSH 事件日志，保证所有源（Claude Code / Codex-ChatGPT / ChatGPT / Cursor /
-// Gemini / Reasonix / Pi Coding Agent / opencode / zcode / grokbuild / openclaw /
-// hermes）事件纪律一致。
+// 合成 DSH 事件日志，保证所有来源的事件纪律一致（来源清单见 lib/discovery.mjs 的
+// FORMATS，每源的实现与存储契约写在各自的 lib/convert/<source>.mjs 头部）。
 
 export {
   SESSION_FORMAT_VERSION,

@@ -71,7 +71,7 @@ Scope note: `import_agents` is a lightweight asset mover only - it does not cove
 
 ### scan_discover — read-only session discovery
 
-`scan_discover` scans the known data roots of all 18 formats (including the Reasonix desktop app and Claude-3p roots on Windows) and returns a structured session index (title, project, cwd, path, import status, and git branch/dirty when the source directory is a git repo) so you can preview before a batch import. Zero side effects:
+`scan_discover` scans the known data roots of every supported format (including the Reasonix desktop app and Claude-3p roots on Windows) and returns a structured session index (title, project, cwd, path, import status, and git branch/dirty when the source directory is a git repo) so you can preview before a batch import. Zero side effects:
 
 ```
 scan_discover()
