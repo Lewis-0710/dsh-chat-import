@@ -101,7 +101,7 @@ export_chat({ format: "kimi", sessionId: "…", outputDir: "D:\backup\kimi" })
 
 ### export_bundle / restore_bundle — portable interchange bundle
 
-`export_bundle({ sessionId })` writes a **`.dshbundle.json`** — an event-level lossless interchange bundle (protocol: [docs/INTERCHANGE.md](docs/INTERCHANGE.md)) with double SHA-256 fingerprints (session-level + file-level) and machine-independent landing info (`originalCwd` + `landingHint`). `restore_bundle({ path })` verifies the fingerprints (corruption is reported loudly, never restored silently), then imports the session through the same idempotent state machine — repeat restores skip, `force: true` makes a copy, directory mode restores every `.dshbundle.json`:
+`export_bundle({ sessionId })` writes a **`.dshbundle.json`** — an event-level lossless interchange bundle (protocol: [docs/INTERCHANGE.md](INTERCHANGE.md)) with double SHA-256 fingerprints (session-level + file-level) and machine-independent landing info (`originalCwd` + `landingHint`). `restore_bundle({ path })` verifies the fingerprints (corruption is reported loudly, never restored silently), then imports the session through the same idempotent state machine — repeat restores skip, `force: true` makes a copy, directory mode restores every `.dshbundle.json`:
 
 ```
 export_bundle({ sessionId: "import-019f5f27-…" })                    // → ~/.dsh/exports/<id>.dshbundle.json
