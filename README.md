@@ -24,7 +24,7 @@
 
 `DSH Chat Import` imports conversation history with full context from other agents, turning it into a seamlessly resumable DeepSeek Harness session.
 
-Now covers import from 22 agents: Claude Code, Codex, ChatGPT, Cursor, Gemini, Antigravity CLI, Reasonix, opencode, MiMo Code, ZCode, Grok Build, OpenClaw, Pi Coding Agent, Hermes, Kimi CLI / Kimi Code, Kilo Code, Qoder CLI, WorkBuddy, Qwen Work CN (千问办公), Continue and DSH session logs.
+Now covers import from 23 agents: Claude Code, Codex, ChatGPT, Cursor, Gemini, Antigravity CLI, Reasonix, opencode, MiMo Code, ZCode, Grok Build, OpenClaw, Pi Coding Agent, Hermes, Kimi CLI / Kimi Code, Kilo Code, Qoder CLI, WorkBuddy, Qwen Work CN (千问办公), Continue, Cline and DSH session logs.
 
 Export back to: Claude Code, Codex, Kimi Code.
 
@@ -35,7 +35,7 @@ Export back to: Claude Code, Codex, Kimi Code.
 | [![Claude Code](./assets/agents/claude.svg)<br>**Claude Code**](https://github.com/anthropics/claude-code) | [![Codex](./assets/agents/codex.svg)<br>**Codex**](https://github.com/openai/codex) | [![ChatGPT](./assets/agents/chatgpt.svg)<br>**ChatGPT**](https://chatgpt.com) | [![Cursor](./assets/agents/cursor.svg)<br>**Cursor**](https://cursor.com) | [![Gemini](./assets/agents/gemini.svg)<br>**Gemini CLI**](https://github.com/google-gemini/gemini-cli) | [![Antigravity](./assets/agents/antigravity.svg)<br>**Antigravity CLI**](https://antigravity.google) |
 | [![Reasonix](./assets/agents/reasonix.svg)<br>**Reasonix**](https://github.com/esengine/DeepSeek-Reasonix) | [![OpenCode](./assets/agents/opencode.svg)<br>**OpenCode**](https://github.com/anomalyco/opencode) | [![MiMo Code](./assets/agents/mimocode.svg)<br>**MiMo Code**](https://github.com/XiaomiMiMo/MiMo-Code) | [![Kilo Code](./assets/agents/kilocode.svg)<br>**Kilo Code**](https://github.com/Kilo-Org/kilocode) | [![ZCode](./assets/agents/zcode.svg)<br>**ZCode**](https://z.ai) |  |
 | [![Grok Build](./assets/agents/grokbuild.svg)<br>**Grok Build**](https://github.com/xai-org/grok-build) | [![OpenClaw](./assets/agents/openclaw.svg)<br>**OpenClaw**](https://github.com/openclaw/openclaw) | [![Pi Coding Agent](./assets/agents/pi.svg)<br>**Pi Coding Agent**](https://github.com/badlogic/pi-mono) | [![Hermes](./assets/agents/hermes.svg)<br>**Hermes**](https://github.com/NousResearch/hermes-agent) | [![Kimi CLI](./assets/agents/kimi.svg)<br>**Kimi CLI**](https://github.com/MoonshotAI/kimi-cli) |  |
-| [![Qoder CLI](./assets/agents/qoder.svg)<br>**Qoder CLI**](https://github.com/qoderAI/qoder-cli) | [![WorkBuddy](./assets/agents/workbuddy.svg)<br>**WorkBuddy**](https://github.com/gabotechs/workbuddy) | [![Qwen Work CN](./assets/agents/qwen.svg)<br>**Qwen Work CN**](https://github.com/QwenLM/qwen-code) | [![Continue](./assets/agents/continue.svg)<br>**Continue**](https://github.com/continuedev/continue) | [![DSH](./assets/agents/dsh.svg)<br>**DSH**](https://github.com/deepseek-ai/deepseek-harness) |  |
+| [![Qoder CLI](./assets/agents/qoder.svg)<br>**Qoder CLI**](https://github.com/qoderAI/qoder-cli) | [![WorkBuddy](./assets/agents/workbuddy.svg)<br>**WorkBuddy**](https://github.com/gabotechs/workbuddy) | [![Qwen Work CN](./assets/agents/qwen.svg)<br>**Qwen Work CN**](https://github.com/QwenLM/qwen-code) | [![Continue](./assets/agents/continue.svg)<br>**Continue**](https://github.com/continuedev/continue) | [![Cline](./assets/agents/cline.svg)<br>**Cline**](https://github.com/cline/cline) | [![DSH](./assets/agents/dsh.svg)<br>**DSH**](https://github.com/deepseek-ai/deepseek-harness) |
 
 ## Install
 
@@ -76,7 +76,7 @@ This plugin's `import_agents` is a lightweight asset mover (it persists pi/openc
 
 | Capability | Entry points | Description |
 | --- | --- | --- |
-| Batch import | `import_chat` (21 formats) · `scan_discover` · sidebar panel | Import 20+ sources with one tool; each conversation becomes its own session |
+| Batch import | `import_chat` (22 formats) · `scan_discover` · sidebar panel | Import 21+ sources with one tool; each conversation becomes its own session |
 | Import history & purge | sidebar panel **History** tab | View `imports.json` records; remove plugin-created sessions (with confirmation) |
 | Full-fidelity resume | Imported sessions | Tool calls & results, reasoning, titles, models and timestamps carry over |
 | Export back | `export_chat` (`format: claude` / `codex` / `kimi`) | Serialize DSH sessions back to Claude / Codex / Kimi |

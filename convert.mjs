@@ -124,6 +124,12 @@ export {
 } from './lib/convert/continue.mjs'
 
 export {
+  convertClineJson,
+  clineMessagesPath,
+  readClineManifest,
+} from './lib/convert/cline.mjs'
+
+export {
   convertDshJsonl,
 } from './lib/convert/dsh.mjs'
 

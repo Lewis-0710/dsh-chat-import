@@ -924,6 +924,111 @@ test('import_continue 幂等：重复导入同一文件已存在则跳过', asyn
   assert.equal(persistence.sessions.size, 1)
 })
 
+// ---- import_cline 集成 ----
+
+// 合成 Cline 会话（结构对齐 lib/convert/cline.mjs 的 v1 契约：Anthropic 原生块，
+// 工具结果是挂在 user 消息上的 tool_result 块）。元数据分工与上游一致：cwd/标题在
+// manifest（DB 优先，测试里命中 manifest 分支 —— DB 属真实 SQLite，见 cline-db.test.mjs）。
+const CLINE_SID = '01J8Z6Q0M4V7X2K9TB3N5R8WDA'
+const CLINE_CWD = hostAbs('D:/demo/cline-proj')
+const CLINE_TS = '2026-04-22T17:40:00.000Z'
+const CLINE_DIR = 'D:\\demo\\cline\\data\\sessions\\' + CLINE_SID + '\\'
+function clineSession(messages, over = {}) {
+  return JSON.stringify({
+    version: 1, updated_at: '2026-04-22T17:42:10.123Z', agent: 'lead', sessionId: CLINE_SID, messages, ...over,
+  })
+}
+function clineManifest(title) {
+  return JSON.stringify({
+    version: 1, session_id: CLINE_SID, started_at: CLINE_TS, cwd: CLINE_CWD,
+    workspace_root: CLINE_CWD, metadata: { title },
+  })
+}
+function clineUser(text) {
+  return { id: 'u1', role: 'user', content: [{ type: 'text', text }], ts: 1776879600000 }
+}
+function clineAssistant(blocks) {
+  return { id: 'a1', role: 'assistant', content: blocks, ts: 1776879601000 }
+}
+
+test('import_cline 单文件导入：manifest 带出 cwd/标题/创建时间、落盘归组、schema 校验', async () => {
+  const src = CLINE_DIR + CLINE_SID + '.messages.json'
+  const { ctx, persistence, attached } = makeCtx({
+    [src]: clineSession([
+      clineUser('修一下登录页分页'),
+      clineAssistant([{ type: 'text', text: '已修好。' }]),
+    ]),
+    [CLINE_DIR + CLINE_SID + '.json']: clineManifest('修登录页分页'),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'cline')
+  const value = await def.execute({ path: src })
+
+  assert.equal(value.mode, 'single')
+  assert.equal(value.sessionId, 'import-' + CLINE_SID)
+  assert.equal(value.turns, 1)
+  assert.equal(value.messages, 2)
+  assert.equal(value.toolCalls, 0)
+  assert.equal(value.alreadyImported, false)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get('import-' + CLINE_SID)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, CLINE_CWD)
+  assert.equal(saved.meta.createdAt, Date.parse(CLINE_TS)) // 只存在于 manifest / DB 索引
+  assert.equal(saved.events.at(-1).type, 'session/title')
+  assert.match(saved.events.at(-1).data.title, /^Cline · /)
+  assert.ok(saved.events.every((e, i) => e.seq === i))
+  assertEnvelopeHygiene(saved.events)
+  assert.equal(attached.length, 1)
+  assert.equal(attached[0].id, 'import-' + CLINE_SID)
+})
+
+test('import_cline 工具历史：tool_result 块配对、思考落盘、is_error 如实标记', async () => {
+  const src = CLINE_DIR + CLINE_SID + '.messages.json'
+  const { ctx, persistence } = makeCtx({
+    [src]: clineSession([
+      clineUser('跑一下测试'),
+      clineAssistant([
+        { type: 'thinking', thinking: '先用命令跑' },
+        { type: 'tool_use', id: 'toolu_1', name: 'run_tests', input: { command: 'npm test' } },
+      ]),
+      { id: 'u2', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'ok 42 passed', is_error: false }] },
+      clineAssistant([{ type: 'text', text: '测试通过。' }]),
+    ]),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'cline')
+  const value = await def.execute({ path: src })
+  assert.equal(value.mode, 'single')
+  assert.equal(value.toolCalls, 1)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get(value.sessionId)
+  const result = saved.events.find((e) => e.type === 'tool/result')
+  assert.ok(result)
+  assert.deepEqual(result.sourceEventSeqs, [saved.events.find((e) => e.type === 'tool/call').seq])
+  assert.equal(result.data.message.content[0].content[0].text, 'ok 42 passed')
+  const reasoning = saved.events
+    .flatMap((e) => (e.type === 'assistant/message' ? e.data.message.content : []))
+    .filter((b) => b.type === 'reasoning')
+  assert.deepEqual(reasoning, [{ type: 'reasoning', text: '先用命令跑' }])
+})
+
+test('import_cline 幂等：重复导入同一文件已存在则跳过', async () => {
+  const src = CLINE_DIR + CLINE_SID + '.messages.json'
+  const { ctx, persistence } = makeCtx({
+    [src]: clineSession([clineUser('第一问'), clineAssistant([{ type: 'text', text: '一答' }])]),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'cline')
+  const first = await def.execute({ path: src })
+  const second = await def.execute({ path: src })
+  assert.equal(first.alreadyImported, false)
+  assert.equal(second.alreadyImported, true)
+  assert.equal(persistence.sessions.size, 1)
+})
+
 // ---- import_chatgpt 集成 ----
 
 test('import_chatgpt 单文件：一文件多会话、恒返回 batch、schema 校验', async () => {

@@ -741,6 +741,88 @@ test('continue：取消标题（默认 New Session）不冒充标题，交给首
   assert.equal(sessions[0].title, null)
 })
 
+test('cline：DB 索引优先（cwd/时间/标题），转写缺失的会话不列出', async () => {
+  const dataDir = join(HOME, '.cline', 'data')
+  const sessionsDir = join(dataDir, 'sessions')
+  const dbPath = join(dataDir, 'db', 'sessions.db')
+  const sid = '01J8Z6Q0M4V7X2K9TB3N5R8WDA'
+  const transcript = join(sessionsDir, sid, sid + '.messages.json')
+  const files = new Map([
+    [sessionsDir, { type: 'dir' }],
+    [dbPath, { type: 'file', mtimeMs: 1786000005000, text: 'SQLite format 3' }],
+    [transcript, {
+      type: 'file', mtimeMs: 1786000006000,
+      text: j({ version: 1, agent: 'lead', sessionId: sid, updated_at: '2026-04-22T17:42:10.123Z', messages: [] }),
+    }],
+  ])
+  const host = mockHost(files)
+  host.dbSessions = (kind) => {
+    assert.equal(kind, 'cline')
+    return [
+      {
+        id: sid, title: '修登录页分页', prompt: '修一下登录页分页', cwd: '/home/u/repo',
+        createdAt: Date.parse('2026-04-22T17:40:00.000Z'), lastActiveAt: Date.parse('2026-04-22T17:42:10.123Z'),
+        messageCount: null, messagesPath: transcript,
+      },
+      // 转写被删/未落盘的会话：DB 里有、磁盘上没有 → 不列出（点了也导不进来）
+      { id: 'ghost', title: '幽灵会话', cwd: null, createdAt: null, messagesPath: join(sessionsDir, 'ghost', 'ghost.messages.json') },
+    ]
+  }
+
+  const { sessions, total } = await discoverSessions({ path: sessionsDir, format: 'cline', host, imports: {} })
+  assert.equal(total, 1)
+  const s = sessions[0]
+  assert.equal(s.format, 'cline')
+  assert.equal(s.sessionId, sid)
+  assert.equal(s.title, '修登录页分页')
+  assert.equal(s.project, 'repo')
+  assert.equal(s.cwd, '/home/u/repo')
+  assert.equal(s.createdAt, Date.parse('2026-04-22T17:40:00.000Z'))
+  assert.equal(s.lastActiveAt, Date.parse('2026-04-22T17:42:10.123Z'))
+  assert.equal(s.messageCount, null) // sessions 表没有 message_count 列
+  assert.equal(s.sourcePath, transcript)
+})
+
+test('cline：DB 不可用时回退扫目录（manifest 取标题/项目；子代理消息文件不算会话）', async () => {
+  const sessionsDir = join(HOME, '.cline', 'data', 'sessions')
+  const sid = '01J8Z6Q0M4V7X2K9TB3N5R8WDA'
+  const dir = join(sessionsDir, sid)
+  const manifest = j({
+    version: 1, session_id: sid, started_at: '2026-04-22T17:40:00.000Z',
+    cwd: '/home/u/repo', workspace_root: '/home/u/repo', metadata: { title: '来自 manifest 的标题' },
+  })
+  const files = new Map([
+    [sessionsDir, { type: 'dir' }],
+    [dir, { type: 'dir' }],
+    [join(dir, sid + '.messages.json'), {
+      type: 'file', mtimeMs: 1786000007000,
+      text: j({ version: 1, agent: 'lead', sessionId: sid, updated_at: '2026-04-22T17:42:10.123Z', messages: [] }),
+    }],
+    [join(dir, sid + '.json'), { type: 'file', text: manifest }],
+    // 子代理消息文件（文件名与目录名不同）+ 子代理 agent 的文件都不成会话
+    [join(dir, 'explore-1.messages.json'), {
+      type: 'file', text: j({ version: 1, agent: 'subagent', sessionId: sid + '__explore-1', messages: [] }),
+    }],
+  ])
+
+  const { sessions, total } = await discoverSessions({ path: sessionsDir, format: 'cline', host: mockHost(files), imports: {} })
+  assert.equal(total, 1)
+  const s = sessions[0]
+  assert.equal(s.sessionId, sid)
+  assert.equal(s.title, '来自 manifest 的标题')
+  assert.equal(s.project, 'repo')
+  assert.equal(s.cwd, '/home/u/repo')
+  assert.equal(s.createdAt, Date.parse('2026-04-22T17:40:00.000Z'))
+  assert.equal(s.lastActiveAt, Date.parse('2026-04-22T17:42:10.123Z'))
+})
+
+test('cline 默认根：$CLINE_SESSION_DATA_DIR / $CLINE_DATA_DIR / $CLINE_DIR 优先级', () => {
+  const roots = defaultRoots({ home: HOME })
+  const expected = process.env.CLINE_SESSION_DATA_DIR
+    || join(process.env.CLINE_DATA_DIR || join(process.env.CLINE_DIR || join(HOME, '.cline'), 'data'), 'sessions')
+  assert.equal(roots.cline, expected)
+})
+
 test('continue 默认根：$CONTINUE_GLOBAL_DIR 优先，否则 ~/.continue/sessions', () => {
   const roots = defaultRoots({ home: HOME })
   assert.equal(roots.continue, process.env.CONTINUE_GLOBAL_DIR
@@ -1047,9 +1129,9 @@ test('cursor：slug 解码为真实工作区名分组，<timestamp> 解析时间
   assert.equal(numeric.cwd, null)
 })
 
-test('FORMATS 与工具 schema enum 一致（21 种）', () => {
-  assert.equal(FORMATS.length, 21)
-  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'codex', 'continue', 'cursor', 'dsh', 'gemini', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode'])
+test('FORMATS 与工具 schema enum 一致（22 种）', () => {
+  assert.equal(FORMATS.length, 22)
+  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'cursor', 'dsh', 'gemini', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'workbuddy', 'zcode'])
 })
 
 // ── git 状态（REQ-58）──────────────────────────────────────────────────────
