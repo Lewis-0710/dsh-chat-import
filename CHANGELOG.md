@@ -13,6 +13,10 @@ from the matching section below.
 
 ## [Unreleased]
 
+### Fixed
+
+- **开发/CI 依赖：js-yaml 锁到 4.3.2（CVE-2026-84375；PR #58 的跟进）** — js-yaml 只存在于 **peer/开发依赖树**里（由 `@deepseek-ai/cordis-plugin-include`、`@deepseek-ai/dsh-agent-presets` 传递引入），不是插件的运行期依赖：用户侧的 DSH 安装由 DSH 自身锁定该版本，本仓的 `overrides` 只影响本仓库与 CI 的安装树。上游 PR 按 DSH 包逐个列了 40+ 条覆盖，问题有两处：新增 DSH 包就会漏，且同一条锁重复 40 次；改成**单条全局 `"js-yaml": "4.3.2"`**，对现存与将来所有 DSH 包都成立（`npm ls js-yaml` 实测两处引用都解到 4.3.2）。
+
 ## [0.17.0] - 2026-09-15
 
 ### Added
