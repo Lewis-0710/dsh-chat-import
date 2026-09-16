@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   codexThreadIdFromName, codexNameTimestamp, groupCodexThreads, sortCodexPages,
-  codexChainStat, codexSessionsAncestor,
+  codexChainStat, codexSessionsAncestor, resolveCodexChain,
 } from '../lib/codex.mjs'
 import { convertCodexJsonl } from '../lib/convert/codex.mjs'
 
@@ -84,4 +84,61 @@ test('拼接转换：两页合成一个会话（第二条 session_meta 被忽略
   assert.deepEqual(out.turns.map((t) => t.prompt), ['第一问', '第二问'])
   // 会话时间取首页 meta 的 timestamp（第二页的 meta 被忽略）
   assert.equal(out.meta.createdAt, Date.parse('2026-09-14T10:54:34.000Z'))
+})
+
+// 极简 fs 面：目录 → 子项名（以 / 结尾视为子目录）；未列出的目录按不可读处理。
+// 用来钉住链解析的遍历口径——真实磁盘上的条目顺序不可控，只有这个夹具能稳定复现。
+function chainFs(dirs, heads = {}) {
+  return {
+    listDir: async (dir) => {
+      const names = dirs[dir]
+      if (!names) throw new Error('ENOENT: ' + dir)
+      return names.map((n) => (n.endsWith('/')
+        ? { name: n.slice(0, -1), type: 'directory', target: { targetKey: dir + '/' + n.slice(0, -1), displayPath: dir + '/' + n.slice(0, -1) } }
+        : { name: n, type: 'file' }))
+    },
+    readHead: async (p) => heads[p] ?? null,
+  }
+}
+
+const ROOT = '/u/.codex/sessions'
+const PAGE_A_NAME = `rollout-2026-09-14T10-54-33-${THREAD}.jsonl`
+const PAGE_B_NAME = `rollout-2026-09-15T19-55-00-${THREAD}_${PAGE_B}.jsonl`
+const PAGE_C_NAME = `rollout-2026-09-15T20-41-00-${THREAD}_9a8b7c6d.jsonl`
+const CHAIN_A = `${ROOT}/2026/09/14/${PAGE_A_NAME}`
+const CHAIN_B = `${ROOT}/2026/09/15/${PAGE_B_NAME}`
+const CHAIN_C = `${ROOT}/2026/09/15/${PAGE_C_NAME}`
+
+// 无关 rollout 排在链所在目录**之前**：按文件数截断的旧口径会先被它们填满，
+// 轮不到本 thread 的分页（链解析必须是按 thread 过滤、按目录项数计预算）
+function bulkTree(bulkCount) {
+  return {
+    [ROOT]: ['bulk/', '2026/'],
+    [`${ROOT}/bulk`]: Array.from({ length: bulkCount }, (_, i) => `rollout-2026-08-01T00-00-${String(i).padStart(2, '0')}-11111111-2222-3333-4444-555555555555.jsonl`),
+    [`${ROOT}/2026`]: ['09/'],
+    [`${ROOT}/2026/09`]: ['14/', '15/'],
+    [`${ROOT}/2026/09/14`]: [PAGE_A_NAME],
+    [`${ROOT}/2026/09/15`]: [PAGE_B_NAME, PAGE_C_NAME],
+  }
+}
+
+test('resolveCodexChain：无关 rollout 再多也按 thread 收全链（页序 = 文件名时间戳升序）', async () => {
+  const fs = chainFs(bulkTree(600), { [CHAIN_A]: metaLine(THREAD) + '\n', [CHAIN_B]: metaLine(THREAD) + '\n' })
+  const pages = await resolveCodexChain(fs, CHAIN_B)
+  assert.deepEqual(pages.map((p) => p.path), [CHAIN_A, CHAIN_B, CHAIN_C])
+  // headPayload 只对收集到的分页读一次（无关文件不读头部）
+  assert.equal(pages[0].headPayload.id, THREAD)
+  assert.equal(pages[2].headPayload, null)
+})
+
+test('resolveCodexChain：文件名无 thread id（改名副本）→ null，交回单文件路径', async () => {
+  const renamed = `${ROOT}/2026/09/15/copy.jsonl`
+  const fs = chainFs({ ...bulkTree(1), [`${ROOT}/2026/09/15`]: ['copy.jsonl'] })
+  assert.equal(await resolveCodexChain(fs, renamed), null)
+})
+
+test('resolveCodexChain：预算触顶抛错，绝不返回半截链', async () => {
+  const fs = chainFs(bulkTree(600))
+  await assert.rejects(() => resolveCodexChain(fs, CHAIN_B, { maxEntries: 3 }), /目录树超过 3 个目录项/)
+  await assert.rejects(() => resolveCodexChain(fs, CHAIN_B, { maxPages: 1 }), /本链分页超过 1 页/)
 })
