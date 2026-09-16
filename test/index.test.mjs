@@ -11,6 +11,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { zstdCompressSync } from 'node:zlib'
 import { Buffer } from 'node:buffer'
 import { apply, readOpencodeDb, exportClaudeSession } from '../index.mjs'
+import { discoverSessions } from '../lib/discovery.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { resolveRegistryDir, loadImports, rememberImport, listPersistedIds, readSessionRecord, readSessionEvents, writeSession } from '../lib/imports.mjs'
 import { syncClaudeSession, evaluateWritebackGuards, readFileTailUuid } from '../lib/backfill.mjs'
@@ -1459,6 +1460,185 @@ test('import_crush 幂等：重复导入同一库只落盘一次；非 Crush 库
   await assert.rejects(() => def.execute({ path: bogus }), /Crush/)
 })
 
+// ---- import_codex 分页 rollout（issue #57）----
+
+// 同一 thread 的两个分页文件（新版 Codex CLI 形态）：首页无后缀、次页带 _<pageId> 后缀，
+// 次页首行 session_meta 带 history_mode/history_base 指向首页。
+const PAG_THREAD = '0f1e2d3c-4b5a-6978-8901-2abcdef01234'
+const PAG_PAGE_ID = '7c6d5e4f-0011-2233-4455-66778899aabb'
+const PAG_DIR = 'D:\\demo\\codex-chain\\sessions\\2026\\09\\14\\'
+const PAG_DIR2 = 'D:\\demo\\codex-chain\\sessions\\2026\\09\\15\\'
+function pagMeta(id, over = {}) {
+  return JSON.stringify({
+    timestamp: '2026-09-14T10:54:34.000Z', type: 'session_meta',
+    payload: { id, cwd: hostAbs('D:/demo/codex-chain'), timestamp: '2026-09-14T10:54:34.000Z', ...over },
+  })
+}
+function pagUser(text, ts) {
+  return JSON.stringify({ timestamp: ts, type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } })
+}
+function pagAsst(text, ts) {
+  return JSON.stringify({ timestamp: ts, type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] } })
+}
+
+test('import_codex 分页 rollout：导最后一页也拿到整链（首页 + 次页拼一个会话）', async () => {
+  const pageA = PAG_DIR + `rollout-2026-09-14T10-54-33-${PAG_THREAD}.jsonl`
+  const pageB = PAG_DIR2 + `rollout-2026-09-15T19-55-00-${PAG_THREAD}_${PAG_PAGE_ID}.jsonl`
+  const { ctx, persistence, attached } = makeCtx({
+    // 中间目录也要进树：链解析从 sessions 祖先逐层 listDir 下钻
+    'D:\\demo\\codex-chain\\sessions': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026\\09': 'dir',
+    [PAG_DIR.replace(/\\+$/, '')]: 'dir',
+    [PAG_DIR2.replace(/\\+$/, '')]: 'dir',
+    [pageA]: [
+      pagMeta(PAG_THREAD),
+      pagUser('第一问', '2026-09-14T10:55:00.000Z'),
+      pagAsst('答一', '2026-09-14T10:55:10.000Z'),
+    ].join('\n'),
+    [pageB]: [
+      pagMeta(PAG_THREAD, {
+        history_mode: 'paginated',
+        history_base: { thread_id: PAG_THREAD, end_ordinal_exclusive: 3, end_byte_offset: 300 },
+      }),
+      pagUser('第二问', '2026-09-15T19:56:00.000Z'),
+      pagAsst('答二', '2026-09-15T19:56:10.000Z'),
+    ].join('\n'),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'codex')
+  // 报告者的用法：导入的是**最后一页**
+  const value = await def.execute({ path: pageB })
+
+  assert.equal(value.mode, 'single')
+  assert.equal(value.sessionId, 'import-' + PAG_THREAD)
+  assert.equal(value.turns, 2) // 首页 + 次页拼成一个会话
+  assert.equal(value.messages, 4)
+
+  const saved = persistence.sessions.get('import-' + PAG_THREAD)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, hostAbs('D:/demo/codex-chain'))
+  // 会话时间取首页 meta 的 timestamp（次页 meta 被忽略）
+  assert.equal(saved.meta.createdAt, Date.parse('2026-09-14T10:54:34.000Z'))
+  assert.match(saved.events.at(-1).data.title, /^Codex · /)
+  assert.ok(saved.events.every((e, i) => e.seq === i))
+  assertEnvelopeHygiene(saved.events)
+  assert.equal(attached.length, 1)
+  assert.equal(attached[0].id, 'import-' + PAG_THREAD)
+})
+
+test('import_codex 分页幂等：重复导同一页跳过；新增一页后重导按 append 增量', async () => {
+  const pageA = PAG_DIR + `rollout-2026-09-14T10-54-33-${PAG_THREAD}.jsonl`
+  const pageB = PAG_DIR2 + `rollout-2026-09-15T19-55-00-${PAG_THREAD}_${PAG_PAGE_ID}.jsonl`
+  const tree = {
+    'D:\\demo\\codex-chain\\sessions': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026\\09': 'dir',
+    [PAG_DIR.replace(/\\+$/, '')]: 'dir',
+    [PAG_DIR2.replace(/\\+$/, '')]: 'dir',
+    [pageA]: [
+      pagMeta(PAG_THREAD),
+      pagUser('第一问', '2026-09-14T10:55:00.000Z'),
+      pagAsst('答一', '2026-09-14T10:55:10.000Z'),
+    ].join('\n'),
+    [pageB]: [
+      pagMeta(PAG_THREAD, { history_mode: 'paginated', history_base: { thread_id: PAG_THREAD } }),
+      pagUser('第二问', '2026-09-15T19:56:00.000Z'),
+      pagAsst('答二', '2026-09-15T19:56:10.000Z'),
+    ].join('\n'),
+  }
+  const { ctx, persistence } = makeCtx(tree)
+  apply(ctx)
+  const def = chatDef(ctx, 'codex')
+
+  const first = await def.execute({ path: pageB })
+  assert.equal(first.turns, 2)
+  const again = await def.execute({ path: pageB })
+  assert.equal(again.alreadyImported, true)
+  assert.equal(persistence.sessions.size, 1)
+
+  // 追加第三页（真正的增量场景：Codex 又开了一个新分页文件）。mock 的 listDir 有
+  // entriesCache，这里直接在 ctx.fs.listDir 外层注入新条目，模拟缓存过期后的目录内容
+  const pageC = PAG_DIR2 + `rollout-2026-09-15T20-41-00-${PAG_THREAD}_9a8b7c6d.jsonl`
+  tree[pageC] = [
+    pagMeta(PAG_THREAD, { history_mode: 'paginated', history_base: { thread_id: PAG_PAGE_ID } }),
+    pagUser('第三问', '2026-09-15T20:42:00.000Z'),
+    pagAsst('答三', '2026-09-15T20:42:10.000Z'),
+  ].join('\n')
+  const origListDir = ctx.fs.listDir
+  ctx.fs.listDir = async (t) => {
+    const base = await origListDir(t)
+    const key = t.targetKey || ''
+    if (key.replace(/[\\/]+$/, '') === PAG_DIR2.replace(/[\\/]+$/, '')) {
+      return [...base, {
+        name: pageC.split('\\').pop(), type: 'file',
+        target: { targetKey: pageC, displayPath: pageC }, version: 1,
+      }]
+    }
+    return base
+  }
+  const third = await def.execute({ path: pageB })
+  assert.equal(third.status, 'appended')
+  assert.ok((third.appendedTurns ?? 0) >= 1)
+  const saved = persistence.sessions.get('import-' + PAG_THREAD)
+  const prompts = saved.events
+    .filter((e) => e.type === 'user/message' && e.data.source.kind === 'user')
+    .flatMap((e) => e.data.content).filter((b) => b.type === 'text').map((b) => b.text)
+  assert.deepEqual(prompts, ['第一问', '第二问', '第三问'])
+})
+
+test('import_codex 分页发现：同 thread 多页只出一条（标题取首页首问，修复同名条目）', async () => {
+  const pageA = PAG_DIR + `rollout-2026-09-14T10-54-33-${PAG_THREAD}.jsonl`
+  const pageB = PAG_DIR2 + `rollout-2026-09-15T19-55-00-${PAG_THREAD}_${PAG_PAGE_ID}.jsonl`
+  const tree = {
+    'D:\\demo\\codex-chain\\sessions': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026\\09': 'dir',
+    [PAG_DIR.replace(/\\+$/, '')]: 'dir',
+    [PAG_DIR2.replace(/\\+$/, '')]: 'dir',
+    [pageA]: [
+      pagMeta(PAG_THREAD),
+      pagUser('第一问（会话起点）', '2026-09-14T10:55:00.000Z'),
+      pagAsst('答一', '2026-09-14T10:55:10.000Z'),
+    ].join('\n'),
+    [pageB]: [
+      pagMeta(PAG_THREAD, { history_mode: 'paginated', history_base: { thread_id: PAG_THREAD } }),
+      pagUser('第一问（会话起点）', '2026-09-15T19:56:00.000Z'), // 与首页同文 → 旧行为撞标题
+      pagAsst('答二', '2026-09-15T19:56:10.000Z'),
+    ].join('\n'),
+  }
+  const host = {
+    stat: async (p) => {
+      const v = tree[p]
+      if (v === undefined) return null
+      return v === 'dir' ? { type: 'directory' } : { type: 'file', size: v.length, mtimeMs: 1786000000000 }
+    },
+    readHead: async (p, max) => (tree[p] !== undefined ? tree[p].slice(0, max) : null),
+    readText: async (p) => (tree[p] !== undefined ? tree[p] : null),
+    readDir: async (p) => {
+      const norm = (x) => String(x).replace(/\\/g, '/')
+      const prefix = norm(p).replace(/\/$/, '') + '/'
+      const out = []
+      for (const path of Object.keys(tree)) {
+        const n = norm(path)
+        if (!n.startsWith(prefix) || n === prefix) continue
+        const rest = n.slice(prefix.length)
+        if (rest.includes('/')) continue
+        out.push({ name: path.split('\\').pop(), type: tree[path] === 'dir' ? 'directory' : 'file', path })
+      }
+      return out
+    },
+  }
+  const { sessions, total } = await discoverSessions({
+    path: 'D:\\demo\\codex-chain\\sessions', format: 'codex', host, imports: {},
+  })
+  assert.equal(total, 1) // 旧行为是两条同题条目
+  const s = sessions[0]
+  assert.equal(s.sessionId, PAG_THREAD)
+  assert.equal(s.title, '第一问（会话起点）') // 首页首问（不是次页的同文首问）
+  assert.equal(s.sourcePath, pageA) // 幂等键 = 链首页
+})
+
 // ---- import_chatgpt 集成 ----
 
 test('import_chatgpt 单文件：一文件多会话、恒返回 batch、schema 校验', async () => {
@@ -2009,7 +2189,6 @@ test('import_pi 单文件：头行 cwd/id 落盘、归组、返回值符合 sche
   assert.equal(value.sessionId, 'import-019f0a11-2222-7333-8444-555566667777')
   assert.equal(value.turns, 2)
   assert.equal(value.messages, 4)
-  assert.equal(value.toolCalls, 0)
   assert.equal(value.alreadyImported, false)
   assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
 

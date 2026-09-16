@@ -15,6 +15,7 @@ from the matching section below.
 
 ### Fixed
 
+- **Codex 新版 CLI 的分页 rollout 被当成多条会话（#57）** — Codex CLI 0.154.0-alpha.6.2 起把**一个会话拆成多个 rollout 文件**：同一 thread 的文件名前缀是 `rollout-<时间戳>-<threadId>`，后续页多一个 `_<pageId>` 后缀。旧实现逐文件成会话 → 扫描面板里同一个会话出现多条同名条目，导入后对话止于首页。现在按**文件名里第一个 UUID（thread id）**成链：① 发现层把同 thread 的分页合成**一条**候选（标题取首页首问；首页读不到用户消息时回退最新页，`sourcePath` 恒为首页）；② 单文件导入从任意一页向上找最近的 `sessions` 祖先目录，递归收集同 thread 的全部分页后**整链一次转换**——各页文本按换行拼接，直接相接会让上一页最后一行与下一页的 `session_meta` 并成一行、被 `JSON.parse` 跳过，静默丢掉前一页最后一条 assistant 记录；③ 幂等键 = 链**首页**路径（追加新页不改首页），指纹 = 全页复合 stat（size 求和 + version 拼接）→ 已有会话在新页落盘后走 REQ-24 的 append 增量，既不跳过也不建副本。**刻意不依赖 `history_base` 的内部语义**（该字段只有报告者转述、上游源码未核对）：它只用于链完整性诊断，第 2 页起的 `history_base.thread_id` 若不出现在前一页文件名里，在导入结果中显式上报（`codexChainGaps`），绝不因此改页序。
 - **开发/CI 依赖：js-yaml 锁到 4.3.2（CVE-2026-84375；PR #58 的跟进）** — js-yaml 只存在于 **peer/开发依赖树**里（由 `@deepseek-ai/cordis-plugin-include`、`@deepseek-ai/dsh-agent-presets` 传递引入），不是插件的运行期依赖：用户侧的 DSH 安装由 DSH 自身锁定该版本，本仓的 `overrides` 只影响本仓库与 CI 的安装树。上游 PR 按 DSH 包逐个列了 40+ 条覆盖，问题有两处：新增 DSH 包就会漏，且同一条锁重复 40 次；改成**单条全局 `"js-yaml": "4.3.2"`**，对现存与将来所有 DSH 包都成立（`npm ls js-yaml` 实测两处引用都解到 4.3.2）。
 
 ## [0.17.0] - 2026-09-15
