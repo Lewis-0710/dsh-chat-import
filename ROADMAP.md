@@ -102,7 +102,7 @@
 | REQ-65 | P1 | 新源：Cline 适配（`~/.cline/data/sessions/<id>/<id>.messages.json` + `db/sessions.db` 元数据索引，DB 优先 / manifest 兜底） | ✅ |
 | REQ-66 | P2 | Cline legacy `tasks/` 适配（VS Code globalStorage 的 `api_conversation_history.json` + `ui_messages.json` + `taskHistory.json` 索引；新版 SDK 存储尚未迁移它） | ☐ |
 | REQ-67 | P1 | 新源：Goose 适配（`sessions.db` 两表 + `$GOOSE_PATH_ROOT`/三平台路径；旧 jsonl 不读以免重复导入） | ✅ |
-| REQ-68 | P2 | 缺陷：数据库类批量来源（opencode / mimocode / kilocode / zcode）的会话标题未钉「来源 · 话题」，DSH 可能回退成工作区目录名 | ☐ |
+| REQ-68 | P2 | 缺陷：数据库类批量来源（opencode / mimocode / kilocode / zcode）的会话标题未钉「来源 · 话题」，DSH 可能回退成工作区目录名 | ✅ |
 | REQ-69 | P1 | 新源：Zed Agent 线程适配（`threads.db` 单表 + zstd blob，含 legacy 方言；子代理线程不单独成会话） | ✅ |
 | REQ-70 | P1 | 新源：Crush（Charm）适配（项目内 `crush.db` + `projects.json` 注册表 / 宿主工作区探测；parts wrapper 形状） | ✅ |
 | REQ-71 | P2 | 测试稳定性：Windows 上偶发单点失败（`EPERM: rename` 原子写、临时目录竞争、`rm` 语义相关用例）——给用例独立 tmp 根并隔离文件锁依赖 | ☐ |
@@ -112,7 +112,8 @@
 | REQ-78 | P2 | 文档：写明 Kimi `context.apply_compaction` 的压缩语义（只保留最后一次压缩之后的模型视角，轮数会少于 `turn.prompt` 条数）——README 与 `import_chat` 描述 | ☐ |
 | REQ-79 | P2 | 反向导出：新增 opencode 目标（`opencode import <file>` 接受的 JSON——session + messages + parts 三表形状） | ✅ |
 | REQ-80 | P1 | 面板「导入到」下拉：直投 Claude Code / Codex / Kimi Code / opencode（转投到目标格式落盘，DSH 侧不留中间会话） | ✅ |
+| REQ-81 | P1 | 新源：TeleAgent（星辰超级智能体）适配——opencode 同构三表库 + `users/<账户>/teleagent.db` 多账户目录发现（issue #60） | ✅ |
 
 > **编号说明**：REQ-72~74 已被本地 `dev/REQUIREMENTS.md` 的「竞品借鉴」批次占用（`import-core.mjs` / `command.mjs` / `lib/convert/opencode.mjs` 的注释与对应测试引用同源，含义与公开路线图不同），因此本表自 **REQ-75** 续号，避免两套含义在同一个编号下混淆。
 
-**全部 72 项 ✅ + REQ-66 / REQ-68 / REQ-71 / REQ-77 / REQ-78 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-75 见 v0.17.1 / v0.17.3、REQ-76 见 v0.17.3、REQ-79 / REQ-80 见 v0.18.0）——未开工项已登记在案。
+**全部 74 项 ✅ + REQ-66 / REQ-71 / REQ-77 / REQ-78 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-68 见 v0.18.1、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-75 见 v0.17.1 / v0.17.3、REQ-76 见 v0.17.3、REQ-79 / REQ-80 见 v0.18.0、REQ-81 见 v0.18.1）——未开工项已登记在案。

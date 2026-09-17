@@ -64,6 +64,7 @@
 | gemini | ✅ | ✅ | ✅ | — | — | — |
 | reasonix | ✅ | ✅ | ✅ | — | — | — |
 | opencode | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| teleagent | ✅ | ✅ | ✅ | — | ✅ | ✅（样本 compaction 无 tail_start_id → 不裁剪，全量导入） |
 | zcode | ✅ | ✅ | ✅ | — | — | ✅ |
 | grokbuild | ✅ | ✅ | — | — | — | — |
 | openclaw | ✅ | — | ✅ | — | — | — |

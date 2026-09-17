@@ -82,6 +82,10 @@ export {
 } from './lib/convert/mimocode.mjs'
 
 export {
+  convertTeleagentJson,
+} from './lib/convert/teleagent.mjs'
+
+export {
   convertKilocodeJson,
 } from './lib/convert/kilocode.mjs'
 

@@ -24,7 +24,7 @@
 
 `DSH Chat Import` imports conversation history with full context from other agents, turning it into a seamlessly resumable DeepSeek Harness session.
 
-**26 agents** plus any local JSONL are covered today — the full list is under [Supported Agents](#supported-agents). Export back to: Claude Code, Codex, Kimi Code, opencode.
+**27 agents** plus any local JSONL are covered today — the full list is under [Supported Agents](#supported-agents). Export back to: Claude Code, Codex, Kimi Code, opencode.
 
 ## Supported Agents
 
@@ -83,6 +83,7 @@ Every source below becomes an independent DSH session, with tool calls, tool res
     <td align="center" width="20%"><a href="https://github.com/gabotechs/workbuddy"><img src="./assets/agents/workbuddy.svg" width="56" height="56" alt="WorkBuddy" /><br /><b>WorkBuddy</b></a></td>
     <td align="center" width="20%"><a href="https://github.com/QwenLM/qwen-code"><img src="./assets/agents/qwen.svg" width="56" height="56" alt="Qwen Work CN" /><br /><b>Qwen Work CN</b></a></td>
     <td align="center" width="20%"><a href="https://github.com/deepseek-ai/deepseek-harness"><img src="./assets/agents/dsh.svg" width="56" height="56" alt="DSH" /><br /><b>DSH</b></a></td>
+    <td align="center" width="20%"><a href="https://www.teleai.com.cn/product/super-agent"><img src="./assets/agents/teleagent.svg" width="56" height="56" alt="TeleAgent" /><br /><b>TeleAgent</b></a></td>
     <td align="center" width="20%"><a href="#usage"><img src="./assets/agents/local-jsonl.svg" width="56" height="56" alt="Local JSONL" /><br /><b>Local JSONL</b></a></td>
   </tr>
 </table>
@@ -126,7 +127,7 @@ This plugin's `import_agents` is a lightweight asset mover (it persists pi/openc
 
 | Capability | Entry points | Description |
 | --- | --- | --- |
-| Batch import | `import_chat` (25 formats) · `scan_discover` · sidebar panel | Import 24+ sources with one tool; each conversation becomes its own session |
+| Batch import | `import_chat` (26 formats) · `scan_discover` · sidebar panel | Import 25+ sources with one tool; each conversation becomes its own session |
 | Import history & purge | sidebar panel **History** tab | View `imports.json` records; remove plugin-created sessions (with confirmation) |
 | Full-fidelity resume | Imported sessions | Tool calls & results, reasoning, titles, models and timestamps carry over |
 | Export back | `export_chat` (`format: claude` / `codex` / `kimi` / `opencode`) | Serialize DSH sessions back to Claude / Codex / Kimi / opencode (the opencode JSON is fed to `opencode import`) |

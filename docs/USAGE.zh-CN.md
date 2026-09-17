@@ -19,6 +19,7 @@ import_codex({ path: "C:\Users\<you>\.codex\sessions\2026\05\18\rollout-2026-05-
 import_chatgpt({ path: "C:\Users\<you>\Downloads\chatgpt-export\conversations.json" })
 import_opencode({ path: "C:\Users\<you>\.local\share\opencode\opencode.db" })
 import_kilocode({ path: "C:\Users\<you>\.local\share\kilo\kilo.db" })
+import_teleagent({ path: "C:\Users\<you>\.local\share\TeleAgent\users\<account>\teleagent.db" })
 import_local_jsonl({ path: "D:\downloads\session.jsonl" })
 ```
 
@@ -29,7 +30,7 @@ import_local_jsonl({ path: "D:\downloads\session.jsonl" })
 import_local_jsonl({ path: "D:\downloads\unknown.jsonl", format: "claude" })
 ```
 
-`import_chatgpt` / `import_opencode` / `import_kilocode` / `import_zcode` / `import_hermes` 恒返回批量结果——一个文件 / 数据库包含全部会话，一次调用即可让每段对话成为独立会话。
+`import_chatgpt` / `import_opencode` / `import_kilocode` / `import_teleagent` / `import_zcode` / `import_hermes` 恒返回批量结果——一个文件 / 数据库包含全部会话，一次调用即可让每段对话成为独立会话。`import_teleagent` 也接受 `users/` 多账户目录（逐账户枚举 `<账户>/teleagent.db`）或 `TeleAgent/` 数据根。
 
 <details>
 <summary><b>导入参数与行为</b></summary>

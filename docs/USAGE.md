@@ -19,6 +19,7 @@ import_codex({ path: "C:\Users\<you>\.codex\sessions\2026\05\18\rollout-2026-05-
 import_chatgpt({ path: "C:\Users\<you>\Downloads\chatgpt-export\conversations.json" })
 import_opencode({ path: "C:\Users\<you>\.local\share\opencode\opencode.db" })
 import_kilocode({ path: "C:\Users\<you>\.local\share\kilo\kilo.db" })
+import_teleagent({ path: "C:\Users\<you>\.local\share\TeleAgent\users\<account>\teleagent.db" })
 import_local_jsonl({ path: "D:\downloads\session.jsonl" })
 ```
 
@@ -29,7 +30,7 @@ import_local_jsonl({ path: "D:\downloads\session.jsonl" })
 import_local_jsonl({ path: "D:\downloads\unknown.jsonl", format: "claude" })
 ```
 
-`import_chatgpt` / `import_opencode` / `import_kilocode` / `import_zcode` / `import_hermes` always return a batch result — one file / database holds all conversations, so each conversation becomes its own session in a single call.
+`import_chatgpt` / `import_opencode` / `import_kilocode` / `import_teleagent` / `import_zcode` / `import_hermes` always return a batch result — one file / database holds all conversations, so each conversation becomes its own session in a single call. `import_teleagent` also accepts the `users/` multi-account directory (it enumerates `<account>/teleagent.db` per account) or the `TeleAgent/` data root directly.
 
 <details>
 <summary><b>Import parameters & behaviors</b></summary>
