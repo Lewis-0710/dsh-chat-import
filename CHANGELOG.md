@@ -13,6 +13,8 @@ from the matching section below.
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-09-17
+
 ### Added
 
 - **新源：TeleAgent（星辰超级智能体，中电信 TeleAI）会话适配（第 26 种格式，issue #60 / REQ-81）** — 读 `~/.local/share/TeleAgent/users/<账户ID>/teleagent.db`（SQLite + WAL，XDG 风格多账户目录，Windows 上同样在 `~/.local/share`；`$TELEAGENT_HOME` 可覆盖数据根）。会话库与 opencode **同构**（issue #60 报告者实测：session/message/part 三表 + 同样 `data` JSON 形状，`part.type ∈ text | reasoning | tool | step-start | step-finish | compaction`），读取/导入/预览完全复用 opencode 管线，仅换 provider 标签；**session 表无 `model` 列**（消息级 model 在 `message.data.modelID`）由既有 PRAGMA 探测自动兼容（与 mimocode 同形态）。发现层新增「多账户目录」形态：`users/` 目录逐账户枚举 `<账户>/teleagent.db`（账户目录 / 库文件显式 path 同样可用，`crush` 的「枚举目录 → 候选 DB」是同类先例）。压缩语义：样本中的 `compaction` part 只有 `{auto:true}`、无 `tail_start_id`，不触发 opencode 式裁剪 → **全量导入**（不丢历史）。会话标题按 REQ-68 钉成「TeleAgent · 话题」。
