@@ -89,14 +89,15 @@ retract_import({ sessionId: "import-019f5f27-…" })
 
 > **Ghost sessions after retract (#22)** — the DSH host has no delete/forget API: after `retract_import` and manual artifact deletion, the session id may still occupy the host's in-memory index (it stays visible in the session list until dsh restarts, and re-importing the same source used to fail with `session "…" already exists in this backend`). This is now self-healed: re-import detects the stale entry (still listed but log unreadable, or `create` rejecting the id) and **automatically mints a suffixed new session id** (`import-<id>-1`) with a clear `staleGhost: { previous, current }` report instead of failing; `retract_import`'s `manualDelete` guidance also notes that the ghost only fully disappears after a dsh restart.
 
-### export_chat — DSH → Claude / Codex / Kimi (matrix export)
+### export_chat — DSH → Claude / Codex / Kimi / opencode (matrix export)
 
-`export_chat({ format: "claude", sessionId })` serializes an existing DSH session (imported or native) into a Claude Code JSONL transcript, ready for `--resume`. It is written to `<outputDir>/<slug>/<uuid>.jsonl` (default `~/.claude/projects`), with a fresh UUID v4 file name — an existing file is never overwritten. `format: "codex"` and `format: "kimi"` write Codex rollout JSONL and Kimi `wire.jsonl` respectively (default `~/.dsh/exports`, or `path: …` to pick a target) — completing the DSH↔Claude↔Codex↔Kimi matrix (the import edges already exist). Every export lists its **lossy items** in a `degradations` field (orphan tool results, skipped injections, skipped attachments) — nothing is silently dropped:
+`export_chat({ format: "claude", sessionId })` serializes an existing DSH session (imported or native) into a Claude Code JSONL transcript, ready for `--resume`. It is written to `<outputDir>/<slug>/<uuid>.jsonl` (default `~/.claude/projects`), with a fresh UUID v4 file name — an existing file is never overwritten. `format: "codex"` / `format: "kimi"` write Codex rollout JSONL / Kimi `wire.jsonl`; `format: "opencode"` writes the JSON document that `opencode import <file>` accepts (session info + messages + parts, ids prefixed `ses` / `msg` / `prt` as opencode's decoder requires). Those three default to `~/.dsh/exports`, or `path: …` to pick a target — completing the DSH↔Claude↔Codex↔Kimi↔opencode matrix (the import edges already exist). Every export lists its **lossy items** in a `degradations` field (orphan tool results, skipped injections, skipped attachments, and for opencode the `usage-unknown` item: opencode requires `cost`/`tokens` while DSH session logs carry no usage counters, so zeros are written and reported) — nothing is silently dropped:
 
 ```
 export_chat({ format: "claude", sessionId: "import-019f5f27-…" })
 export_chat({ format: "codex", sessionId: "…", dryRun: true })
 export_chat({ format: "kimi", sessionId: "…", outputDir: "D:\backup\kimi" })
+export_chat({ format: "opencode", sessionId: "…" })   // → ~/.dsh/exports/<id>.opencode.json, then: opencode import <file>
 ```
 
 ### export_bundle / restore_bundle — portable interchange bundle
@@ -174,6 +175,17 @@ sync_to_claude({ sessionId: "…", target: "copy", dryRun: true })
 The dsh web sidebar shows an **导入会话** button in its footer, styled to match the sidebar's **设置** entry and carrying the plugin logo as its icon (a `sidebar.footer.action` slot entry sitting in the same footer row as whatever else registers there. When a same-slot entry is a full-width one — a plugin badge, a cost card — the row switches to wrapping so each entry takes a full-width row of its own; when only narrower entries compete for the row and the label no longer fits, the button shrinks to a 36×36 icon button with the label kept in its tooltip / `aria-label`. It is never truncated or overlapped either way). It opens a panel listing discovered sessions **grouped by workspace folder** (each source's `cwd`/project when available, otherwise an "(未分组)" bucket), with a source filter — "全部来源" scans every format's default data root, a single source restricts the view — and a per-session import-status badge (已导入 / 部分 / 未导入). A search box filters by title / workspace / path, and the list is **paginated** (50 per page) with selections kept across pages for bulk operations. The panel closes on `Escape`.
 
 Each row supports **single import**, and the checkboxes enable **multi-select import** ("导入所选 (N)"): the panel calls the same host import pipeline as the `import_*` tools, so idempotent skip / incremental append / `force` / context-budget semantics are identical, and the list refreshes with the new statuses after importing. A multi-session source (e.g. `conversations.json`, an opencode/zcode/hermes DB) is imported whole — opencode/zcode restrict to the selected `sessionId`s.
+
+Under the source filter there is an **导入到 / Import to** dropdown that picks where the conversation lands:
+
+| Choice | What happens |
+| --- | --- |
+| **DSH 会话环境** (default) | Normal import — a resumable DSH session (unchanged behaviour). |
+| Claude Code | The transcript is converted and written into `~/.claude/projects/<slug>/<uuid>.jsonl`; Claude Code reads that directory directly (`claude --resume`). |
+| Codex / Kimi Code | Written as a Codex rollout JSONL / Kimi `wire.jsonl` under `~/.dsh/exports/` for you to move into that tool's sessions directory. |
+| opencode | Written as opencode JSON under `~/.dsh/exports/`, to be imported with `opencode import <file>`. |
+
+Non-DSH targets **transfer instead of importing**: the plugin runs the source through the same converters, serializes the result into the target's own format (the same serializers `export_chat` uses), and writes it with `createIfAbsent` (never overwriting). The intermediate DSH session created for that conversion is **retracted right after the export succeeds**, so no copy is left behind in DSH; a session that already existed before (already-imported / appended) is never deleted — it is exported and reported as kept. If retraction fails (session running, artifact locked) the reason is reported in the result instead of being swallowed. The result line shows the written path plus the next step for that tool, and per-item failures plus the usual `degradations` list.
 
 > The data comes from the same read-only discovery as `scan_discover` (30s TTL cache + persistent mtime bookmarks); the panel itself never writes anything except the imports you trigger.
 

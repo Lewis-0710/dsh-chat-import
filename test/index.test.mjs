@@ -19,6 +19,7 @@ import { clearScanCache } from '../lib/discovery.mjs'
 import { clearWorkspacePathCache, slugifyClaudeCwd } from '../lib/cwd-map.mjs'
 import { restampSession, sanitizeJsonValue, prepareHostMeta } from '../lib/import-core.mjs'
 import { SESSION_FORMAT_VERSION } from '../convert.mjs'
+import { verifyOpencodeImportJson } from '../export.mjs'
 import { hostAbs, hostAbsText } from './_support/host-path.mjs'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
@@ -5595,7 +5596,123 @@ test('REQ-41 /api-import/import handler：批量形态（chatgpt conversations.j
   assert.equal(persistence.sessions.size, 2)
 })
 
-// ---- issue #41：宿主会话格式 v3 适配 ----
+// ---- 「导入到」非 DSH 目标（转投：转换成目标工具格式落盘，不留下 DSH 会话） ----
+
+test('面板「导入到」opencode：只落 opencode JSON，DSH 侧不留会话（中间会话已撤回）', async () => {
+  const file = 'D:\\demo\\claude\\projects\\proj-a\\sess-tool-001.jsonl'
+  const { ctx, webRoutes, writes } = makeCtx({ [file]: load('sess-tool-001.jsonl') })
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  const out = await invokeImportRoute(route, {
+    target: 'opencode',
+    items: [{ source: 'claude-code', sourcePath: file, cwd: hostAbs('D:/demo/proj') }],
+  })
+  assert.equal(out.res.status, 200)
+  assert.equal(out.data.ok, true)
+  assert.equal(out.data.target, 'opencode')
+  const r0 = out.data.results[0]
+  assert.equal(r0.target, 'opencode')
+  assert.equal(r0.status, 'transferred', JSON.stringify(out.data))
+  assert.equal(r0.transferred, 1, JSON.stringify(out.data))
+  assert.equal(r0.failed, 0)
+  // 转投的中间会话被撤回。注：本测试的 persistence mock 没有宿主 delete 面（真实宿主在
+  // 工件消失后即不再持有该会话），所以这里断言 purge 的三件事实——撤回被调用且成功、
+  // 工件清理路径没抛错、registry 记录已清——而不是 mock 内存 Map 的尺寸。
+  assert.equal(r0.purged, 1)
+  assert.match(r0.hint, /opencode import/)
+
+  // 落盘的是 opencode import 可读的 JSON（结构自检）
+  const written = writes.filter((w) => w.path.endsWith('.opencode.json'))
+  assert.equal(written.length, 1)
+  assert.equal(verifyOpencodeImportJson(written[0].content).ok, true)
+  // 且确实是这段对话：用户提问进了 user 消息
+  const doc = JSON.parse(written[0].content)
+  assert.ok(doc.messages.some((m) => m.info.role === 'user' && m.parts.some((p) => typeof p.text === 'string' && p.text.length > 0)))
+  // 撤回后 registry 也清干净（不留悬空记录）
+  const reg = await loadImports(resolveRegistryDir())
+  assert.equal(Object.keys(reg.imports).length, 0)
+})
+
+test('面板「导入到」claude：落到 Claude Code 的 projects 目录，DSH 侧同样不留会话', async () => {
+  const file = 'D:\\demo\\claude\\projects\\proj-a\\sess-simple-001.jsonl'
+  const { ctx, webRoutes, writes } = makeCtx({ [file]: load('sess-simple-001.jsonl') })
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  const out = await invokeImportRoute(route, {
+    target: 'claude',
+    items: [{ source: 'claude-code', sourcePath: file, cwd: hostAbs('D:/demo/kimi-proj') }],
+  })
+  assert.equal(out.data.ok, true)
+  const r0 = out.data.results[0]
+  assert.equal(r0.status, 'transferred')
+  assert.equal(r0.transferred, 1)
+  assert.equal(r0.purged, 1, 'claude 目标同样不留 DSH 侧中间会话')
+  const written = writes.filter((w) => w.path.replace(/\\/g, '/').includes('/.claude/projects/'))
+  assert.equal(written.length, 1, '写进 Claude Code 的 projects 目录')
+  const lines = written[0].content.split('\n').filter((l) => l.trim())
+  assert.ok(lines.length > 0)
+  assert.doesNotThrow(() => JSON.parse(lines[0]), 'Claude Code JSONL 每行都是合法 JSON')
+})
+
+test('面板「导入到」：原本已存在的 DSH 会话只导出不删除（不留空转投），未知目标 400', async () => {
+  const file = 'D:\\demo\\claude\\projects\\proj-a\\sess-multi-001.jsonl'
+  const { ctx, persistence, webRoutes, writes } = makeCtx({ [file]: load('sess-multi-001.jsonl') })
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  // 先常规导入一次（建 DSH 会话），再对同一来源做 opencode 转投
+  await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: file }] })
+  assert.equal(persistence.sessions.size, 1)
+  const before = writes.length
+  const transfer = await invokeImportRoute(route, {
+    target: 'opencode',
+    items: [{ source: 'claude-code', sourcePath: file }],
+  })
+  const r0 = transfer.data.results[0]
+  assert.equal(r0.transferred, 1)
+  // 会话本来就存在（already-imported）→ 保留，不撤回（用户自己的会话不因转投被删）
+  assert.equal(r0.purged, 0)
+  assert.equal(r0.kept, 1)
+  assert.equal(r0.files[0].kept, true)
+  const reg = await loadImports(resolveRegistryDir())
+  assert.equal(Object.keys(reg.imports).length, 1, '未撤回 → registry 记录保留')
+  assert.ok(writes.length > before, '仍然产出了目标格式文件')
+
+  const bad = await invokeImportRoute(route, {
+    target: 'zcode',
+    items: [{ source: 'claude-code', sourcePath: file }],
+  })
+  assert.equal(bad.res.status, 400)
+  assert.match(bad.data.error, /未知导入目标/)
+})
+
+
+
+test('export_chat format: opencode：DSH 会话 → opencode import JSON（dryRun 不写盘 + schema + 降级上报）', async () => {
+  const src = 'D:\\demo\\proj\\sess-simple-001.jsonl'
+  const { ctx, writes } = makeCtx({ [src]: load('sess-simple-001.jsonl') })
+  apply(ctx)
+  const imported = await chatDef(ctx, 'claude').execute({ path: src })
+  assert.equal(imported.status, 'imported')
+  const def = exportDef(ctx, 'opencode')
+
+  const dry = await def.execute({ sessionId: imported.sessionId, dryRun: true })
+  assert.equal(dry.dryRun, true)
+  assert.match(dry.filePath, /\.opencode\.json$/)
+  assert.equal(writes.some((w) => w.path === dry.filePath), false, 'dryRun 不写盘')
+
+  const out = await def.execute({ sessionId: imported.sessionId })
+  assert.equal(out.dryRun, false)
+  assert.match(out.filePath, /\.opencode\.json$/)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, out), [])
+  const written = writes.find((w) => w.path === out.filePath)
+  assert.ok(written, '落盘一次')
+  assert.equal(verifyOpencodeImportJson(written.content).ok, true)
+  // 用量未知（opencode 必填的 cost/tokens 在 DSH 日志里没有）→ 降级显式上报
+  assert.ok((out.degradations || []).some((d) => d.id === 'usage-unknown'))
+})
 
 // 宿主写入路径把 header 按 released-v2 schema 严格校验：必填 version/id/createdAt/
 // isSeeded/delegationDepth，可选 cwd/parentSession/origin/agentPreset——白名单外的

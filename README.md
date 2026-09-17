@@ -24,7 +24,7 @@
 
 `DSH Chat Import` imports conversation history with full context from other agents, turning it into a seamlessly resumable DeepSeek Harness session.
 
-**26 agents** plus any local JSONL are covered today — the full list is under [Supported Agents](#supported-agents). Export back to: Claude Code, Codex, Kimi Code.
+**26 agents** plus any local JSONL are covered today — the full list is under [Supported Agents](#supported-agents). Export back to: Claude Code, Codex, Kimi Code, opencode.
 
 ## Supported Agents
 
@@ -129,7 +129,7 @@ This plugin's `import_agents` is a lightweight asset mover (it persists pi/openc
 | Batch import | `import_chat` (25 formats) · `scan_discover` · sidebar panel | Import 24+ sources with one tool; each conversation becomes its own session |
 | Import history & purge | sidebar panel **History** tab | View `imports.json` records; remove plugin-created sessions (with confirmation) |
 | Full-fidelity resume | Imported sessions | Tool calls & results, reasoning, titles, models and timestamps carry over |
-| Export back | `export_chat` (`format: claude` / `codex` / `kimi`) | Serialize DSH sessions back to Claude / Codex / Kimi |
+| Export back | `export_chat` (`format: claude` / `codex` / `kimi` / `opencode`) | Serialize DSH sessions back to Claude / Codex / Kimi / opencode (the opencode JSON is fed to `opencode import`) |
 | Bidirectional sync | panel "Sync" tab | Incremental sync in both directions (external ↔ DSH), off by default |
 
 > One documented exception to full fidelity: **failed ghost retry steps**. When a tool call never received its result and the very next step re-emits the same call id verbatim, the dead step is dropped at import — the result already pairs with the re-emitted call. Duplicate call ids in the imported log would hard-fail DSH's conversation folding (a second `start` for the same id), swallowing the whole trajectory after the first duplicate. See the `droppedRetrySteps` counter on the converter result.

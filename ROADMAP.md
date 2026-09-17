@@ -110,8 +110,9 @@
 | REQ-76 | P1 | 缺陷：Kimi Code 导入丢失工作区（state.json 字段变更为 workDir）与下划线 sessionId 清理校验放宽（issue #61） | ✅ |
 | REQ-77 | P2 | Kimi Code：`state.json` 整份缺失时按 `~/.kimi-code/workspaces.json`（workspace-id → root）回退解析 cwd（与旧布局的 `kimi.json` 映射对称） | ☐ |
 | REQ-78 | P2 | 文档：写明 Kimi `context.apply_compaction` 的压缩语义（只保留最后一次压缩之后的模型视角，轮数会少于 `turn.prompt` 条数）——README 与 `import_chat` 描述 | ☐ |
-| REQ-79 | P2 | 反向导出：新增 opencode 目标（`opencode import <file>` 接受的 JSON——session + messages + parts 三表形状） | ☐ |
+| REQ-79 | P2 | 反向导出：新增 opencode 目标（`opencode import <file>` 接受的 JSON——session + messages + parts 三表形状） | ✅ |
+| REQ-80 | P1 | 面板「导入到」下拉：直投 Claude Code / Codex / Kimi Code / opencode（转投到目标格式落盘，DSH 侧不留中间会话） | ✅ |
 
 > **编号说明**：REQ-72~74 已被本地 `dev/REQUIREMENTS.md` 的「竞品借鉴」批次占用（`import-core.mjs` / `command.mjs` / `lib/convert/opencode.mjs` 的注释与对应测试引用同源，含义与公开路线图不同），因此本表自 **REQ-75** 续号，避免两套含义在同一个编号下混淆。
 
-**全部 70 项 ✅ + REQ-66 / REQ-68 / REQ-71 / REQ-77 / REQ-78 / REQ-79 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-75 见 v0.17.1 / v0.17.3、REQ-76 见 v0.17.3）——未开工项已登记在案。
+**全部 72 项 ✅ + REQ-66 / REQ-68 / REQ-71 / REQ-77 / REQ-78 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-75 见 v0.17.1 / v0.17.3、REQ-76 见 v0.17.3、REQ-79 / REQ-80 见 v0.18.0）——未开工项已登记在案。

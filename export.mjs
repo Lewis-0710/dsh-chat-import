@@ -35,3 +35,10 @@ export {
   serializeKimiWire,
   verifyKimiWire,
 } from './lib/export/kimi.mjs'
+
+// REQ-79 反向导出：DSH 会话 → opencode `import <file>` JSON（纯函数）
+export {
+  buildOpencodeImportDoc,
+  serializeOpencodeJson,
+  verifyOpencodeImportJson,
+} from './lib/export/opencode.mjs'

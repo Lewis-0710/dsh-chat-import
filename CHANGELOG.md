@@ -13,6 +13,11 @@ from the matching section below.
 
 ## [Unreleased]
 
+### Added
+
+- **导入面板新增「导入到」下拉：直投 Claude Code / Codex / Kimi Code / opencode（issue #59）** — 「来源」下方多一行目标选择，默认仍是 **DSH 会话环境**（既有行为一字不变）；选其他目标则是**转投**而非导入：用同一套转换器读源会话，序列化成目标工具自己的格式（即 `export_chat` 的序列化器），以 `createIfAbsent` 落盘——`claude` 直接写进 `~/.claude/projects/<slug>/<uuid>.jsonl`（Claude Code 自己读该目录），`codex` / `kimi` / `opencode` 写 `~/.dsh/exports/` 并给出下一步（opencode 需 `opencode import <文件>`）。为这次转换临时建立的 DSH 会话在导出成功后**立刻撤回**，DSH 侧不留副本；转投前就已存在的会话（already-imported / appended）**绝不删除**，只导出并在结果里标为保留（`kept`）；撤回失败（会话在跑 / 工件被占用）把原因写进结果而不是吞掉。多条已导入源的转投沿用同一批聚合与预算链，逐条失败不拖垮整批。
+- **新增反向导出目标 opencode（`export_chat` `format: "opencode"`，REQ-79）** — 产出 `opencode import <file>` 能直接吃下的 JSON（`{ info, messages: [{ info, parts }] }`），落盘 `~/.dsh/exports/<id>.opencode.json`。契约按上游源码逐字段核对（`packages/opencode/src/cli/cmd/import.ts` 的 `decodeUnknownSync` 插入路径、`packages/opencode/src/session/session.ts` 的 `Session.Info`、`packages/schema/src/v1/session.ts` 的 `SessionV1.Info` / `SessionV1.Part`）：id 前缀 `ses` / `msg` / `prt` 会被校验、每个 part 必须带 `id`+`sessionID`+`messageID`、assistant 的 `cost` / `tokens`（含 `cache.read` / `cache.write`）与 `reasoning` 的 `time.start` 都是解码必填。DSH 会话日志没有用量计数 → 按 0 写入并在 `degradations` 里以新增的 **`usage-unknown`** 规则显式上报（不静默假装有数）；工具名走双向对照表（`web_search` → `websearch`、`Bash` → `bash`），id 由会话 id 哈希派生因此重导幂等。同批附带 `verifyOpencodeImportJson` 只读结构校验（前缀 / 必填 / part 的 `messageID` 外键），让序列化漂移在本地测试里先红，而不是等用户跑 `opencode import` 才发现。
+
 ## [0.17.3] - 2026-09-17
 
 ### Fixed

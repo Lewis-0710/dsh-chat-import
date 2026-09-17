@@ -95,6 +95,7 @@
 | `compacted-unavailable` | compacted | text-fallback | 无压缩摘要 → 超长会话由预算三层保护被动截断 |
 | `injection-skipped` | — | skip-placeholder | 非人类注入消息（system-reminder 等）不进入会话 → 跳过并计数 |
 | `orphan-tool-result` | toolResults | skip-placeholder | 源日志无对应 tool/call 的工具结果（中途开始的 transcript）→ 丢弃并计数 |
+| `usage-unknown` | — | text-fallback | 目标格式要求用量计数（opencode 的 `cost` / `tokens` 是解码必填）而 DSH 会话日志没有这些计数 → 写 0 并显式报告 |
 
 ## 4. 便携 bundle（REQ-56/62）
 

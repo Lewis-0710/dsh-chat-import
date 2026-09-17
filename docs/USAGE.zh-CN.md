@@ -89,14 +89,15 @@ retract_import({ sessionId: "import-019f5f27-…" })
 
 > **撤回后的幽灵会话（#22）** — DSH 宿主没有 delete/forget 面：`retract_import` 并手动删除工件后，会话 id 仍可能占据宿主内存索引（会话列表里可见、直到重启 dsh 才消失），同源重导此前会报 `session "…" already exists in this backend`。现已自愈：重导检测到陈旧条目（list 仍暴露但日志不可读，或 create 拒绝该 id）时**自动另铸后缀新 id**（`import-<id>-1`）完整重导并报告 `staleGhost: { previous, current }`，不再失败；`retract_import` 的 `manualDelete` 引导也注明幽灵会话需重启 dsh 才彻底消失。
 
-### export_chat — DSH → Claude / Codex / Kimi（矩阵导出）
+### export_chat — DSH → Claude / Codex / Kimi / opencode（矩阵导出）
 
-`export_chat({ format: "claude", sessionId })` 把现有 DSH 会话（导入的或原生的）序列化为 Claude Code JSONL transcript，可直接 `--resume`。文件写到 `<outputDir>/<slug>/<uuid>.jsonl`（默认 `~/.claude/projects`），文件名是全新 UUID v4——绝不覆盖已有文件。`format: "codex"` 与 `format: "kimi"` 分别写 Codex rollout JSONL 与 Kimi `wire.jsonl`（默认 `~/.dsh/exports`，或用 `path: …` 指定目标）——补齐 DSH↔Claude↔Codex↔Kimi 矩阵（导入边已存在）。每次导出在 `degradations` 字段里逐条列出**有损项**（孤儿工具结果 / 注入跳过 / 附件跳过）——绝不静默丢弃：
+`export_chat({ format: "claude", sessionId })` 把现有 DSH 会话（导入的或原生的）序列化为 Claude Code JSONL transcript，可直接 `--resume`。文件写到 `<outputDir>/<slug>/<uuid>.jsonl`（默认 `~/.claude/projects`），文件名是全新 UUID v4——绝不覆盖已有文件。`format: "codex"` / `format: "kimi"` 分别写 Codex rollout JSONL 与 Kimi `wire.jsonl`；`format: "opencode"` 写 `opencode import <文件>` 能吃下的 JSON 文档（会话 info + messages + parts，id 前缀 `ses` / `msg` / `prt` 是 opencode 解码器的硬要求）。后三者默认写 `~/.dsh/exports`，或用 `path: …` 指定目标——补齐 DSH↔Claude↔Codex↔Kimi↔opencode 矩阵（导入边已存在）。每次导出在 `degradations` 字段里逐条列出**有损项**（孤儿工具结果 / 注入跳过 / 附件跳过，opencode 另有 `usage-unknown`：它要求 `cost`/`tokens` 而 DSH 会话日志没有用量计数，故写 0 并上报）——绝不静默丢弃：
 
 ```
 export_chat({ format: "claude", sessionId: "import-019f5f27-…" })
 export_chat({ format: "codex", sessionId: "…", dryRun: true })
 export_chat({ format: "kimi", sessionId: "…", outputDir: "D:\backup\kimi" })
+export_chat({ format: "opencode", sessionId: "…" })   // → ~/.dsh/exports/<id>.opencode.json，随后：opencode import <文件>
 ```
 
 ### export_bundle / restore_bundle — 便携 interchange bundle
@@ -174,6 +175,17 @@ sync_to_claude({ sessionId: "…", target: "copy", dryRun: true })
 dsh web 侧边栏底部有一个「导入会话」入口（`sidebar.footer.action` 槽条目，与同槽其它条目共享那条 footer 行。同槽出现整宽条目——插件徽标、费用卡之类——时整行改为换行堆叠，各条目各占一整行；只是与更窄的入口抢同一行、放不下文字时，入口缩成 36×36 圆钮，文字保留在 tooltip / aria-label 里。两种情况下都不会被截断或遮挡）。打开的面板**按工作区文件夹分组**列出发现的会话（各来源记录里的 `cwd`/项目名，缺省归入「(未分组)」），支持来源过滤——「全部来源」扫描全部格式的默认数据根，单选来源则只看该格式——并带逐会话导入状态徽标（已导入 / 部分 / 未导入）。搜索框按标题 / 工作区 / 路径过滤，列表**分页**展示（每页 50 条），跨页选择保留便于批量操作。面板支持 `Esc` 关闭。
 
 每行支持**单选导入**，复选框支持**多选导入**（「导入所选 (N)」）：面板调用与 `import_*` 工具完全相同的 host 导入管线，幂等跳过 / 增量续写 / force / 上下文预算语义完全一致；导入后自动刷新列表展示最新状态。多会话源（如 `conversations.json`、opencode/zcode/hermes 库）整源导入——opencode/zcode 只导所选 `sessionId`。
+
+来源下方有「**导入到**」下拉，决定这次导入的落点：
+
+| 选择 | 行为 |
+| --- | --- |
+| **DSH 会话环境**（默认） | 照常导入为可继续的 DSH 会话（既有行为不变）。 |
+| Claude Code | 转换后写进 `~/.claude/projects/<slug>/<uuid>.jsonl`；Claude Code 直接读该目录（`claude --resume` 打开）。 |
+| Codex / Kimi Code | 分别写成 Codex rollout JSONL / Kimi `wire.jsonl` 落到 `~/.dsh/exports/`，由你放进对应工具的 sessions 目录。 |
+| opencode | 写成 opencode JSON 落到 `~/.dsh/exports/`，随后用 `opencode import <文件>` 导入。 |
+
+非 DSH 目标是**转投而不是导入**：插件用同一套转换器读源会话，序列化成目标工具自己的格式（即 `export_chat` 用的那些序列化器），以 `createIfAbsent` 落盘（绝不覆盖）。为这次转换而临时建立的 DSH 会话会在**导出成功后立刻撤回**，DSH 侧不留副本；但如果会话在你选择转投之前就已存在（already-imported / appended），**绝不删除**——只导出，并在结果里标为保留。撤回失败（会话在运行、工件被占用）会把原因写进结果而不是吞掉。结果行显示落盘路径与该工具的下一步操作，条目级失败与常规 `degradations` 清单照常列出。
 
 > 数据来自与 `scan_discover` 同一套只读发现（30s TTL 缓存 + 持久化 mtime 书签）；面板除你主动触发的导入外零写入。
 
