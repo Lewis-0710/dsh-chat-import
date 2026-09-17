@@ -111,4 +111,4 @@
 | REQ-74 | P2 | Kimi Code：`state.json` 整份缺失时按 `~/.kimi-code/workspaces.json`（workspace-id → root）回退解析 cwd（与旧布局的 `kimi.json` 映射对称） | ☐ |
 | REQ-75 | P2 | 文档：写明 Kimi `context.apply_compaction` 的压缩语义（只保留最后一次压缩之后的模型视角，轮数会少于 `turn.prompt` 条数）——README 与 `import_chat` 描述 | ☐ |
 
-**全部 70 项 ✅ + REQ-66 / REQ-68 / REQ-71 / REQ-74 / REQ-75 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-72 见 v0.17.2、REQ-73 见 v0.17.3）——未开工项已登记在案。
+**全部 70 项 ✅ + REQ-66 / REQ-68 / REQ-71 / REQ-74 / REQ-75 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-72 见 v0.17.3、REQ-73 见 v0.17.3）——未开工项已登记在案。
