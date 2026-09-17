@@ -231,6 +231,26 @@ test('面板路由：/api-import/history + /api-import/purge 注册并可调用'
   assert.equal(hist.total, 1)
 })
 
+test('assertPluginSession / clearSessionArtifactsForReplace：支持带下划线的合法 sessionId（如 import-foo_bar）', async () => {
+  const dir = resolveRegistryDir()
+  const sourcePath = 'D:\\kimi\\wire.jsonl'
+  const sessionId = 'import-my_special_session-123'
+  await rememberImport(dir, sourcePath, {
+    kind: 'single', dshId: sessionId, turns: 1, events: 1, importedAt: T0,
+  })
+  const persistence = makePersistence()
+  const artDir = join(process.env.DSH_HOME, 'sessions', '_proj', sessionId)
+  mkdirSync(artDir, { recursive: true })
+  writeFileSync(join(artDir, 'session.jsonl'), '{"type":"x"}\n')
+  persistence.sessions.set(sessionId, {
+    meta: { id: sessionId },
+    events: [markerEvent(sourcePath)],
+  })
+  const ctx = makeCtx(persistence)
+  const res = await deleteImportedSession(ctx, dir, sessionId)
+  assert.equal(res.sessionId, sessionId)
+})
+
 test('collectRegistryTargets：multi 子表展开', () => {
   const targets = collectRegistryTargets({
     a: { kind: 'single', dshId: 's1' },

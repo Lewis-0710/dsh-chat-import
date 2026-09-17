@@ -500,6 +500,34 @@ test('kimi：新 Kimi Code ~/.kimi-code agents/main/wire.jsonl 发现、state.js
   assert.equal(direct.sessions[0].sourcePath, sessDir)
 })
 
+// Issue #61：新版 Kimi Code 的 state.json 多数只写 workDir（旧版写 cwd）。发现层只认 cwd 时
+// project/cwd 会丢，面板里那条会话因此没有项目归属，导入也落不到源工作区。
+test('kimi：state.json 仅含 workDir 时发现层同样取到 cwd（#61）', async () => {
+  const root = join(HOME, '.kimi-code', 'sessions')
+  const workspace = join(root, 'wd_genius-invokation_7d34e589df57')
+  const sessDir = join(workspace, 'session-eb6808b9')
+  const agentWire = join(sessDir, 'agents', 'main', 'wire.jsonl')
+  const files = new Map([
+    [root, { type: 'dir' }],
+    [join(HOME, '.kimi-code'), { type: 'dir' }],
+    [workspace, { type: 'dir' }],
+    [sessDir, { type: 'dir' }],
+    [join(sessDir, 'agents'), { type: 'dir' }],
+    [join(sessDir, 'agents', 'main'), { type: 'dir' }],
+    [agentWire, { type: 'file', mtimeMs: 1786000002000, text: [
+      j({ type: 'metadata', protocol_version: '1', created_at: 1786000000500 }),
+      j({ type: 'turn.prompt', input: [{ type: 'text', text: '帮我看看构建失败' }], time: 1786000000501 }),
+    ].join('\n') }],
+    [join(sessDir, 'state.json'), { type: 'file', text: j({ id: 'session-eb6808b9', workDir: 'D:/AI/GTCG/genius-invokation' }) }],
+  ])
+  const host = mockHost(files)
+
+  const { sessions, total } = await discoverSessions({ path: root, format: 'kimi', host, imports: {} })
+  assert.equal(total, 1)
+  assert.equal(sessions[0].cwd, 'D:/AI/GTCG/genius-invokation')
+  assert.equal(sessions[0].project, 'genius-invokation')
+})
+
 test('antigravity：~/.gemini/antigravity-cli 每会话一目录发现、annotation 标题、cwd、缺 transcript 自拒', async () => {
   const root = join(HOME, '.gemini', 'antigravity-cli')
   const convDir = join(root, 'conversations')

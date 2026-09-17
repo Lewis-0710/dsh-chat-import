@@ -107,5 +107,6 @@
 | REQ-70 | P1 | 新源：Crush（Charm）适配（项目内 `crush.db` + `projects.json` 注册表 / 宿主工作区探测；parts wrapper 形状） | ✅ |
 | REQ-71 | P2 | 测试稳定性：Windows 上偶发单点失败（`EPERM: rename` 原子写、临时目录竞争、`rm` 语义相关用例）——给用例独立 tmp 根并隔离文件锁依赖 | ☐ |
 | REQ-72 | P1 | 缺陷：Codex 新版 CLI 分页 rollout（一个会话拆成多个 `rollout-*.jsonl`）被当成多条同名会话——按 thread id 成链后整链一次导入（issue #57） | ✅ |
+| REQ-73 | P1 | 缺陷：Kimi Code 导入丢失工作区（state.json 字段变更为 workDir）与下划线 sessionId 清理校验放宽（issue #61） | ✅ |
 
-**全部 69 项 ✅ + REQ-66 / REQ-68 / REQ-71 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-72 见 v0.17.2）——未开工项已登记在案。
+**全部 70 项 ✅ + REQ-66 / REQ-68 / REQ-71 待做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-72 见 v0.17.2、REQ-73 见 v0.17.3）——未开工项已登记在案。

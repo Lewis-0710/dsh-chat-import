@@ -5787,3 +5787,42 @@ test('cwdRemap：dry-run 预览与落盘的 cwd 同口径', async () => {
   assert.equal(value.cwdRemap.mapped, to)
   assert.equal(persistence.sessions.get(value.sessionId).meta.cwd, to, '落盘与预览一致')
 })
+
+// Issue #61：Kimi Code 的 state.json 多数只写 workDir（旧版写 cwd，新版两者可能共存）。
+// 只读 cwd 会让 cwd 丢掉 → 会话落到 _no-cwd 并新建一个以源会话目录为根的孤儿工作区。
+test('import_kimi 新 Kimi Code：state.json 仅含 workDir 时同样解析出 cwd（#61）', async () => {
+  const sess = 'C:\\Users\\u\\.kimi-code\\sessions\\wd_genius-invokation_7d34e589df57\\session-eb6808b9'
+  const workDir = hostAbs('D:/AI/GTCG/genius-invokation')
+  const tree = {
+    'C:\\Users\\u\\.kimi-code\\sessions': 'dir',
+    'C:\\Users\\u\\.kimi-code\\sessions\\wd_genius-invokation_7d34e589df57': 'dir',
+    [sess]: 'dir',
+    [sess + '\\agents']: 'dir',
+    [sess + '\\agents\\main']: 'dir',
+    [sess + '\\agents\\main\\wire.jsonl']: kimiCodeWire([
+      kimiCodeEv('turn.prompt', { input: [{ type: 'text', text: '帮我看看构建失败' }], origin: { kind: 'user' } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'step.begin', turnId: '0', step: 1 } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'content.part', part: { type: 'text', text: '是缺少依赖。' } } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'step.end', turnId: '0', step: 1, finishReason: 'end_turn' } }),
+      kimiCodeEv('turn.ended', { turnId: 0, reason: 'completed' }),
+    ]),
+    // 关键形态：只有 workDir，没有 cwd（本机实测 29/53 个会话是这种）
+    [sess + '\\state.json']: JSON.stringify({ id: 'session-eb6808b9', workDir, custom_title: '牌圣测试' }),
+  }
+  const { ctx, persistence, attached } = makeCtx(tree)
+  apply(ctx)
+  const def = chatDef(ctx, 'kimi')
+  const preview = await def.execute({ path: sess, preview: true })
+  assert.equal(preview.cwd, workDir)
+
+  const value = await def.execute({ path: sess })
+  assert.equal(value.mode, 'single')
+  assert.equal(value.status, 'imported')
+  const saved = persistence.sessions.get(value.sessionId)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, workDir) // state.json.workDir（不再回退 kimi.json）
+  assert.equal(saved.events.at(-1).data.title, 'Kimi · 牌圣测试')
+  assertEnvelopeHygiene(saved.events)
+  assert.equal(attached.length, 1)
+})
+

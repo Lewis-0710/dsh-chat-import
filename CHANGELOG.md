@@ -13,6 +13,13 @@ from the matching section below.
 
 ## [Unreleased]
 
+## [0.17.3] - 2026-09-17
+
+### Fixed
+
+- **Kimi Code 导入与发现支持新版 state.json 的 workDir 字段（#61）** — Kimi CLI 近期版本在 `.kimi/sessions/<uuid>/state.json` 中使用 `workDir` 记录工作目录（旧版仅写 `cwd`，新版二者可能共存或仅存在 `workDir`）。此前导入（`kimiDeriveArgs`）与发现（`scanKimi`）仅读取 `state.cwd`，导致新版会话在解析 cwd 时错误回退到 `~/.kimi/kimi.json` 的 md5 映射；当全局映射缺少对应记录时 cwd 丢失，导入的会话无法绑定到正确的工作区。现统一优先按 `[state.cwd, state.workDir]` 顺序读取非空工作目录字符串。
+- **清理与重导支持合法带下划线的会话 ID** — `lib/purge.mjs` 中的 `SESSION_ID_RE` 原先仅放行字母、数字与中划线，导致部分合法生成的会话 ID（如带下划线的 `import-foo_bar`）在执行清理或替换重导时抛出「非法 sessionId」错误。校验正则放宽至包含下划线。
+
 ## [0.17.2] - 2026-09-16
 
 ### Fixed
