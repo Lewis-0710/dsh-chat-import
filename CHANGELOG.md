@@ -13,6 +13,8 @@ from the matching section below.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-17
+
 ### Added
 
 - **导入面板新增「导入到」下拉：直投 Claude Code / Codex / Kimi Code / opencode（issue #59）** — 「来源」下方多一行目标选择，默认仍是 **DSH 会话环境**（既有行为一字不变）；选其他目标则是**转投**而非导入：用同一套转换器读源会话，序列化成目标工具自己的格式（即 `export_chat` 的序列化器），以 `createIfAbsent` 落盘——`claude` 直接写进 `~/.claude/projects/<slug>/<uuid>.jsonl`（Claude Code 自己读该目录），`codex` / `kimi` / `opencode` 写 `~/.dsh/exports/` 并给出下一步（opencode 需 `opencode import <文件>`）。为这次转换临时建立的 DSH 会话在导出成功后**立刻撤回**，DSH 侧不留副本；转投前就已存在的会话（already-imported / appended）**绝不删除**，只导出并在结果里标为保留（`kept`）；撤回失败（会话在跑 / 工件被占用）把原因写进结果而不是吞掉。多条已导入源的转投沿用同一批聚合与预算链，逐条失败不拖垮整批。
