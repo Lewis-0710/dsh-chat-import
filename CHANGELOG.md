@@ -13,6 +13,15 @@ from the matching section below.
 
 ## [Unreleased]
 
+### Fixed
+
+- **ChatGPT 官方导出被静默丢弃：三处形状假设（#62）** — 报告者用真实的官方导出（43 会话、45.9MB）定位出三个**相互叠加**的阻断点，全都源于对「导出形状」的假设而非转换逻辑：
+  1. **图遍历依赖 `children`**：官方「slim」导出完全不写 `children` 字段，旧实现沿 `children` 走，于是 root 之后一个节点都遍历不到。现在 `children` 缺失时**按 `parent` 指针还原**（还原出的兄弟顺序按消息 `create_time` 升序，保持「最后一个 child = 活跃分支」的既有语义；自带 `children` 的导出仍以声明为准）。
+  2. **root 必须带 message**：官方导出常见 `{ id, message: null, parent: null }` 的**占位 root**（不承载内容），旧实现找不到候选 root 就把整个会话 `return null`。现在优先取带 message 的节点，没有再退到任何无父节点——占位节点不贡献内容，遍历本就会跳过它。
+  3. **带小数的 Unix 秒未取整**：官方导出的 `create_time` 形如 `1767583930.285031`，`* 1000` 得到**浮点毫秒**，宿主以 `time must be a safe integer` 拒收整份会话（会话已合成、却在写入时被拒）。`parseTime` 现在统一四舍五入到安全整数毫秒（秒与毫秒两种量级分支都覆盖）。这一条同时修掉了**同因的第四个症状**：dry-run 预览把浮点 `createdAt` 放进结果，违反 output schema 的 `integer` 声明，于是「内容可导入时预览反而报 schema 错」——正好掩盖了上面两条。
+
+  另外给 `verify_session` 加了 `non-integer-time` 检查项与 `repairHints`：这类会话原本只会以宿主的「create failed」形式暴露，现在能在插件自己的诊断入口看到是哪条事件的 `time` 不是安全整数，并得到 `force:true` 重导的修复建议。报告者用的数据预处理绕行方案（重建 `children` / 丢弃占位 root / 取整时间戳）不再需要。
+
 ## [0.18.1] - 2026-09-17
 
 ### Added
