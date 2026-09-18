@@ -1,4 +1,4 @@
-// mcp.test.mjs — REQ-68 MCP 镜像（Claude/Codex → DSH MCP client 计划）
+// mcp.test.mjs — MCP 镜像（Claude/Codex → DSH MCP client 计划）
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'

@@ -1,6 +1,6 @@
-// req45.test.mjs — REQ-45 源覆盖面：Reasonix 桌面版 + Claude-3p 新端
+// reasonix-claude3p.test.mjs — 源覆盖面：Reasonix 桌面版 + Claude-3p 新端
 //（发现层合成夹具 + reasonix 桌面版导入管线；真实机样本校准见
-// dev/research/reasonix-desktop-claude-3p-recon.md 文末不确定点）。
+// 对应提交记录）。
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'

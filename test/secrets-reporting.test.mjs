@@ -1,4 +1,4 @@
-// req26.test.mjs — REQ-26 畸形行行号明细 + secrets 位置上报 + permission 计数
+// secrets-reporting.test.mjs — 畸形行行号明细 + secrets 位置上报 + permission 计数
 //
 // 覆盖三块：parseJsonlLines 行号/封顶/错误净化、各转换器返回的 skippedLines /
 // secrets / permissionCount、index 层 schema 透传与 render 报告（正文不含 secret 内容）。
@@ -96,7 +96,7 @@ test('parseJsonlLines: requireObject 时非对象行计入 skipped 明细', () =
 // ── Claude：畸形行明细 + secrets 位置 + permission 计数（不进入对话）─────────
 
 // 合成 Claude transcript（sessionId 与文件名 stem 一致，避免辅助 transcript 判定）。
-function claudeReq26Raw(sessionId = 'sess-req26') {
+function claudeDetailsRaw(sessionId = 'sess-details') {
   return [
     '{"sessionId":"' + sessionId + '","type":"user","cwd":"D:\\\\demo","message":{"role":"user","content":"hi"}}',
     'this is not valid json',
@@ -109,7 +109,7 @@ function claudeReq26Raw(sessionId = 'sess-req26') {
 }
 
 test('convertClaudeJsonl: 畸形行号明细 + secrets 位置（只含 line+kind）+ permission 计数', () => {
-  const out = convertClaudeJsonl(claudeReq26Raw(), { sourcePath: 'D:\\demo\\req26.jsonl' })
+  const out = convertClaudeJsonl(claudeDetailsRaw(), { sourcePath: 'D:\\demo\\details.jsonl' })
   assert.equal(out.skipped, 2)
   assert.deepEqual(out.skippedLines.map((s) => s.line), [2, 5])
   assert.equal(out.skippedLines[0].error.length > 0, true)
@@ -316,11 +316,11 @@ function makeMinCtx(tree) {
 }
 
 test('import_claude 单文件：skippedLines/secrets/permissionCount 透传 + schema + 报告正文不含 secret 内容', async () => {
-  const tree = { 'D:\\demo\\sess-req26.jsonl': claudeReq26Raw() }
+  const tree = { 'D:\\demo\\sess-details.jsonl': claudeDetailsRaw() }
   const { ctx } = makeMinCtx(tree)
   apply(ctx)
   const def = chatDef(ctx)
-  const value = await def.execute({ path: 'D:\\demo\\sess-req26.jsonl' })
+  const value = await def.execute({ path: 'D:\\demo\\sess-details.jsonl' })
   assert.equal(value.mode, 'single')
   assert.equal(value.status, 'imported')
   assert.equal(value.skipped, 2)
@@ -331,7 +331,7 @@ test('import_claude 单文件：skippedLines/secrets/permissionCount 透传 + sc
   // 返回数据不含 secret 内容
   assert.ok(!JSON.stringify(value).includes(SECRET))
   // render：畸形行明细只含行号与 kind 计数，绝不拼入 secret 内容
-  const text = def.output.render({ path: 'D:\\demo\\sess-req26.jsonl' }, value).map((b) => b.text).join('\n')
+  const text = def.output.render({ path: 'D:\\demo\\sess-details.jsonl' }, value).map((b) => b.text).join('\n')
   assert.ok(text.includes('畸形行明细：L2/L5'))
   assert.ok(text.includes('secrets 命中 1 处'))
   assert.ok(text.includes('permission 2 条'))
@@ -340,11 +340,11 @@ test('import_claude 单文件：skippedLines/secrets/permissionCount 透传 + sc
 })
 
 test('import_claude 全畸形文件：skipped 路径也透传行号明细并渲染', async () => {
-  const tree = { 'D:\\demo\\req26-allbad.jsonl': 'bad line 1\nbad line 2\nbad line 3' }
+  const tree = { 'D:\\demo\\details-allbad.jsonl': 'bad line 1\nbad line 2\nbad line 3' }
   const { ctx } = makeMinCtx(tree)
   apply(ctx)
   const def = chatDef(ctx)
-  const value = await def.execute({ path: 'D:\\demo\\req26-allbad.jsonl' })
+  const value = await def.execute({ path: 'D:\\demo\\details-allbad.jsonl' })
   assert.equal(value.status, 'skipped')
   assert.deepEqual(value.skippedLines.map((s) => s.line), [1, 2, 3])
   assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
@@ -353,10 +353,10 @@ test('import_claude 全畸形文件：skipped 路径也透传行号明细并渲�
 })
 
 test('import_claude 目录批量：batchItem 透传 skippedLines/secrets/permissionCount + schema', async () => {
-  const dir = 'D:\\demo\\req26dir'
+  const dir = 'D:\\demo\\detailsdir'
   const tree = {
     [dir]: 'dir',
-    [dir + '\\a.jsonl']: claudeReq26Raw('a'),
+    [dir + '\\a.jsonl']: claudeDetailsRaw('a'),
     [dir + '\\b.jsonl']: '{"sessionId":"b","type":"user","message":{"role":"user","content":"hi"}}\n{"sessionId":"b","type":"assistant","message":{"role":"assistant","content":"ok"}}',
   }
   const { ctx } = makeMinCtx(tree)

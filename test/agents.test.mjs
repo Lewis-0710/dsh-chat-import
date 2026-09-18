@@ -358,9 +358,9 @@ test('REQ-61: Claude 源带 kind:skill frontmatter 过滤 + 缺目录静默空�
   assert.equal(r2.total, 0)
 })
 
-// ── REQ-64：Codex 资产（skills / instructions.md / AGENTS.md / config.toml）────
+// ── Codex 资产（skills / instructions.md / AGENTS.md / config.toml）────
 
-test('REQ-64 runAgentsImport: Codex skills/instructions/AGENTS/config 落盘 + provenance + 幂等', async () => {
+test('runAgentsImport: Codex skills/instructions/AGENTS/config 落盘 + provenance + 幂等', async () => {
   const root = mkdtempSync(join(tmpdir(), 'agents-'))
   const codexRoot = join(root, 'codex')
   const agentsHome = join(root, 'agents-home')

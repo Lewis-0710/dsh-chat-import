@@ -1,4 +1,4 @@
-// req40.test.mjs — REQ-40 剩余增强：scan_discover 持久化 mtime/size 书签（跨进程免重扫）
+// scan-cache.test.mjs — scan_discover 持久化 mtime/size 书签（跨进程免重扫）
 //
 // 自包含：mock host（内存合成夹具，可观测读计数）+ 真实临时 cacheDir（书签文件走
 // node:fs 落盘）。覆盖：
@@ -80,7 +80,7 @@ const scan = (opts) => discoverSessions({ cache: createScanCache(), ...opts })
 test('首次扫描落书签（原子写）；同 mtime+size 二次扫描命中书签不重读', async (t) => {
   const root = join('C:', 'Users', 'tester', '.claude', 'projects')
   const { files, s1 } = claudeFixture(root)
-  const cacheDir = mkdtempSync(join(tmpdir(), 'req40-hit-'))
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-hit-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
   const bmPath = join(cacheDir, SCAN_CACHE_FILE)
 
@@ -125,7 +125,7 @@ test('首次扫描落书签（原子写）；同 mtime+size 二次扫描命中�
 test('size 变化触发重读并更新书签', async (t) => {
   const root = join('C:', 'Users', 'tester', '.claude', 'projects')
   const { files, s1 } = claudeFixture(root)
-  const cacheDir = mkdtempSync(join(tmpdir(), 'req40-size-'))
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-size-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
   const bmPath = join(cacheDir, SCAN_CACHE_FILE)
 
@@ -148,7 +148,7 @@ test('size 变化触发重读并更新书签', async (t) => {
 test('mtime 变化（同 size）触发重读', async (t) => {
   const root = join('C:', 'Users', 'tester', '.claude', 'projects')
   const { files, s1 } = claudeFixture(root)
-  const cacheDir = mkdtempSync(join(tmpdir(), 'req40-mtime-'))
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-mtime-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
 
   await scan({ path: root, format: 'claude', host: mockHost(files), imports: {}, cacheDir })
@@ -166,7 +166,7 @@ test('mtime 变化（同 size）触发重读', async (t) => {
 test('书签文件损坏按空书签处理，扫描后重写为合法', async (t) => {
   const root = join('C:', 'Users', 'tester', '.claude', 'projects')
   const { files, s1 } = claudeFixture(root)
-  const cacheDir = mkdtempSync(join(tmpdir(), 'req40-corrupt-'))
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-corrupt-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
   const bmPath = join(cacheDir, SCAN_CACHE_FILE)
 
@@ -186,7 +186,7 @@ test('书签文件损坏按空书签处理，扫描后重写为合法', async (t
 test('书签文件缺失按空书签处理，扫描后重建', async (t) => {
   const root = join('C:', 'Users', 'tester', '.claude', 'projects')
   const { files, s1 } = claudeFixture(root)
-  const cacheDir = mkdtempSync(join(tmpdir(), 'req40-missing-'))
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-missing-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
   const bmPath = join(cacheDir, SCAN_CACHE_FILE)
 
@@ -219,7 +219,7 @@ test('cursor 书签命中：旧 slug-only entries 读时补丁解码 cwd/project
     ['E:\\RPA-260721-New', { type: 'dir' }],
     [cwdDots, { type: 'dir' }],
   ])
-  const cacheDir = mkdtempSync(join(tmpdir(), 'req40-cursor-patch-'))
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-cursor-patch-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
   const bmPath = join(cacheDir, SCAN_CACHE_FILE)
   writeFileSync(bmPath, JSON.stringify({
@@ -279,7 +279,7 @@ test('cursor 书签命中：纯数字 slug 读时补丁清空 project，不误�
     [dirNum, { type: 'dir' }],
     [file, { type: 'file', mtimeMs: 1786000004000, text: fileBody }],
   ])
-  const cacheDir = mkdtempSync(join(tmpdir(), 'req40-cursor-numeric-'))
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-cursor-numeric-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
   writeFileSync(join(cacheDir, SCAN_CACHE_FILE), JSON.stringify({
     version: 2,
@@ -317,18 +317,18 @@ test('cursor 书签命中：纯数字 slug 读时补丁清空 project，不误�
 test('跨进程模拟：重新 import 模块实例 + 复用书签文件 → 未变文件不重读', async (t) => {
   const root = join('C:', 'Users', 'tester', '.claude', 'projects')
   const { files } = claudeFixture(root)
-  const cacheDir = mkdtempSync(join(tmpdir(), 'req40-cross-'))
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-cross-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
 
   // 实例 A（进程 1）：全新模块态，首次扫描落书签
-  const modA = await import('../lib/discovery.mjs?req40-cross-a=1')
+  const modA = await import('../lib/discovery.mjs?scan-cache-cross-a=1')
   const hostA = mockHost(files)
   const rA = await modA.discoverSessions({ path: root, format: 'claude', host: hostA, imports: {}, cacheDir, cache: modA.createScanCache() })
   assert.equal(rA.total, 2)
   assert.ok(hostA.counters.reads > 0)
 
   // 实例 B（进程 2）：模块级缓存为空，仅复用磁盘书签 → 未变文件不重读
-  const modB = await import('../lib/discovery.mjs?req40-cross-b=2')
+  const modB = await import('../lib/discovery.mjs?scan-cache-cross-b=2')
   const hostB = mockHost(files)
   const rB = await modB.discoverSessions({ path: root, format: 'claude', host: hostB, imports: {}, cacheDir, cache: modB.createScanCache() })
   assert.equal(rB.total, 2)

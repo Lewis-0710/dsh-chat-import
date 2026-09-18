@@ -2819,9 +2819,9 @@ test('import_hermes 单 .jsonl：db 之外的单会话源，mode single', async 
   assert.equal(persistence.sessions.size, 1)
 })
 
-// ---- REQ-72 expectedHash（源文件强校验） ----
+// ---- expectedHash（源文件强校验） ----
 
-test('REQ-72 expectedHash: 正确哈希导入成功，错误哈希失败且不落盘', async () => {
+test('expectedHash: 正确哈希导入成功，错误哈希失败且不落盘', async () => {
   const raw = [
     JSON.stringify({ sessionId: 'sess-hash-001', type: 'user', cwd: hostAbs('D:/demo/proj'), message: { role: 'user', content: '你好' } }),
     JSON.stringify({ sessionId: 'sess-hash-001', type: 'assistant', message: { role: 'assistant', content: '好的' } }),
@@ -2848,16 +2848,16 @@ test('REQ-72 expectedHash: 正确哈希导入成功，错误哈希失败且不�
   assert.equal(persistence.sessions.size, 1)
 })
 
-test('REQ-72 restamp: 时间戳平移到当前，保持相对间隔', () => {
+test('restamp: 时间戳平移到当前，保持相对间隔', () => {
   const out = { meta: { createdAt: 1000 }, events: [{ time: 1000 }, { time: 2000 }] }
   restampSession(out, { restamp: true })
   assert.ok(out.meta.createdAt > 1000, 'createdAt 被平移: ' + out.meta.createdAt)
   assert.equal(out.events[1].time - out.events[0].time, 1000, '相对间隔保持不变')
 })
 
-// ---- REQ-70 导入时 workspaceMode（dedicated） ----
+// ---- 导入时 workspaceMode（dedicated） ----
 
-test('REQ-70 import_claude workspaceMode=dedicated: 导入会话挂到专用工作区', async () => {
+test('import_claude workspaceMode=dedicated: 导入会话挂到专用工作区', async () => {
   const raw = [
     JSON.stringify({ sessionId: 'sess-ws-001', type: 'user', cwd: hostAbs('D:/demo/proj'), message: { role: 'user', content: '你好' } }),
     JSON.stringify({ sessionId: 'sess-ws-001', type: 'assistant', message: { role: 'assistant', content: '好的' } }),

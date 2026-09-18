@@ -1,4 +1,4 @@
-// cwd-remap.test.mjs — REQ-74 cwd 重映射单测。
+// cwd-remap.test.mjs — cwd 重映射单测。
 //
 // 背景：宿主用平台相关的 isAbsolute 校验 header.cwd（dsh-session/lib/index.js:786），
 // 所以源机路径（如 Windows 的 D:\demo\proj 在 POSIX 上）在 prepareHostMeta 处被剔除，
@@ -10,7 +10,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 
-import { applyCwdRemap, attachReq26, finalizeConvertedSession } from '../lib/import-core.mjs'
+import { applyCwdRemap, attachConversionDetails, finalizeConvertedSession } from '../lib/import-core.mjs'
 
 const conv = (cwd) => ({ meta: { id: 'import-x', cwd }, turns: [], events: [] })
 // 期望值用与产品同口径的 node:path join 计算（AGENTS.md 跨平台路径纪律）：
@@ -132,14 +132,14 @@ test('meta 缺失或 cwd 非字符串时安全返回', () => {
   }
 })
 
-test('接线：finalizeConvertedSession 应用重映射；attachReq26 把结果透出到返回值', () => {
+test('接线：finalizeConvertedSession 应用重映射；attachConversionDetails 把结果透出到返回值', () => {
   const out = conv(SRC.proj)
   finalizeConvertedSession(out, { cwdRemap: [{ from: SRC.demo, to: '/local/demo' }] })
   assert.equal(out.meta.cwd, mapped('/local/demo', 'proj'), 'finalize 阶段即改写（早于落盘与归组）')
 
-  const res = attachReq26(out, { sessionId: 'import-x', turns: 0, messages: 0, toolCalls: 0, skipped: 0 })
+  const res = attachConversionDetails(out, { sessionId: 'import-x', turns: 0, messages: 0, toolCalls: 0, skipped: 0 })
   assert.deepEqual(res.cwdRemap, out.cwdRemap, '重映射事实进入返回值，可被观察')
 
-  const plain = attachReq26(conv('/local/x'), { sessionId: 'y' })
+  const plain = attachConversionDetails(conv('/local/x'), { sessionId: 'y' })
   assert.equal(plain.cwdRemap, undefined, '未启用时不占键')
 })
