@@ -2453,6 +2453,66 @@ test('import_opencode 幂等：重复导入同一库只落盘一次', async () =
   assert.equal(persistence.sessions.size, 2)
 })
 
+test('import_opencode sessionIds 补导：库未变时再选未导过的会话仍真正落盘', async () => {
+  // 回归：DB version/size 未变时 S3 短路径曾直接对已导子表返回 already-imported，
+  // 忽略 args.sessionIds，导致面板「部分」条目补导无效（opencode/mimocode/teleagent 同构）。
+  const dbPath = makeOpencodeDb(opencodeTestSessions())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'opencode')
+  const first = await def.execute({ path: dbPath, sessionIds: ['ses-a'] })
+  assert.equal(first.imported, 1)
+
+  // 同一未变化的库，补导另一个会话：短路径不得吞掉新选中的 ses-b
+  const second = await def.execute({ path: dbPath, sessionIds: ['ses-b'] })
+  assert.equal(second.imported, 1)
+  assert.equal(second.results.length, 1)
+  assert.equal(second.results[0].sessionId, 'import-ses-b')
+  assert.equal(persistence.sessions.size, 2)
+
+  // 再选已导过的会话：仍是幂等 already-imported（短路径对被覆盖选择照常生效）
+  const third = await def.execute({ path: dbPath, sessionIds: ['ses-a'] })
+  assert.equal(third.imported, 0)
+  assert.equal(persistence.sessions.size, 2)
+})
+
+// 回归（WAL 盲区）：WAL 模式下新会话只写 opencode.db-wal，主文件 mtime/size 在
+// checkpoint 前不变——S3 短路径只比主文件会把「库已变」判成「未变」，第二次全量
+// 导入拿不到新会话（opencode / mimocode / teleagent / kilocode 同构共用此编排）。
+test('import_opencode WAL 盲区：主文件未变、-wal 增长 → 新会话仍被增量导入', async () => {
+  const dbPath = makeOpencodeDb(opencodeTestSessions())
+  const conn = new DatabaseSync(dbPath)
+  conn.exec('PRAGMA journal_mode=WAL')
+  conn.exec('PRAGMA wal_autocheckpoint=0') // 阻止自动 checkpoint 合并回主文件
+  // 连接保持打开（-wal 持续存在；关闭最后一个连接会触发 checkpoint + 删除 -wal）
+  try {
+    const { ctx, persistence } = makeCtx({})
+    apply(ctx)
+    const def = chatDef(ctx, 'opencode')
+    const first = await def.execute({ path: dbPath })
+    assert.equal(first.imported, 2)
+    const mainBefore = statSync(dbPath)
+
+    // 追加第三个会话：只落 -wal，主文件 stat 不变
+    conn.prepare('INSERT INTO session (id, title, directory, time_created, model) VALUES (?, ?, ?, ?, ?)')
+      .run('ses-wal', 'Wal session', hostAbs('E:/demo/opencode'), 1786000200000, null)
+    conn.prepare('INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)')
+      .run('msg-w1', 'ses-wal', 1786000200001, JSON.stringify({ role: 'user' }))
+    conn.prepare('INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)')
+      .run('p-w1', 'msg-w1', 'ses-wal', 1786000200001, JSON.stringify({ type: 'text', text: '新问题' }))
+    const mainAfter = statSync(dbPath)
+    assert.equal(mainAfter.size, mainBefore.size) // 前提：主文件确实没变（WAL 语义成立）
+
+    const second = await def.execute({ path: dbPath })
+    assert.equal(second.imported, 1)
+    assert.equal(second.alreadyImported, 2)
+    assert.equal(persistence.sessions.size, 3)
+    assert.ok(persistence.sessions.get('import-ses-wal'))
+  } finally {
+    conn.close()
+  }
+})
+
 test('readOpencodeDb：只读抽取会话、消息/part 排序、模型解析', () => {
   const dbPath = makeOpencodeDb(opencodeTestSessions())
   const sessions = readOpencodeDb(dbPath)
