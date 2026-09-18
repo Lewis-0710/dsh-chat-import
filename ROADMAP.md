@@ -72,7 +72,7 @@
 | REQ-63 | P3 | 仓库社区健康（CONTRIBUTING + issue/PR 模板） | ✅ |
 | REQ-64 | P1 | 新源：Continue 适配（`~/.continue/sessions/<id>.json` + `sessions.json` 索引；VS Code / JetBrains / CLI 共用） | ✅ |
 | REQ-65 | P1 | 新源：Cline 适配（`~/.cline/data/sessions/<id>/<id>.messages.json` + `db/sessions.db` 元数据索引，DB 优先 / manifest 兜底） | ✅ |
-| REQ-66 | P2 | Cline legacy `tasks/` 适配（VS Code globalStorage 的 `api_conversation_history.json` + `ui_messages.json` + `taskHistory.json` 索引；新版 SDK 存储尚未迁移它） | ☐ |
+| REQ-66 | P2 | Cline legacy `tasks/` 适配（VS Code globalStorage 的 `api_conversation_history.json` + `ui_messages.json` + `taskHistory.json` 索引；新版 SDK 存储尚未迁移它） | ✅ |
 | REQ-67 | P1 | 新源：Goose 适配（`sessions.db` 两表 + `$GOOSE_PATH_ROOT`/三平台路径；旧 jsonl 不读以免重复导入） | ✅ |
 | REQ-68 | P2 | 缺陷：数据库类批量来源（opencode / mimocode / kilocode / zcode）的会话标题未钉「来源 · 话题」，DSH 可能回退成工作区目录名 | ✅ |
 | REQ-69 | P1 | 新源：Zed Agent 线程适配（`threads.db` 单表 + zstd blob，含 legacy 方言；子代理线程不单独成会话） | ✅ |

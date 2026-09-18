@@ -123,6 +123,10 @@ export {
 export {
   convertClineJson,
   clineMessagesPath,
+  clineLegacyApiHistoryPath,
+  clineLegacyTaskHistoryPath,
+  clineLegacyUiMessagesPath,
+  parseClineLegacyTaskHistory,
   readClineManifest,
 } from './lib/convert/cline.mjs'
 

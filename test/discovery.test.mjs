@@ -863,6 +863,40 @@ test('cline：DB 不可用时回退扫目录（manifest 取标题/项目；子�
   assert.equal(s.lastActiveAt, Date.parse('2026-04-22T17:42:10.123Z'))
 })
 
+test('cline legacy：globalStorage 的 taskHistory 索引发现 api history，UI 消息可作标题回退', async () => {
+  const root = join(HOME, 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev')
+  const taskId = 'legacy-task-001'
+  const tasks = join(root, 'tasks')
+  const taskDir = join(tasks, taskId)
+  const api = join(taskDir, 'api_conversation_history.json')
+  const ui = join(taskDir, 'ui_messages.json')
+  const files = new Map([
+    [root, { type: 'dir' }], [join(root, 'state'), { type: 'dir' }], [tasks, { type: 'dir' }], [taskDir, { type: 'dir' }],
+    [join(root, 'state', 'taskHistory.json'), {
+      type: 'file', mtimeMs: 1786000012000,
+      text: j([{ id: taskId, ts: 1786000000000, task: '', cwdOnTaskInitialization: 'D:\\repo' }]),
+    }],
+    [api, {
+      type: 'file', mtimeMs: 1786000013000,
+      text: j([{ role: 'user', content: 'legacy question' }, { role: 'assistant', content: 'answer' }]),
+    }],
+    [ui, { type: 'file', text: j([{ type: 'ask', ask: 'followup', text: '标题来自 UI' }]) }],
+  ])
+  const host = mockHost(files)
+  const result = await discoverSessions({ path: root, format: 'cline', host, imports: {} })
+  assert.equal(result.total, 1)
+  assert.deepEqual(result.sessions[0], {
+    format: 'cline', sessionId: taskId, title: '标题来自 UI', project: 'repo',
+    createdAt: 1786000000000, lastActiveAt: 1786000013000, messageCount: null,
+    contextTokens: null, sourcePath: api, cwd: 'D:\\repo', importStatus: 'not-imported',
+    gitBranch: null, gitDirty: null,
+  })
+
+  const direct = await discoverSessions({ path: api, host, imports: {} })
+  assert.equal(direct.total, 1)
+  assert.equal(direct.sessions[0].sessionId, taskId)
+})
+
 test('goose：sessions.db 经 host.readSessions 发现（标题/项目/时间/消息数），旧 jsonl 不当作来源', async () => {
   const dataDir = join(HOME, '.local', 'share', 'goose')
   const sessionsDir = join(dataDir, 'sessions')
@@ -996,7 +1030,8 @@ test('cline 默认根：$CLINE_SESSION_DATA_DIR / $CLINE_DATA_DIR / $CLINE_DIR �
   const roots = defaultRoots({ home: HOME })
   const expected = process.env.CLINE_SESSION_DATA_DIR
     || join(process.env.CLINE_DATA_DIR || join(process.env.CLINE_DIR || join(HOME, '.cline'), 'data'), 'sessions')
-  assert.equal(roots.cline, expected)
+  assert.equal(roots.cline[0], expected)
+  assert.ok(Array.isArray(roots.cline))
 })
 
 test('continue 默认根：$CONTINUE_GLOBAL_DIR 优先，否则 ~/.continue/sessions', () => {

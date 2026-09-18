@@ -198,7 +198,27 @@ test('clineDeriveArgs：DB 与 manifest 都缺 → 只带 id（标题由转换�
   })
 })
 
-test('collectClineFiles：只收 <sessionId>.messages.json（manifest / compaction 不收），递归子目录', async () => {
+test('clineDeriveArgs：legacy api history 从 taskHistory.json 派生任务元数据', async () => {
+  await withTmpAsync(async (root) => {
+    const taskId = 'legacy-001'
+    const globalStorage = join(root, 'globalStorage')
+    const apiPath = join(globalStorage, 'tasks', taskId, 'api_conversation_history.json')
+    const historyPath = join(globalStorage, 'state', 'taskHistory.json')
+    const ctx = fakeCtx({
+      [historyPath]: JSON.stringify([{
+        id: taskId, ts: 1786000000000, task: '旧任务', cwdOnTaskInitialization: 'D:\\repo',
+        modelId: 'claude-sonnet', conversationHistoryDeletedRange: [2, 4],
+      }]),
+    })
+    const derived = await clineDeriveArgs(ctx, { displayPath: apiPath })
+    assert.deepEqual(derived, {
+      legacyTask: true, clineId: taskId, title: '旧任务', cwd: 'D:\\repo',
+      createdAt: 1786000000000, modelId: 'claude-sonnet', legacyDeletedRange: [2, 4],
+    })
+  })
+})
+
+test('collectClineFiles：收现代 messages 与 legacy api history，排除 manifest / compaction，递归子目录', async () => {
   const sessionsDir = join('home', 'u', '.cline', 'data', 'sessions')
   const sessionDir = join(sessionsDir, SID)
   const nested = join(sessionDir, 'nested-session')
@@ -207,6 +227,7 @@ test('collectClineFiles：只收 <sessionId>.messages.json（manifest / compacti
       { name: SID + '.messages.json', type: 'file', target: join(sessionDir, SID + '.messages.json') },
       { name: SID + '.json', type: 'file', target: join(sessionDir, SID + '.json') },
       { name: SID + '.compaction.json', type: 'file', target: join(sessionDir, SID + '.compaction.json') },
+      { name: 'api_conversation_history.json', type: 'file', target: join(sessionsDir, 'tasks', 'legacy-001', 'api_conversation_history.json') },
       { name: 'explore-1.messages.json', type: 'file', target: join(sessionDir, 'explore-1.messages.json') },
       { name: 'nested-session', type: 'directory', target: nested },
     ],
@@ -220,6 +241,7 @@ test('collectClineFiles：只收 <sessionId>.messages.json（manifest / compacti
   // 子代理消息文件（explore-1.messages.json）也会被收进来 —— 由转换器按 agent 字段
   // 判定为子代理会话后跳过（发现层用目录名过滤，见 discovery 的 scanCline）
   assert.deepEqual(out.sort(), [
+    join(sessionsDir, 'tasks', 'legacy-001', 'api_conversation_history.json'),
     join(sessionDir, 'explore-1.messages.json'),
     join(sessionDir, SID + '.messages.json'),
     join(nested, 'n1.messages.json'),

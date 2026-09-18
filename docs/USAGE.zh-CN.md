@@ -72,7 +72,7 @@ import_agents({ codexRoot: "~/.codex", apply: true })  // 显式包含 Codex 资
 
 ### scan_discover — 只读会话发现
 
-`scan_discover` 扫描全部已支持格式的已知数据根（Windows 上含 Reasonix 桌面版与 Claude-3p 根），返回结构化会话索引（标题、项目、cwd、路径、导入状态，源目录为 git 仓库时附分支/dirty），供批导入前预览。零副作用：
+`scan_discover` 扫描全部已支持格式的已知数据根（包括 Cline 新版 sessions 与 VS Code globalStorage 旧版任务，以及 Windows 上的 Reasonix 桌面版与 Claude-3p 根），返回结构化会话索引（标题、项目、cwd、路径、导入状态，源目录为 git 仓库时附分支/dirty），供批导入前预览。VS Code 使用非标准 globalStorage 路径时可设置 `CLINE_LEGACY_GLOBAL_STORAGE_DIR`。零副作用：
 
 ```
 scan_discover()

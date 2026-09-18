@@ -67,6 +67,54 @@ test('简单轮次：user 文本块开轮、db 元数据经 args 落地、标题
   assert.equal(out.events.filter((e) => e.type === 'session/title').length, 0)
 })
 
+test('legacy task：原始 api_conversation_history 数组保留文本、推理与工具配对', () => {
+  const raw = JSON.stringify([
+    { role: 'user', content: 'legacy question' },
+    { role: 'assistant', content: [
+      { type: 'thinking', thinking: '先读文件' },
+      toolUse('legacy-call', 'read_file', { path: 'a.ts' }),
+    ] },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'legacy-call', content: '内容' }] },
+    { role: 'assistant', content: [{ type: 'text', text: 'done' }] },
+  ])
+  const out = convertClineJson(raw, {
+    legacyTask: true,
+    clineId: 'legacy-1',
+    createdAt: TS,
+    cwd: CWD,
+    title: 'Legacy task',
+  })
+  assert.equal(out.meta.sourceId, 'legacy-1')
+  assert.equal(out.meta.cwd, CWD)
+  assert.equal(out.turns.length, 1)
+  assert.equal(out.turns[0].steps[0].content[0].type, 'reasoning')
+  assert.equal(out.turns[0].steps[0].toolCalls[0].id, 'legacy-call')
+  assert.deepEqual(out.turns[0].steps[0].toolResults[0].content, [{ type: 'text', text: '内容' }])
+  assertToolPairing(out.events)
+})
+
+test('legacy task：按 taskHistory 的 deleted range 截断旧上下文并移除孤儿 tool_result', () => {
+  const raw = JSON.stringify([
+    { role: 'user', content: 'first' },
+    { role: 'assistant', content: 'first answer' },
+    { role: 'user', content: 'stale question' },
+    { role: 'assistant', content: 'stale answer' },
+    { role: 'user', content: [
+      { type: 'tool_result', tool_use_id: 'stale-call', content: 'stale output' },
+      { type: 'text', text: 'current question' },
+    ] },
+    { role: 'assistant', content: 'current answer' },
+  ])
+  const out = convertClineJson(raw, {
+    legacyTask: true, clineId: 'legacy-range', legacyDeletedRange: [2, 3], createdAt: TS,
+  })
+  assert.equal(out.turns.length, 2)
+  assert.equal(out.turns[0].prompt, 'first')
+  assert.equal(out.turns[1].prompt, 'current question')
+  assert.equal(out.turns[1].steps[0].content[0].text, 'current answer')
+  assert.equal(out.records, 4)
+})
+
 test('thinking + tool_use + tool_result（挂 user 消息）→ 推理/调用/结果同一步且配对', () => {
   const out = convertClineJson(session([
     user('读一下 a.ts'),

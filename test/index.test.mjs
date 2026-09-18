@@ -1033,6 +1033,43 @@ test('import_cline 幂等：重复导入同一文件已存在则跳过', async (
   assert.equal(persistence.sessions.size, 1)
 })
 
+test('import_cline legacy：taskHistory 元数据 + api history 经真实工具入口导入', async () => {
+  const taskId = 'legacy-tool-001'
+  const root = 'D:\\demo\\Code\\User\\globalStorage\\saoudrizwan.claude-dev'
+  const src = root + '\\tasks\\' + taskId + '\\api_conversation_history.json'
+  const state = root + '\\state\\taskHistory.json'
+  const { ctx, persistence, attached } = makeCtx({
+    [src]: JSON.stringify([
+      { role: 'user', content: 'first question' },
+      { role: 'assistant', content: 'first answer' },
+      { role: 'user', content: 'stale question' },
+      { role: 'assistant', content: 'stale answer' },
+      { role: 'user', content: 'current question' },
+      { role: 'assistant', content: 'current answer' },
+    ]),
+    [state]: JSON.stringify([{
+      id: taskId, ts: 1786000000000, task: 'Legacy import', cwdOnTaskInitialization: hostAbs('D:/repo'),
+      modelId: 'claude-sonnet', conversationHistoryDeletedRange: [2, 3],
+    }]),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'cline')
+  const value = await def.execute({ path: src })
+
+  assert.equal(value.mode, 'single')
+  assert.equal(value.sessionId, 'import-' + taskId)
+  assert.equal(value.turns, 2)
+  assert.equal(value.messages, 4)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get(value.sessionId)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, hostAbs('D:/repo'))
+  assert.equal(saved.meta.createdAt, 1786000000000)
+  assert.match(saved.events.at(-1).data.title, /^Cline · Legacy import/)
+  assert.equal(attached.length, 1)
+})
+
 // ---- import_goose 集成（真实 SQLite 临时库） ----
 
 // 合成 Goose 会话库（sessions/messages 两表，schema 对齐 lib/goose.mjs 头部契约）。
@@ -6002,4 +6039,3 @@ test('import_kimi 新 Kimi Code：state.json 仅含 workDir 时同样解析出 c
   assertEnvelopeHygiene(saved.events)
   assert.equal(attached.length, 1)
 })
-
