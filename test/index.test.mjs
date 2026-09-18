@@ -2453,6 +2453,29 @@ test('import_opencode 幂等：重复导入同一库只落盘一次', async () =
   assert.equal(persistence.sessions.size, 2)
 })
 
+test('import_opencode sessionIds 补导：库未变时再选未导过的会话仍真正落盘', async () => {
+  // 回归：DB version/size 未变时 S3 短路径曾直接对已导子表返回 already-imported，
+  // 忽略 args.sessionIds，导致面板「部分」条目补导无效（opencode/mimocode/teleagent 同构）。
+  const dbPath = makeOpencodeDb(opencodeTestSessions())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'opencode')
+  const first = await def.execute({ path: dbPath, sessionIds: ['ses-a'] })
+  assert.equal(first.imported, 1)
+
+  // 同一未变化的库，补导另一个会话：短路径不得吞掉新选中的 ses-b
+  const second = await def.execute({ path: dbPath, sessionIds: ['ses-b'] })
+  assert.equal(second.imported, 1)
+  assert.equal(second.results.length, 1)
+  assert.equal(second.results[0].sessionId, 'import-ses-b')
+  assert.equal(persistence.sessions.size, 2)
+
+  // 再选已导过的会话：仍是幂等 already-imported（短路径对被覆盖选择照常生效）
+  const third = await def.execute({ path: dbPath, sessionIds: ['ses-a'] })
+  assert.equal(third.imported, 0)
+  assert.equal(persistence.sessions.size, 2)
+})
+
 test('readOpencodeDb：只读抽取会话、消息/part 排序、模型解析', () => {
   const dbPath = makeOpencodeDb(opencodeTestSessions())
   const sessions = readOpencodeDb(dbPath)

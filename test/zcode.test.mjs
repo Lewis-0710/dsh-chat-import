@@ -653,6 +653,29 @@ test('import_zcode 幂等：重复导入同一库只落盘一次', async () => {
   assert.equal(persistence.sessions.size, 2)
 })
 
+test('import_zcode sessionIds 补导：库未变时再选未导过的会话仍真正落盘', async () => {
+  // 回归：DB version/size 未变时 S3 短路径曾直接对已导子表返回 already-imported，
+  // 忽略 args.sessionIds，导致面板「部分」条目补导无效（闪一下、0 imported）。
+  const dbPath = makeZcodeDb(zcodeTestSessions())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'zcode')
+  const first = await def.execute({ path: dbPath, sessionIds: ['zcs-a'] })
+  assert.equal(first.imported, 1)
+
+  // 同一未变化的库，补导另一个会话：短路径不得吞掉新选中的 zcs-b
+  const second = await def.execute({ path: dbPath, sessionIds: ['zcs-b'] })
+  assert.equal(second.imported, 1)
+  assert.equal(second.results.length, 1)
+  assert.equal(second.results[0].sessionId, 'import-zcs-b')
+  assert.equal(persistence.sessions.size, 2)
+
+  // 再选已导过的会话：仍是幂等 already-imported（短路径对被覆盖选择照常生效）
+  const third = await def.execute({ path: dbPath, sessionIds: ['zcs-a'] })
+  assert.equal(third.imported, 0)
+  assert.equal(persistence.sessions.size, 2)
+})
+
 test('import_zcode db 缺失回退 transcript.jsonl：不报错、0 skipped', async () => {
   const { txPath } = writeZcodeTranscript()
   const { ctx, persistence } = makeCtx({})
