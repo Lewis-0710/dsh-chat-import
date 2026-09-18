@@ -111,7 +111,7 @@ restore_bundle({ path: "D:\backup\sess.dshbundle.json" })            // A 机导
 restore_bundle({ path: "D:\backup\bundle-dir", preview: true })      // dry-run
 ```
 
-**跨机器（REQ-62）：** A 机导出 → 拷贝 bundle → B 机还原。原 `cwd` 在 B 机不可达时，会话回退归到 bundle 文件所在目录（REQ-39-lite 归组），结果报告 `cwdAvailable: false` / `groupedTo` / `restoreNote`——绝不静默。
+**跨机器：** A 机导出 → 拷贝 bundle → B 机还原。原 `cwd` 在 B 机不可达时，会话回退归到 bundle 文件所在目录，结果报告 `cwdAvailable: false` / `groupedTo` / `restoreNote`——绝不静默。
 
 ### verify_session — 只读结构审计
 

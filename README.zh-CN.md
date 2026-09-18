@@ -25,7 +25,7 @@
 
 `DSH Chat Import` 从其他 Agents 导入含完整上下文的聊天历史，成为可无缝继续的 DeepSeek Harness 会话。
 
-现已覆盖 **27 种 Agents** 与任意本地 JSONL——完整列表见[支持的 Agents](#支持的-agents)。反向导出：Claude Code、Codex、Kimi Code、opencode。
+现已覆盖 **27 种格式**（25 种外部 Agent + DSH + 本地 JSONL）——完整列表见[支持的 Agents](#支持的-agents)。反向导出：Claude Code、Codex、Kimi Code、opencode。
 
 
 ## 支持的 Agents
@@ -132,7 +132,7 @@ Reasonix 目录导入只会折叠同时满足“严格语义前缀”和明确 `
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
-| 批量导入 | `import_chat`（26 种格式）· `scan_discover` · 侧边栏面板 | 25+ 来源一键导入，每段对话成为独立会话 |
+| 批量导入 | `import_chat`（27 种格式）· `scan_discover` · 侧边栏面板 | 27 种格式一键导入，每段对话成为独立会话 |
 | 导入历史与撤回 | 侧边栏面板「历史」页 | 展示 `imports.json` 记录；一键删除本插件创建的会话（需确认） |
 | 全保真续聊 | 导入即 DSH 会话 | 工具调用/结果、思考、标题、模型、时间戳原样保留 |
 | 反向导出 | `export_chat`（`format: claude` / `codex` / `kimi` / `opencode`） | DSH 会话序列化回 Claude / Codex / Kimi / opencode（opencode 的 JSON 交给 `opencode import` 导入） |

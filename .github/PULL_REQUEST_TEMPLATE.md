@@ -1,6 +1,6 @@
 ## What & why
 
-<!-- One or two sentences: the change and the reason (link issue / REQ id if any). -->
+<!-- One or two sentences: the change and the reason (link issue if any). -->
 
 ## Verification
 

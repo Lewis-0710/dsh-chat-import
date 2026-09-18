@@ -3,34 +3,6 @@
 > dsh-chat-import 的需求总览与路线图。状态标记：✅ 已完成 · ◐ 部分完成 · ☐ 未完成 · ❌ 明确不做（附理由）。
 > 实现细节与历史见 [CHANGELOG.md](CHANGELOG.md) 与 git 历史。
 
-## 生态收录
-
-`dsh-chat-import` 已收录于：[awesome-dsh-plugin/awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) · [AdamPlatin123/awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins)（PR #4 已 merged，行尾 ✅）· [0xsline/awesome-deepseek-harness](https://github.com/0xsline/awesome-deepseek-harness) · [Dominic789654/awesome-deepseek-harness](https://github.com/Dominic789654/awesome-deepseek-harness) · [Alex-Yanggg/awesome-DSH-plugin](https://github.com/Alex-Yanggg/awesome-DSH-plugin) · [Zhiyuan-Fan/Awesome-DeepSeek-Harness-Plugins](https://github.com/Zhiyuan-Fan/Awesome-DeepSeek-Harness-Plugins) · [bruc3van/awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) · [kejixiaoliang/awesome-dsh-plugins](https://github.com/kejixiaoliang/awesome-dsh-plugins) · [dshbase.com 插件目录](https://dshbase.com/plugins/dsh-chat-import/) · [awesome-dsh-plugin.com 兼容性徽章](https://awesome-dsh-plugin.com) · npm registry。
-
-自动收录渠道（打 `dsh-plugin` topic 即收录）：ZASENJC/dsh-plugins-store、YELEBAI/dsh-plugin-marketplace、bradeGithub/DSH-Plugins-Marketplace 等。
-
-## 能力对照（DSH 生态会话导入工具）
-
-| 能力 | dsh-chat-import | 生态内其他 |
-| --- | --- | --- |
-| 来源数 | 24 源 + 本地 JSONL（13 工具） | 单源 ~ 4 源 |
-| 全保真（tool/result + thinking + sourceEventSeqs） | ✅ | 部分 |
-| 增量续写（append 新轮次） | ✅ | 部分（复制式） |
-| 上下文预算保护 | ✅ | — |
-| 反向导出（DSH → Claude Code JSONL） | ✅ | — |
-| 矩阵化互转（DSH ↔ Claude ↔ Codex ↔ Kimi） | ✅ | — |
-| 便携 bundle 备份/跨机器还原（指纹校验） | ✅ | 部分（codex-claude-transfer） |
-| 降级显式报告（degradations） | ✅ | — |
-| 只读结构校验 + repair 提示（verify_session） | ✅ | — |
-| 交接摘要续聊（/resume-claude /resume-codex） | ✅ | 部分（dsh-resume-plugin） |
-| 反向同步（增量写回，带守卫） | ✅ | — |
-| agents / skills 落盘资产（`import_agents`） | ✅ | 部分 |
-| Browser 面板 + `/import` / `/import-all` 命令 | ✅ | 部分 |
-| 会话开始迁移提示 + 上下文桥接 | ✅ | 部分 |
-| cwd 权威映射（`.claude.json` / slug 贪心解码）+ 沙箱防护 | ✅ | 部分 |
-
-生态内同类工具：[dsh-claude-move](https://github.com/PerryLink/dsh-claude-move)（Claude 会话+资产 copy，REQ-61 跟进点）· [dsh-plugin-cc](https://github.com/cpj-dev/dsh-plugin-cc)（DSH↔Claude 控制面桥）· [dsh-movein](https://github.com/sjh9714/dsh-movein)（Claude 配置迁移，README 指向我们补会话，[首次迁移指南](https://github.com/sjh9714/dsh-movein/blob/main/docs/first-migration.zh.md)已互链——互补）· [dsh-plugin-session-import](https://github.com/huguangyu666/dsh-plugin-session-import) · [dsh-import-agents](https://github.com/Chang-Tong/dsh-import-agents) · [opencode-dsh-importer](https://github.com/wang-xudong/opencode-dsh-importer) · [dsh-resume-plugin](https://github.com/Demogorgon314/dsh-resume-plugin) · [dsh-session-import](https://github.com/kinyokun/dsh-session-import) · [dsh-plugin-codex-import](https://github.com/Gordonynh/dsh-plugin-codex-import)。
-
 ## 需求总览
 
 | ID | 优先级 | 标题 | 状态 |
@@ -117,6 +89,4 @@
 | REQ-83 | P2 | 清理入口不对称：`purge*` 只挂在面板路由上，工具面仅有 `retract_import`（清 registry 记录、不做删除），Agent 无自助回滚手段（issue #62 的观察项） | ❌ 不做：删除是低频需求，而常驻工具描述会挤占上下文、拉低日常体验；面板 History 页已提供带确认的批量删除 |
 | REQ-84 | P1 | 「导入会话」窗口接入官方原生右侧栏 tab（DSH ≥ 0.1.5-rc.1 的 `sidebarRightTabs` / `sidebar.right.pane.tab`，参照 dsh-context；footer 按钮打开同一 tab、对话区保留）——dsh peer 抬到 ≥ 0.1.5-rc.1 后删除 better-sidebar 集成与自绘 ShellPanel 浮层回落链（REQ-41 的浮层形态退役，按钮保留） | ✅ |
 
-> **编号说明**：REQ-72~74 已被本地 `dev/REQUIREMENTS.md` 的「竞品借鉴」批次占用（`import-core.mjs` / `command.mjs` / `lib/convert/opencode.mjs` 的注释与对应测试引用同源，含义与公开路线图不同），因此本表自 **REQ-75** 续号，避免两套含义在同一个编号下混淆。
 
-**全部 75 项 ✅ + REQ-66 / REQ-71 / REQ-77 / REQ-78 待做 + REQ-83 明确不做 + REQ-84 已完成（Unreleased）**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-68 见 v0.18.1、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-75 见 v0.17.1 / v0.17.3、REQ-76 见 v0.17.3、REQ-79 / REQ-80 见 v0.18.0、REQ-81 见 v0.18.1、REQ-82 见 v0.18.2）——未开工项已登记在案。

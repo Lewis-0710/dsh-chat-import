@@ -71,7 +71,7 @@ dsh web 侧边栏「导入会话」面板与设置页「会话导入」分区。
 - 幂等：目标会话已存在即跳过（`sessionPersistence.list()` 判重）；归组经
   `workspaceRegistry.resolveByPath(cwd)` → `workspace.attachSession(id)`。
 - 失败要大声：畸形 JSONL 行计数上报（`skipped`），绝不静默吞掉。
-- 文件以恰好一个换行结尾；注释写契约与上下文，不叙述控制流；空 `catch` 必须说明吞掉什么且 `try` 只包一条语句。
+- 文件以恰好一个换行结尾；注释写契约与上下文，不叙述控制流；空 `catch` 必须说明吞掉什么，`try` 范围尽量小。
 - 测试描述行为而非背书正确性；fixtures 用合成数据，永不掺真实 transcript。
 - **跨平台路径纪律**（CI 在 Linux 跑测试）：mock 树查找必须做分隔符归一；断言比较 `node:path`
   运算结果时期望值用同口径函数计算，不写死 `'X:\…'` 字面量；新增导入测试优先用真实临时目录（`mkdtemp`）。

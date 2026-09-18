@@ -997,8 +997,8 @@ cases green.
   hardcoded `X:\…` literals. The new static guard (`.github/scripts/
   check-linux-compat.mjs`, run in CI after lint) fails on those two
   anti-patterns; all mock `stat`/`readText`/`listDir` lookups now normalize
-  separators (three-way `norm` + `lookup`, uniform across `index`/`req26`/
-  `req33`/`zcode` test mocks). Also documented in `AGENTS.md` (命令 /
+  separators (three-way `norm` + `lookup`, uniform across the converter
+  test mocks). Also documented in `AGENTS.md` (命令 /
   提交纪律 / 质量约定) and available as a local pre-push hook
   (`git config core.hooksPath dev/hooks`).
 - **Sidebar trigger restyled to match the Settings entry, with the plugin logo
@@ -1368,7 +1368,7 @@ pending publish.
   into `lib/opencode.mjs`. No tool names, schemas or return shapes changed; the
   npm `files` whitelist was extended for the new modules.
 - **README slimmed to a user-facing document** — technical / engineering detail
-  moved to the local, never-published `dev/REQUIREMENTS.md`; the tagline and
+  moved out of the published README; the tagline and
   badge area reworked for the 11-source line-up.
 
 ### Fixed

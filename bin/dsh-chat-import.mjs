@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// bin/dsh-chat-import.mjs — REQ-67 独立 CLI（无 DSH host 也可用）
+// bin/dsh-chat-import.mjs — 独立 CLI（无 DSH host 也可用）
 //
 // 当前子命令：
 //   export-md <session.jsonl | session-dir> [--out file]   DSH 会话日志 → Markdown

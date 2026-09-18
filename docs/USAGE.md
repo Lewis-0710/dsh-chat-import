@@ -111,7 +111,7 @@ restore_bundle({ path: "D:\backup\sess.dshbundle.json" })            // machine 
 restore_bundle({ path: "D:\backup\bundle-dir", preview: true })      // dry-run
 ```
 
-**Cross-machine (REQ-62):** export on machine A, copy the bundle, restore on machine B. When the original `cwd` does not exist there, the session falls back to the bundle file's directory (REQ-39-lite grouping) and the result reports `cwdAvailable: false` / `groupedTo` / `restoreNote` — never silent.
+**Cross-machine:** export on machine A, copy the bundle, restore on machine B. When the original `cwd` does not exist there, the session falls back to the bundle file's directory (bundle-file directory grouping) and the result reports `cwdAvailable: false` / `groupedTo` / `restoreNote` — never silent.
 
 ### verify_session — read-only structural audit
 

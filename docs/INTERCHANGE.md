@@ -1,9 +1,8 @@
 # Interchange v1 — dsh-chat-import 会话交换协议
 
-> 机器可读实现见 `lib/convert/interchange.mjs`（`INTERCHANGE_SCHEMA` / `validateInterchange` /
-> `SOURCE_CAPABILITIES` / `DEGRADATION_RULES` / `summarizeDegradations`）。
-> 本协议是 REQ-18 的落盘结论：把导入/导出两侧共用的 turns IR 显式化为中立交换格式，
-> 供源↔目标双向适配器与便携 bundle（REQ-56/62）复用。
+> 机器实现见 `lib/convert/interchange.mjs`（`DEGRADATION_RULES` / `summarizeDegradations` / `exportDegradations`）
+
+> 本协议定义导入/导出共用的 turns IR 与便携 bundle 格式。
 
 ## 1. 文档结构（v1）
 
@@ -79,7 +78,7 @@
 | crush | ✅ | ✅ | ✅ | — | — | ✅（自动摘要消息挂 reasoning 块） |
 | dsh | ✅ | ✅ | ✅ | — | ✅ | — |
 
-## 3. 降级规则表（REQ-21）
+## 3. 降级规则表
 
 目标格式缺能力时「失败要大声」：降级必须显式报告（导出/互转结果附 `degradations`
 字段），不能静默。策略三态：`lossless`（无损）/ `text-fallback`（降级文本块）/
@@ -98,7 +97,7 @@
 | `orphan-tool-result` | toolResults | skip-placeholder | 源日志无对应 tool/call 的工具结果（中途开始的 transcript）→ 丢弃并计数 |
 | `usage-unknown` | — | text-fallback | 目标格式要求用量计数（opencode 的 `cost` / `tokens` 是解码必填）而 DSH 会话日志没有这些计数 → 写 0 并显式报告 |
 
-## 4. 便携 bundle（REQ-56/62）
+## 4. 便携 bundle
 
 `export_bundle` 产出 `.dshbundle.json`，是 interchange v1 的备份编码（事件级无损）：
 
@@ -121,6 +120,6 @@
 ```
 
 还原：`restore_bundle` 校验文件级指纹（损坏检测）→ 校验会话级指纹 → 经
-`convertDshJsonl` 导入为可继续 DSH 会话。跨机器（REQ-62）：A 机导出 → B 机（无原路径）
-还原 0 skipped；`originalCwd` 不可达时按 REQ-39-lite 回退到 bundle 文件所在目录归组，
+`convertDshJsonl` 导入为可继续 DSH 会话。跨机器：A 机导出 → B 机（无原路径）
+还原 0 skipped；`originalCwd` 不可达时回退到 bundle 文件所在目录归组，
 结果报告 `cwdAvailable: false` + `groupedTo`（不静默）。
