@@ -16,7 +16,7 @@ function makeCtx(coldSnapshot) {
     get(service) {
       if (service === 'sessionProjectionCache') return { coldSnapshot }
       if (service === 'sessionPersistence') {
-        return { async inspect(id) { return { meta, events } } }
+        return { async inspect(_id) { return { meta, events } } }
       }
       return undefined
     },

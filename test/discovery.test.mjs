@@ -1068,6 +1068,53 @@ test('importStatus：multi 源子表命中 imported、部分导入 partial', asy
   assert.equal(sessions.find((s) => s.sessionId === 'ses-c').importStatus, 'partial')
 })
 
+// 回归（WAL 盲区）：SQLite 库开 WAL 后新会话只落 -wal，主文件 mtime/size 在
+// checkpoint 前不变——持久化书签只比主文件会命中过期缓存，面板长期显示旧列表
+//（如「某项目只有 2 个会话」）。指纹并入 -wal/-shm 边车后：边车变化 → 失效重扫；
+// 全部未变 → 命中；checkpoint 删除 -wal 也构成指纹变化。
+test('书签 WAL 盲区：-wal 出现/增长/删除都失效重扫，未变则命中', async () => {
+  const dbPath = join(HOME, '.zcode', 'cli', 'db', 'db.sqlite')
+  const files = new Map([[dbPath, { type: 'file', text: 'SQLite format 3', mtimeMs: 1786000000000 }]])
+  const host = mockHost(files)
+  let probe = 0
+  host.dbSessions = (kind) => {
+    if (kind !== 'zcode') return null
+    probe++
+    return [{ id: 'zcs-a', title: 'T a', directory: 'E:/demo/z', createdAt: 1, lastActiveAt: 2, messageCount: 1 }]
+  }
+  const cacheDir = mkdtempSync(join(tmpdir(), 'dsh-scanbm-'))
+  // cache 传新 Map 绕过进程内 30s TTL（书签层的行为才是本用例对象）
+  const run = () => discoverSessions({ path: dbPath, format: 'zcode', host, imports: {}, cache: new Map(), cacheDir })
+  try {
+    const r1 = await run()
+    assert.equal(r1.sessions.length, 1)
+    assert.equal(probe, 1)
+    // 主文件未变、无 -wal → 书签命中
+    await run()
+    assert.equal(probe, 1)
+    // -wal 出现（工具运行中）：主文件 stat 仍不变 → 必须失效重扫
+    files.set(dbPath + '-wal', { type: 'file', text: 'wal-data', mtimeMs: 1786000005000 })
+    const r3 = await run()
+    assert.equal(r3.sessions.length, 1)
+    assert.equal(probe, 2)
+    // -wal 未再变 → 命中
+    await run()
+    assert.equal(probe, 2)
+    // -wal 增长（新会话写入 WAL）→ 失效重扫
+    files.set(dbPath + '-wal', { type: 'file', text: 'wal-data-grown', mtimeMs: 1786000009000 })
+    await run()
+    assert.equal(probe, 3)
+    // checkpoint 删除 -wal → 指纹又变 → 重扫一次后稳定命中
+    files.delete(dbPath + '-wal')
+    await run()
+    assert.equal(probe, 4)
+    await run()
+    assert.equal(probe, 4)
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true })
+  }
+})
+
 test('discoverSessions：archivedIds 传入 → 归档目标 importStatus=archived', async () => {
   const root = join(HOME, '.claude', 'projects')
   const slug = join(root, 'proj-a')
