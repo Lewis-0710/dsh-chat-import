@@ -13,6 +13,10 @@ from the matching section below.
 
 ## [Unreleased]
 
+### Added
+
+- **「导入会话」窗口接入官方原生右侧栏 tab（REQ-84）** — 当前运行版（DSH 0.1.5-rc.1+ / Desktop 2.0.11）支持官方原生右侧栏（`@deepseek-ai/dsh-client-ui-sidebar-right`），接入姿势参照同类插件 dsh-context：把「导入会话」注册为右侧栏 tab 类型（经 `sidebarRightTabs` 服务注册 id/kind = `chat-import`，guide 页胶囊带图标/标题/描述）+ `sidebar.right.pane.tab` 面板主体——tab 在**右栏内**打开、中间的对话区保留；侧边栏底部「导入会话」按钮点击改开该 tab（`sidebarRight.openTab`），不再覆盖主区。注册整体走 deferred inject + 全保护 try/catch：老版本没有 `sidebarRightTabs` 服务时回调不触发、fiber 不挂起，入口自动回落既有行为（better-sidebar tab / 自绘 ShellPanel）；注册失败（id/kind 被占用等）只让右侧栏没有该 tab。同一提交撤掉了此前误加的**左侧栏全局面板**方案（`sidebar.panellist` 图标行 + `main` 主列面板）——用户实测反馈该面板覆盖整个右侧内容区、且与 footer 按钮形成左侧栏两个「导入会话」入口；现在左侧栏恢复单一入口，右侧栏的 tab 形态才是原生侧边栏的正确接入点。
+
 ## [0.18.2] - 2026-09-17
 
 ### Fixed

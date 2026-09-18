@@ -97,7 +97,7 @@ dsh plugin --profile web add -w link:/path/to/dsh-chat-import   # local checkout
 
 ## Usage
 
-1. **Import** — pick the conversations to import from the "Import sessions" panel in the bottom-right of the GUI and import with one click, or have your agent call the context tool:
+1. **Import** — open the import window from the "Import sessions" entry: on recent DSH builds the sidebar footer button docks it into the native **right sidebar** as a tab (the conversation stays visible); on older builds the footer button opens it. Pick the conversations to import and import with one click, or have your agent call the context tool:
 
 ```
 import_chat({ format: "claude", path: "~/.claude/projects" })

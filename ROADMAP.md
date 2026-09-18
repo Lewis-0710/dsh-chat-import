@@ -115,7 +115,8 @@
 | REQ-81 | P1 | 新源：TeleAgent（星辰超级智能体）适配——opencode 同构三表库 + `users/<账户>/teleagent.db` 多账户目录发现（issue #60） | ✅ |
 | REQ-82 | P0 | 缺陷：ChatGPT 官方导出被静默丢弃——`children` 缺失（slim 导出）/ 占位 root 无 message / 带小数秒未取整致宿主拒收整份会话（issue #62） | ✅ |
 | REQ-83 | P2 | 清理入口不对称：`purge*` 只挂在面板路由上，工具面仅有 `retract_import`（清 registry 记录、不做删除），Agent 无自助回滚手段（issue #62 的观察项） | ❌ 不做：删除是低频需求，而常驻工具描述会挤占上下文、拉低日常体验；面板 History 页已提供带确认的批量删除 |
+| REQ-84 | P1 | 「导入会话」窗口接入官方原生右侧栏 tab（DSH ≥ 0.1.5-rc.1 的 `sidebarRightTabs` / `sidebar.right.pane.tab`，参照 dsh-context 的接入姿势；footer 按钮打开同一 tab、对话区保留；左侧栏保持单一入口，老版本回落既有入口） | ✅ |
 
 > **编号说明**：REQ-72~74 已被本地 `dev/REQUIREMENTS.md` 的「竞品借鉴」批次占用（`import-core.mjs` / `command.mjs` / `lib/convert/opencode.mjs` 的注释与对应测试引用同源，含义与公开路线图不同），因此本表自 **REQ-75** 续号，避免两套含义在同一个编号下混淆。
 
-**全部 75 项 ✅ + REQ-66 / REQ-71 / REQ-77 / REQ-78 待做 + REQ-83 明确不做**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-68 见 v0.18.1、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-75 见 v0.17.1 / v0.17.3、REQ-76 见 v0.17.3、REQ-79 / REQ-80 见 v0.18.0、REQ-81 见 v0.18.1、REQ-82 见 v0.18.2）——未开工项已登记在案。
+**全部 75 项 ✅ + REQ-66 / REQ-71 / REQ-77 / REQ-78 待做 + REQ-83 明确不做 + REQ-84 已完成（Unreleased）**（v0.5.0，2026-08-16 收口；REQ-64 见 v0.13.0、REQ-65 见 v0.14.0、REQ-67 见 v0.15.0、REQ-68 见 v0.18.1、REQ-69 见 v0.16.0、REQ-70 见 v0.17.0、REQ-75 见 v0.17.1 / v0.17.3、REQ-76 见 v0.17.3、REQ-79 / REQ-80 见 v0.18.0、REQ-81 见 v0.18.1、REQ-82 见 v0.18.2）——未开工项已登记在案。
