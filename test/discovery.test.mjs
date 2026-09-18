@@ -280,32 +280,49 @@ test('reasonix：desktop-* 发现、projects/<slug> 项目名、伴生排除、s
   assert.ok(!sessions.some((s) => s.sessionId === 'subagent-sub-5-202603101201'), 'subagent 子代理应默认过滤')
 })
 
-test('grokbuild：summary.json 标题/时间、sessions/<project> 项目名', async () => {
+test('grokbuild：summary.json 标题/时间、百分号编码目录名解码为项目名、cwd 透传', async () => {
+  // 真实布局：sessions/<encodeURIComponent(cwd) 整路径>/<session_id>/（Windows 盘符 +
+  // 中文都会进入目录名），面板工作区列必须显示解码后的项目名而非 %XX 乱码。
   const root = join(HOME, '.grok', 'sessions')
-  const proj = join(root, 'proj-x')
-  const sess = join(proj, 'grok-sess-001')
+  const projEnc = 'F%3A%5C%E9%A1%B9%E7%9B%AE%5C%E7%A1%95%E5%A3%AB%E6%AF%95%E4%B8%9A%E8%AE%BE%E8%AE%A1%5CRegulus'
+  const proj = join(root, projEnc)
+  const sessA = join(proj, 'grok-sess-001')
+  const sessB = join(proj, 'grok-sess-002')
   const files = new Map([
-    [root, { type: 'dir' }], [proj, { type: 'dir' }], [sess, { type: 'dir' }],
-    [join(sess, 'summary.json'), { type: 'file', text: j({
-      info: { id: 'grok-sess-001', cwd: 'D:/demo/grok-proj' },
+    [root, { type: 'dir' }], [proj, { type: 'dir' }], [sessA, { type: 'dir' }], [sessB, { type: 'dir' }],
+    [join(sessA, 'summary.json'), { type: 'file', text: j({
+      info: { id: 'grok-sess-001', cwd: 'F:\\项目\\硕士毕业设计\\Regulus' },
       generated_title: '重构认证模块',
       created_at: '2026-07-16T12:00:00Z',
     }) }],
-    [join(sess, 'chat_history.jsonl'), { type: 'file', mtimeMs: 1786000005000, text: [
+    [join(sessA, 'chat_history.jsonl'), { type: 'file', mtimeMs: 1786000005000, text: [
       j({ type: 'user', content: '登录报错' }),
       j({ type: 'assistant', content: '看日志' }),
+    ].join('\n') }],
+    // 无 info.cwd 的会话：项目名走目录布局解码回退（同一编码目录），cwd 为 null
+    [join(sessB, 'summary.json'), { type: 'file', text: j({
+      info: { id: 'grok-sess-002' },
+      generated_title: '另一个会话',
+      created_at: '2026-07-16T13:00:00Z',
+    }) }],
+    [join(sessB, 'chat_history.jsonl'), { type: 'file', mtimeMs: 1786000006000, text: [
+      j({ type: 'user', content: '继续排查' }),
+      j({ type: 'assistant', content: '好的' }),
     ].join('\n') }],
   ])
   const host = mockHost(files)
 
   const { sessions, total } = await discoverSessions({ path: root, format: 'grokbuild', host, imports: {} })
-  assert.equal(total, 1)
-  const a = sessions[0]
-  assert.equal(a.sessionId, 'grok-sess-001')
+  assert.equal(total, 2)
+  const a = sessions.find((s) => s.sessionId === 'grok-sess-001')
   assert.equal(a.title, '重构认证模块')
-  assert.equal(a.project, 'proj-x')
+  assert.equal(a.project, 'Regulus') // 解码后的项目名（不再是 %XX 乱码）
+  assert.equal(a.cwd, 'F:\\项目\\硕士毕业设计\\Regulus') // 记录内完整工作目录
   assert.ok(a.createdAt > 0)
   assert.equal(a.lastActiveAt, 1786000005000) // chat_history mtime 取大
+  const b = sessions.find((s) => s.sessionId === 'grok-sess-002')
+  assert.equal(b.project, 'Regulus') // 无 cwd → 目录布局解码回退
+  assert.equal(b.cwd, null)
 })
 
 test('openclaw：sessions.json displayName 标题、项目名（记录 cwd > agents/<agent> 布局）', async () => {
@@ -1206,6 +1223,8 @@ test('isInjectedTitle / normalizeTitle / layoutProject 纯函数', () => {
   assert.equal(layoutProject('/home/u/.codex/sessions/2026/03/10/rollout-x.jsonl', 'codex'), '2026/03')
   assert.equal(layoutProject('/home/u/.reasonix/projects/demo/s/desktop-1.jsonl', 'reasonix'), 'demo')
   assert.equal(layoutProject('/home/u/.grok/sessions/proj-x/grok-s1', 'grokbuild'), 'proj-x')
+  // 编码目录名 = cwd 整路径 encodeURIComponent：解码后取末段
+  assert.equal(layoutProject('/home/u/.grok/sessions/F%3A%5C%E9%A1%B9%E7%9B%AE%5Cproj/grok-s1', 'grokbuild'), 'proj')
   assert.equal(layoutProject('/home/u/.openclaw/agents/main/sessions/s.jsonl', 'openclaw'), 'main')
   assert.equal(layoutProject('/home/u/.gemini/history/slot-a/chats/session-1.json', 'gemini'), 'slot-a')
   assert.equal(layoutProject('/home/u/.cursor/projects/slug-c/agent-transcripts/abc/abc.jsonl', 'cursor'), 'slug-c')

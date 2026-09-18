@@ -17,6 +17,10 @@ from the matching section below.
 
 - **「导入会话」窗口接入官方原生右侧栏 tab（REQ-84）** — 当前运行版（DSH 0.1.5-rc.1+ / Desktop 2.0.11）支持官方原生右侧栏（`@deepseek-ai/dsh-client-ui-sidebar-right`），接入姿势参照同类插件 dsh-context：把「导入会话」注册为右侧栏 tab 类型（经 `sidebarRightTabs` 服务注册 id/kind = `chat-import`，guide 页胶囊带图标/标题/描述）+ `sidebar.right.pane.tab` 面板主体——tab 在**右栏内**打开、中间的对话区保留；侧边栏底部「导入会话」按钮点击改开该 tab（`sidebarRight.openTab`），不再覆盖主区。注册整体走 deferred inject + 全保护 try/catch：老版本没有 `sidebarRightTabs` 服务时回调不触发、fiber 不挂起，入口自动回落既有行为（better-sidebar tab / 自绘 ShellPanel）；注册失败（id/kind 被占用等）只让右侧栏没有该 tab。同一提交撤掉了此前误加的**左侧栏全局面板**方案（`sidebar.panellist` 图标行 + `main` 主列面板）——用户实测反馈该面板覆盖整个右侧内容区、且与 footer 按钮形成左侧栏两个「导入会话」入口；现在左侧栏恢复单一入口，右侧栏的 tab 形态才是原生侧边栏的正确接入点。
 
+### Fixed
+
+- **Grok Build 会话的「工作区」列不再显示 %XX 编码乱码** — 真实存储布局是 `~/.grok/sessions/<encodeURIComponent(cwd)>/<session_id>/`：项目目录名 = 工作目录**整路径**的百分号编码（Windows 盘符 `C%3A`、反斜杠 `%5C`、中文 `%E9%A1%B9…` 都进目录名）。发现层此前把编码目录名原样放进 `project`（面板按它分组的「工作区」列），于是 `F:\项目\硕士毕业设计\Regulus` 显示成 `F%3A%5C%E9%A1%B9%E7%9B%AE…` 乱码。现在与同步层 `encodeGrokCwd` 配对修复：`layoutProject` 与 grokbuild 扫描器对目录名做 `decodeURIComponent` 后取末段作项目名（畸形 `%XX` 序列原样回退、不臆测），并把 `summary.json` 里 `info.cwd` 的完整工作目录透传到发现条目 `cwd`（缺失时走目录布局解码回退）——面板工作区与搜索/导出都用上真实路径。
+
 ## [0.18.2] - 2026-09-17
 
 ### Fixed
