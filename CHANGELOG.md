@@ -11,7 +11,7 @@ Release dates are the npm publish timestamps in Asia/Shanghai (UTC+8). Every
 version is also published as a GitHub Release (tag `vX.Y.Z`), with notes taken
 from the matching section below.
 
-## [Unreleased]
+## [0.18.3] - 2026-09-18
 
 ### Added
 
@@ -19,7 +19,15 @@ from the matching section below.
 
 ### Fixed
 
+- **多会话 SQLite 来源的 WAL 盲区（#63）** — zcode / opencode 等库以 WAL 模式运行，新会话只落 `<db>-wal`，主文件在 checkpoint 前 mtime/size 不变；发现层持久化书签与导入层短路径此前只比主文件，导致面板缓存过期、新会话漏导。现在新增 `sqliteFingerprint`（主文件 + `-wal`/`-shm` 边车签名），接入 SQLite 扫描器与 hermes / cline / crush 扫描器；旧书签仅在签名形状一致时命中，SQLite 源强制重扫一次自愈。
+- **DB 指纹短路径不再吞掉 `sessionIds` 补导（#63）** — 库 version/size 未变时，S3 短路径对已导子表整体返回 already-imported，未检查本次指定的会话是否已在子表内。现在 zcode / opencode 的选择性导入会校验指定 id 全部已导入才允许短路径，并追加 `-wal` 边车签名（walSig）一致性要求。
+- **`warmProjection` 按宿主三参契约调用 `coldSnapshot`（#63）** — 此前按单参 `coldSnapshot(sessionId)` 调用宿主三参 API，每次导入后打 `SessionLogOffset must be a non-negative safe integer, got undefined`。现在经 `sessionPersistence.inspect` 取回 meta/events 后按三参契约调用（导入会话无继承前缀 → 恒传 0）。
+- **lockfile 用 npm 10 重新生成，修复 CI `npm ci` 依赖树不同步** — 此前 lockfile 由 npm 11 生成，CI（Node 22 → npm 10）报 `Missing: @deepseek-ai/dsh-*@0.1.5-rc.2 from lock file`；改用 CI 同款 npm 10 重新解析 peer 依赖树并落盘后，`npm ci` 与 lockfile 漂移检查恢复通过。
 - **Grok Build 会话的「工作区」列不再显示 %XX 编码乱码** — 真实存储布局是 `~/.grok/sessions/<encodeURIComponent(cwd)>/<session_id>/`：项目目录名 = 工作目录**整路径**的百分号编码（Windows 盘符 `C%3A`、反斜杠 `%5C`、中文 `%E9%A1%B9…` 都进目录名）。发现层此前把编码目录名原样放进 `project`（面板按它分组的「工作区」列），于是 `F:\项目\硕士毕业设计\Regulus` 显示成 `F%3A%5C%E9%A1%B9%E7%9B%AE…` 乱码。现在与同步层 `encodeGrokCwd` 配对修复：`layoutProject` 与 grokbuild 扫描器对目录名做 `decodeURIComponent` 后取末段作项目名（畸形 `%XX` 序列原样回退、不臆测），并把 `summary.json` 里 `info.cwd` 的完整工作目录透传到发现条目 `cwd`（缺失时走目录布局解码回退）——面板工作区与搜索/导出都用上真实路径。
+
+### Changed
+
+- **去 AI 化清理：删除未消费的 interchange schema/validator 层，统一对外文档计数，移除内部编号与竞品对标泄漏** — README / README.zh-CN / ROADMAP 的来源计数改为与 `CHAT_FORMATS` 一致；删除 `docs/INTERCHANGE.md`、`docs/USAGE*.md`、`index.d.ts` 与 `/doctor` 描述里的 REQ 编号、issue 编号与竞品对标；删除没有生产调用方的 `INTERCHANGE_SCHEMA` / `validateInterchange` / `serializeInterchange` / `SOURCE_CAPABILITIES`；测试文件按行为重命名（`req26`/`req33`/`req40`/`req45`）；删除孤儿资产 `assets/wb.png` 与手工预览页 `test/badge-preview.html`。
 
 ## [0.18.2] - 2026-09-17
 
