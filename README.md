@@ -95,9 +95,11 @@ dsh plugin --profile web add dsh-chat-import                    # npm package
 dsh plugin --profile web add -w link:/path/to/dsh-chat-import   # local checkout (symlink)
 ```
 
+> **Requires dsh ≥ 0.1.5-rc.1** — the import window docks into the official native **right sidebar** (`@deepseek-ai/dsh-client-ui-sidebar-right`); the floor is declared via `peerDependencies`.
+
 ## Usage
 
-1. **Import** — open the import window from the "Import sessions" entry: on recent DSH builds the sidebar footer button docks it into the native **right sidebar** as a tab (the conversation stays visible); on older builds the footer button opens it. Pick the conversations to import and import with one click, or have your agent call the context tool:
+1. **Import** — open the import window from the "Import sessions" footer button in the left sidebar; the window docks into the official **right sidebar** as a tab (the conversation stays visible). Pick the conversations to import and import with one click, or have your agent call the context tool:
 
 ```
 import_chat({ format: "claude", path: "~/.claude/projects" })

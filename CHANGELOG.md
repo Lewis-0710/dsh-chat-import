@@ -15,7 +15,7 @@ from the matching section below.
 
 ### Added
 
-- **「导入会话」窗口接入官方原生右侧栏 tab（REQ-84）** — 当前运行版（DSH 0.1.5-rc.1+ / Desktop 2.0.11）支持官方原生右侧栏（`@deepseek-ai/dsh-client-ui-sidebar-right`），接入姿势参照同类插件 dsh-context：把「导入会话」注册为右侧栏 tab 类型（经 `sidebarRightTabs` 服务注册 id/kind = `chat-import`，guide 页胶囊带图标/标题/描述）+ `sidebar.right.pane.tab` 面板主体——tab 在**右栏内**打开、中间的对话区保留；侧边栏底部「导入会话」按钮点击改开该 tab（`sidebarRight.openTab`），不再覆盖主区。注册整体走 deferred inject + 全保护 try/catch：老版本没有 `sidebarRightTabs` 服务时回调不触发、fiber 不挂起，入口自动回落既有行为（better-sidebar tab / 自绘 ShellPanel）；注册失败（id/kind 被占用等）只让右侧栏没有该 tab。同一提交撤掉了此前误加的**左侧栏全局面板**方案（`sidebar.panellist` 图标行 + `main` 主列面板）——用户实测反馈该面板覆盖整个右侧内容区、且与 footer 按钮形成左侧栏两个「导入会话」入口；现在左侧栏恢复单一入口，右侧栏的 tab 形态才是原生侧边栏的正确接入点。
+- **「导入会话」窗口接入官方原生右侧栏 tab，删除回落链与自绘 UI（REQ-84）** — 当前运行版（DSH 0.1.5-rc.2 / Desktop 2.0.11）支持官方原生右侧栏（`@deepseek-ai/dsh-client-ui-sidebar-right`），接入姿势参照同类插件 dsh-context：把「导入会话」注册为右侧栏 tab 类型（`sidebarRightTabs` 注册 id/kind = `chat-import`，guide 页带图标/标题/描述的胶囊）+ `sidebar.right.pane.tab` 面板主体——tab 在**右栏内**打开、中间的对话区保留；左侧栏底部「导入会话」按钮点击经 `sidebarRight.openTab` 打开该 tab，不再覆盖主区。**本次把 dsh 最低版本抬到 ≥ 0.1.5-rc.1**（`peerDependencies` 新增 `@deepseek-ai/dsh`，lockfile 随 npm 重解析同步），原生右侧栏由「可选」变为**硬依赖**（client `inject` 声明 `sidebarRightTabs`，激活即服务就绪，注册不再有任何条件分支）：由此删除整套失败回落链——dsh-better-sidebar 的 tab 集成（`lib/sidebar-compat.mjs` 的 0.18/0.19 seed 版本分支一并移除）与自绘 ShellPanel 浮层（含滑入动画、overlay/panel/header 样式、Discovery/History 面板的独立形态分支与废弃 i18n key）。左侧栏保持单一「导入会话」入口；无右侧栏的老版本不再受客户端支持（客户端半在旧版挂起，工具面照常）。
 
 ## [0.18.2] - 2026-09-17
 

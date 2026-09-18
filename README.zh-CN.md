@@ -98,9 +98,11 @@ dsh plugin --profile web add dsh-chat-import                    # npm 包
 dsh plugin --profile web add -w link:/path/to/dsh-chat-import   # 本地源码（符号链接）
 ```
 
+> **需要 dsh ≥ 0.1.5-rc.1** —— 导入窗口停靠进官方原生**右侧栏**（`@deepseek-ai/dsh-client-ui-sidebar-right`），版本门槛见 `peerDependencies`。
+
 ## 使用
 
-1. **导入** — 在「导入会话」入口打开导入窗口：新版本由侧边栏底部按钮打开，窗口**停靠进官方原生右侧栏**（tab 在右栏内展开、对话区保留）；旧版本同样从侧边栏底部按钮进入。选择你想导入的会话并一键导入。或让你的 Agent 调用上下文工具进行导入：
+1. **导入** — 从左侧栏底部的「导入会话」按钮打开导入窗口，窗口**停靠进官方原生右侧栏**（tab 在右栏内展开、对话区保留）。选择你想导入的会话并一键导入。或让你的 Agent 调用上下文工具进行导入：
 
 ```
 import_chat({ format: "claude", path: "~/.claude/projects" })
