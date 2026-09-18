@@ -11,6 +11,12 @@ Release dates are the npm publish timestamps in Asia/Shanghai (UTC+8). Every
 version is also published as a GitHub Release (tag `vX.Y.Z`), with notes taken
 from the matching section below.
 
+## [Unreleased]
+
+### Fixed
+
+- **Kimi Code 会话缺少 `state.json` 时保留工作区归属** — 新布局现在按会话目录的 workspace id 读取 `~/.kimi-code/workspaces.json`，在缺少会话状态文件时恢复源项目根目录；发现与导入路径保持一致，索引损坏或缺失时继续安全降级。
+
 ## [0.18.3] - 2026-09-18
 
 ### Added

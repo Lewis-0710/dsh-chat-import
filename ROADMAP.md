@@ -80,7 +80,7 @@
 | REQ-71 | P2 | 测试稳定性：Windows 上偶发单点失败（`EPERM: rename` 原子写、临时目录竞争、`rm` 语义相关用例）——给用例独立 tmp 根并隔离文件锁依赖 | ☐ |
 | REQ-75 | P1 | 缺陷：Codex 新版 CLI 分页 rollout（一个会话拆成多个 `rollout-*.jsonl`）被当成多条同名会话——按 thread id 成链后整链一次导入（issue #57） | ✅ |
 | REQ-76 | P1 | 缺陷：Kimi Code 导入丢失工作区（state.json 字段变更为 workDir）与下划线 sessionId 清理校验放宽（issue #61） | ✅ |
-| REQ-77 | P2 | Kimi Code：`state.json` 整份缺失时按 `~/.kimi-code/workspaces.json`（workspace-id → root）回退解析 cwd（与旧布局的 `kimi.json` 映射对称） | ☐ |
+| REQ-77 | P2 | Kimi Code：`state.json` 整份缺失时按 `~/.kimi-code/workspaces.json`（workspace-id → root）回退解析 cwd（与旧布局的 `kimi.json` 映射对称） | ✅ |
 | REQ-78 | P2 | 文档：写明 Kimi `context.apply_compaction` 的压缩语义（只保留最后一次压缩之后的模型视角，轮数会少于 `turn.prompt` 条数）——README 与 `import_chat` 描述 | ☐ |
 | REQ-79 | P2 | 反向导出：新增 opencode 目标（`opencode import <file>` 接受的 JSON——session + messages + parts 三表形状） | ✅ |
 | REQ-80 | P1 | 面板「导入到」下拉：直投 Claude Code / Codex / Kimi Code / opencode（转投到目标格式落盘，DSH 侧不留中间会话） | ✅ |
