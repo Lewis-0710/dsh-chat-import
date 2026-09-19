@@ -130,6 +130,7 @@ This plugin's `import_agents` is a lightweight asset mover (it persists pi/openc
 | Capability | Entry points | Description |
 | --- | --- | --- |
 | Batch import | `import_chat` (27 formats) · `scan_discover` · sidebar panel | Import 27 formats with one tool; each conversation becomes its own session |
+| Cline legacy tasks | `import_chat({ format: "cline" })` · `scan_discover` | Reads legacy VS Code globalStorage tasks (`state/taskHistory.json` and `tasks/<id>/api_conversation_history.json`); set `CLINE_LEGACY_GLOBAL_STORAGE_DIR` for a non-standard profile |
 | Import history & purge | sidebar panel **History** tab | View `imports.json` records; remove plugin-created sessions (with confirmation) |
 | Full-fidelity resume | Imported sessions | Tool calls & results, reasoning, titles, models and timestamps carry over |
 | Export back | `export_chat` (`format: claude` / `codex` / `kimi` / `opencode`) | Serialize DSH sessions back to Claude / Codex / Kimi / opencode (the opencode JSON is fed to `opencode import`) |

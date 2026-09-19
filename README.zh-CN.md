@@ -133,6 +133,7 @@ Reasonix 目录导入只会折叠同时满足“严格语义前缀”和明确 `
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
 | 批量导入 | `import_chat`（27 种格式）· `scan_discover` · 侧边栏面板 | 27 种格式一键导入，每段对话成为独立会话 |
+| Cline 旧版任务 | `import_chat({ format: "cline" })` · `scan_discover` | 读取 VS Code globalStorage 中的旧版任务（`state/taskHistory.json` 与 `tasks/<id>/api_conversation_history.json`）；非标准配置可设置 `CLINE_LEGACY_GLOBAL_STORAGE_DIR` |
 | 导入历史与撤回 | 侧边栏面板「历史」页 | 展示 `imports.json` 记录；一键删除本插件创建的会话（需确认） |
 | 全保真续聊 | 导入即 DSH 会话 | 工具调用/结果、思考、标题、模型、时间戳原样保留 |
 | 反向导出 | `export_chat`（`format: claude` / `codex` / `kimi` / `opencode`） | DSH 会话序列化回 Claude / Codex / Kimi / opencode（opencode 的 JSON 交给 `opencode import` 导入） |
