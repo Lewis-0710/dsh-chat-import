@@ -17,6 +17,8 @@ from the matching section below.
 
 - **Kimi Code 会话缺少 `state.json` 时保留工作区归属** — 新布局现在按会话目录的 workspace id 读取 `~/.kimi-code/workspaces.json`，在缺少会话状态文件时恢复源项目根目录；发现与导入路径保持一致，索引损坏或缺失时继续安全降级。
 
+- **Grok Build 工作区名/路径在升级后仍显示 %XX 乱码** — 0.18.3 的解码修复只改了提取逻辑，没有失效持久化 `scan-cache.json`：旧 v2 书签命中时直接复用编码的 `project` 与 `null` `cwd`，所以升级后看起来「没修」。现在把 `SCAN_CACHE_VERSION` 抬到 3，旧书签整体失效并重扫回填；新增「旧版本书签必须重读」回归测试。
+
 ## [0.18.3] - 2026-09-18
 
 ### Added

@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { discoverSessions, createScanCache, SCAN_CACHE_FILE } from '../lib/discovery.mjs'
+import { discoverSessions, createScanCache, SCAN_CACHE_FILE, SCAN_CACHE_VERSION } from '../lib/discovery.mjs'
 import { clearWorkspacePathCache } from '../lib/cwd-map.mjs'
 
 const j = (o) => JSON.stringify(o)
@@ -94,7 +94,7 @@ test('首次扫描落书签（原子写）；同 mtime+size 二次扫描命中�
   // 书签文件：原子写（目录里只有 scan-cache.json，无 .tmp 残留）、按 format 分表、两个源
   assert.deepEqual(readdirSync(cacheDir).sort(), [SCAN_CACHE_FILE])
   const disk = JSON.parse(readFileSync(bmPath, 'utf8'))
-  assert.equal(disk.version, 2)
+  assert.equal(disk.version, SCAN_CACHE_VERSION)
   const claudeTable = disk.bookmarks.claude
   assert.equal(Object.keys(claudeTable).length, 2) // agent-* 辅助 transcript 不建书签
   const bm1 = claudeTable[s1]
@@ -122,6 +122,40 @@ test('首次扫描落书签（原子写）；同 mtime+size 二次扫描命中�
   assert.equal(r2.sessions.find((s) => s.sessionId === 'sess-002').importStatus, 'not-imported')
 })
 
+test('旧版本书签（version 不匹配）→ 忽略并重扫，写回当前版本', async (t) => {
+  const root = join('C:', 'Users', 'tester', '.claude', 'projects')
+  const { files, s1 } = claudeFixture(root)
+  const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-oldver-'))
+  t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
+  const bmPath = join(cacheDir, SCAN_CACHE_FILE)
+
+  // 预置上一版本书签：mtime/size 与真实文件完全一致，entries 带陈旧 project。
+  // 若按旧口径命中会直接复用陈旧值——Grok Build 的 %XX 项目名就是这么复发的。
+  writeFileSync(bmPath, JSON.stringify({
+    version: SCAN_CACHE_VERSION - 1,
+    bookmarks: {
+      claude: {
+        [s1]: {
+          mtimeMs: 1786000002000,
+          sizeBytes: files.get(s1).text.length,
+          entries: [{
+            format: 'claude', sessionId: 'sess-001', title: '旧缓存标题', project: 'stale-project',
+            createdAt: null, lastActiveAt: null, messageCount: null, sourcePath: s1, cwd: null,
+          }],
+        },
+      },
+    },
+  }) + '\n', 'utf8')
+
+  const host = mockHost(files)
+  const r = await scan({ path: root, format: 'claude', host, imports: {}, cacheDir })
+  assert.equal(r.total, 2)
+  assert.ok(host.counters.reads > 0, '旧版本书签必须失效并重读源文件')
+  const s = r.sessions.find((x) => x.sessionId === 'sess-001')
+  assert.equal(s.project, 'claude-proj')
+  assert.equal(s.title, '修复构建失败')
+  assert.equal(JSON.parse(readFileSync(bmPath, 'utf8')).version, SCAN_CACHE_VERSION)
+})
 test('size 变化触发重读并更新书签', async (t) => {
   const root = join('C:', 'Users', 'tester', '.claude', 'projects')
   const { files, s1 } = claudeFixture(root)
@@ -179,7 +213,7 @@ test('书签文件损坏按空书签处理，扫描后重写为合法', async (t
   assert.equal(r.total, 2)
   assert.ok(host.counters.reads > 0) // 损坏 → 按空书签全量重扫
   const disk = JSON.parse(readFileSync(bmPath, 'utf8')) // 扫描后已重写为合法书签
-  assert.equal(disk.version, 2)
+  assert.equal(disk.version, SCAN_CACHE_VERSION)
   assert.ok(disk.bookmarks.claude[s1])
 })
 
@@ -223,7 +257,7 @@ test('cursor 书签命中：旧 slug-only entries 读时补丁解码 cwd/project
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
   const bmPath = join(cacheDir, SCAN_CACHE_FILE)
   writeFileSync(bmPath, JSON.stringify({
-    version: 2,
+    version: SCAN_CACHE_VERSION,
     bookmarks: {
       cursor: {
         [file]: {
@@ -282,7 +316,7 @@ test('cursor 书签命中：纯数字 slug 读时补丁清空 project，不误�
   const cacheDir = mkdtempSync(join(tmpdir(), 'scan-cache-cursor-numeric-'))
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }))
   writeFileSync(join(cacheDir, SCAN_CACHE_FILE), JSON.stringify({
-    version: 2,
+    version: SCAN_CACHE_VERSION,
     bookmarks: {
       cursor: {
         [file]: {
