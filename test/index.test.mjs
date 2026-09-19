@@ -6003,3 +6003,39 @@ test('import_kimi 新 Kimi Code：state.json 仅含 workDir 时同样解析出 c
   assert.equal(attached.length, 1)
 })
 
+test('import_kimi 新 Kimi Code：state.json 缺失时按 workspaces.json 回退 cwd（REQ-77）', async () => {
+  const workspaceId = 'wd_genius-invokation_7d34e589df57'
+  const sess = 'C:\\Users\\u\\.kimi-code\\sessions\\' + workspaceId + '\\session-no-state'
+  const workDir = hostAbs('D:/AI/GTCG/genius-invokation')
+  const tree = {
+    'C:\\Users\\u\\.kimi-code\\sessions': 'dir',
+    ['C:\\Users\\u\\.kimi-code\\sessions\\' + workspaceId]: 'dir',
+    [sess]: 'dir',
+    [sess + '\\agents']: 'dir',
+    [sess + '\\agents\\main']: 'dir',
+    'C:\\Users\\u\\.kimi-code\\workspaces.json': JSON.stringify({
+      version: 1,
+      workspaces: { [workspaceId]: { root: workDir, name: 'genius-invokation' } },
+    }),
+    [sess + '\\agents\\main\\wire.jsonl']: kimiCodeWire([
+      kimiCodeEv('turn.prompt', { input: [{ type: 'text', text: '帮我看看构建失败' }], origin: { kind: 'user' } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'step.begin', turnId: '0', step: 1 } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'content.part', part: { type: 'text', text: '是缺少依赖。' } } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'step.end', turnId: '0', step: 1, finishReason: 'end_turn' } }),
+      kimiCodeEv('turn.ended', { turnId: 0, reason: 'completed' }),
+    ]),
+  }
+  const { ctx, persistence, attached } = makeCtx(tree)
+  apply(ctx)
+  const def = chatDef(ctx, 'kimi')
+  const preview = await def.execute({ path: sess, preview: true })
+  assert.equal(preview.cwd, workDir)
+
+  const value = await def.execute({ path: sess })
+  assert.equal(value.mode, 'single')
+  assert.equal(value.status, 'imported')
+  const saved = persistence.sessions.get(value.sessionId)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, workDir)
+  assert.equal(attached.length, 1)
+})
