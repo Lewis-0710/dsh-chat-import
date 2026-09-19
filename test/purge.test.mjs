@@ -141,7 +141,8 @@ test('deleteImportedSession：工件被占用（rm 后仍存在）→ 中止且 
   // 重试也解不开），Linux 靠只读目录（unlink 需要目录写权限）
   chmodSync(artDir, 0o555)
   chmodSync(artFile, 0o444)
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 3000)'], { cwd: artDir, stdio: 'ignore' })
+  const child = spawn(process.execPath, ['-e', 'process.stdout.write("ready\\n"); setTimeout(() => {}, 5000)'], { cwd: artDir, stdio: ['ignore', 'pipe', 'ignore'] })
+  await new Promise((resolve) => child.stdout.once('data', resolve))
   persistence.sessions.set(sessionId, {
     meta: { id: sessionId },
     events: [markerEvent(sourcePath)],
@@ -154,8 +155,8 @@ test('deleteImportedSession：工件被占用（rm 后仍存在）→ 中止且 
   } finally {
     child.kill()
     await once(child, 'exit')
-    chmodSync(artDir, 0o755)
-    chmodSync(artFile, 0o644)
+    try { chmodSync(artDir, 0o755) } catch { /* 目录若已被删则忽略 */ }
+    try { chmodSync(artFile, 0o644) } catch { /* 文件若已被删则忽略 */ }
   }
 })
 
