@@ -5506,8 +5506,8 @@ test('REQ-41 /api-import/prefs：settings 缺席回退默认；在场时读/写�
   assert.equal(r0.res.status, 200)
   assert.equal(r0.data.ok, true)
   assert.equal(r0.data.available, false)
-  // settings 缺席回退 IMPORT_PREFS_DEFAULT：injectTools 默认档 'minimal'
-  assert.deepEqual(r0.data.value, { importSystemPrompt: true, injectTools: 'minimal' })
+  // settings 缺席回退 IMPORT_PREFS_DEFAULT：injectTools 默认档 'minimal'，sidebarButton 默认 true
+  assert.deepEqual(r0.data.value, { importSystemPrompt: true, injectTools: 'minimal', sidebarButton: true })
   const w0 = await invoke(route, { importSystemPrompt: true })
   assert.equal(w0.data.ok, true)
   assert.equal(w0.data.available, false)
@@ -5540,6 +5540,14 @@ test('REQ-41 /api-import/prefs：settings 缺席回退默认；在场时读/写�
   assert.deepEqual(calls, [
     { ns: 'chat-import', patch: { importSystemPrompt: true }, expectedRevision: 7 },
     { ns: 'chat-import', patch: { injectTools: false }, expectedRevision: 7 },
+  ])
+  // sidebarButton 写入同样走 fenced 路由（第三个开关共用同一偏好命名空间）
+  const w3 = await invoke(route2, { sidebarButton: false, revision: 7 })
+  assert.equal(w3.data.ok, true)
+  assert.deepEqual(calls, [
+    { ns: 'chat-import', patch: { importSystemPrompt: true }, expectedRevision: 7 },
+    { ns: 'chat-import', patch: { injectTools: false }, expectedRevision: 7 },
+    { ns: 'chat-import', patch: { sidebarButton: false }, expectedRevision: 7 },
   ])
 
   // update 抛冲突 → ok:false + code: settings-conflict（客户端据此重读）

@@ -1635,3 +1635,69 @@ test('layoutProject(dsh)：~XXXX 转义按 code unit 还原，不再解成控制
   // 非会话文件名不认
   assert.equal(layoutProject('/h/sessions/--x--/sid/other.jsonl', 'dsh'), null)
 })
+
+test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH 自身会话不自扫）', async () => {
+  const root = join(HOME, 'dsh-home', 'sessions')
+  const proj = join(root, '--proj--')
+  const sessNative = join(proj, 'session-native')
+  const sessImported = join(proj, 'session-imported')
+  const sessExternal = join(proj, 'session-external')
+  const fNative = join(sessNative, 'session.v3.jsonl')
+  const fImported = join(sessImported, 'session.v3.jsonl')
+  const fExternal = join(sessExternal, 'session.v3.jsonl')
+  const body = (id) => [
+    j({ type: 'session', id, cwd: '/demo/proj', createdAt: 1700000000000 }),
+    j({ type: 'user/message', seq: 1, data: { content: [{ type: 'text', text: '会话内容 ' + id }] } }),
+  ].join('\n')
+
+  const files = new Map([
+    [root, { type: 'dir' }],
+    [proj, { type: 'dir' }],
+    [sessNative, { type: 'dir' }],
+    [sessImported, { type: 'dir' }],
+    [sessExternal, { type: 'dir' }],
+    [fNative, { type: 'file', mtimeMs: 1786000001000, text: body('session-native') }],
+    [fImported, { type: 'file', mtimeMs: 1786000002000, text: body('session-imported') }],
+    [fExternal, { type: 'file', mtimeMs: 1786000003000, text: body('session-external') }],
+  ])
+  const host = mockHost(files)
+  const imports = {
+    [fImported]: { kind: 'single', dshId: 'session-imported', importedAt: 1786000002000 },
+  }
+  const persistedIds = new Set(['session-native', 'session-imported'])
+
+  // 1. 全量扫描：原生会话被过滤，已导入和外部未加载会话保留
+  const res = await discoverSessions({
+    path: root,
+    format: 'dsh',
+    host,
+    imports,
+    persistedIds,
+  })
+  assert.equal(res.total, 2, '原生会话应被过滤，总数仅保留 2 条')
+  assert.ok(!res.sessions.some((s) => s.sessionId === 'session-native'), '宿主原生会话必须过滤')
+  assert.ok(res.sessions.some((s) => s.sessionId === 'session-imported'), '已导入会话保留供同步')
+  assert.ok(res.sessions.some((s) => s.sessionId === 'session-external'), '未持久化外部会话保留供导入')
+
+  // 2. 流式扫描：onEntry 同样不接收原生会话
+  const streamed = []
+  await discoverSessions({
+    path: root,
+    format: 'dsh',
+    host,
+    imports,
+    persistedIds,
+    onEntry: (e) => streamed.push(e),
+  })
+  assert.equal(streamed.length, 2, '流式条目应仅包含 2 条')
+  assert.ok(!streamed.some((s) => s.sessionId === 'session-native'), '流式推送中原生会话不应出现')
+
+  // 3. 缺省 persistedIds：不执行过滤（向后兼容）
+  const fallback = await discoverSessions({
+    path: root,
+    format: 'dsh',
+    host,
+    imports,
+  })
+  assert.equal(fallback.total, 3, '不传 persistedIds 时全部 3 条正常产出')
+})
