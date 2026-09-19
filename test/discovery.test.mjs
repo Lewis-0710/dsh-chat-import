@@ -16,6 +16,7 @@ import {
 import { resolveCursorSlugPath, clearWorkspacePathCache } from '../lib/cwd-map.mjs'
 import { gooseSessionsDir } from '../lib/convert/goose.mjs'
 import { zedThreadsDir } from '../lib/convert/zed.mjs'
+import { hostAbs } from './_support/host-path.mjs'
 
 beforeEach(() => {
   clearScanCache()
@@ -904,7 +905,7 @@ test('cline legacy：globalStorage 的 taskHistory 索引发现 api history，UI
     [root, { type: 'dir' }], [join(root, 'state'), { type: 'dir' }], [tasks, { type: 'dir' }], [taskDir, { type: 'dir' }],
     [join(root, 'state', 'taskHistory.json'), {
       type: 'file', mtimeMs: 1786000012000,
-      text: j([{ id: taskId, ts: 1786000000000, task: '', cwdOnTaskInitialization: 'D:\\repo' }]),
+      text: j([{ id: taskId, ts: 1786000000000, task: '', cwdOnTaskInitialization: hostAbs('D:/repo') }]),
     }],
     [api, {
       type: 'file', mtimeMs: 1786000013000,
@@ -918,7 +919,7 @@ test('cline legacy：globalStorage 的 taskHistory 索引发现 api history，UI
   assert.deepEqual(result.sessions[0], {
     format: 'cline', sessionId: taskId, title: '标题来自 UI', project: 'repo',
     createdAt: 1786000000000, lastActiveAt: 1786000013000, messageCount: null,
-    contextTokens: null, sourcePath: api, cwd: 'D:\\repo', importStatus: 'not-imported',
+    contextTokens: null, sourcePath: api, cwd: hostAbs('D:/repo'), importStatus: 'not-imported',
     gitBranch: null, gitDirty: null,
   })
 
