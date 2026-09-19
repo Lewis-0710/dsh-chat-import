@@ -1,4 +1,4 @@
-// eslint.config.mjs — REQ-10 最小 flat config（无插件）。
+// eslint.config.mjs — 最小 flat config（无插件）。
 // 规则贴近仓库风格：no-unused-vars / no-undef / eqeqeq / no-constant-condition。
 // ECMAScript 内建全局由 ecmaVersion:'latest' 提供；宿主全局（console / process）
 // 在此手工声明，不引入 globals 包。
