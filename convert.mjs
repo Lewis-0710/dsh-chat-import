@@ -20,6 +20,8 @@ export {
   trimTurns,
   applyBudgetTrim,
   validateSessionEvents,
+  isEnvInjectionEvent,
+  ENV_INJECTION_EVENT_ID_SUFFIX,
 } from './lib/convert/core.mjs'
 
 // 降级规则与导出降级清单

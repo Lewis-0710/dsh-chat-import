@@ -104,7 +104,7 @@ test('convertKimiWire: 简单问答（TurnBegin/StepBegin/TextPart/TurnEnd）、
   assert.ok(!out.events.some((e) => e.type === 'session/title'))
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'user/message', 'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   assertEnvelopeHygiene(out.events)

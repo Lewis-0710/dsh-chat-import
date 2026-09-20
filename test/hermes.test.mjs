@@ -124,7 +124,7 @@ test('convertHermesJson: 中间 JSON 问答、元数据、平衡回合', () => {
   assertBalanced(out)
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'user/message', 'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
+    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
   ])
   // 导入归属外置 registry（issue #34）：日志无 session/imported 标记
   assert.ok(out.events.every((e) => e.type !== 'session/imported'))

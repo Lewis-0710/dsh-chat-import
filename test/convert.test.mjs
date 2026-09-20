@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { convertClaudeJsonl, convertCodexJsonl, convertChatgptJson, convertCursorJsonl, convertGeminiJson, convertReasonixJsonl, convertPiJsonl, convertOpencodeJson, convertQoderJsonl, reasonixStemTime, mintSessionId, parseTime, SESSION_FORMAT_VERSION, tailSessionEvents, codexCustomToolArguments, jsObjectLiteralToJson, estimateTokens, cropContentBlocks, trimTurns, applyBudgetTrim, TEXT_BLOCK_CHAR_LIMIT, TOOL_RESULT_CHAR_LIMIT, validateSessionEvents } from '../convert.mjs'
+import { convertClaudeJsonl, convertCodexJsonl, convertChatgptJson, convertCursorJsonl, convertGeminiJson, convertReasonixJsonl, convertPiJsonl, convertOpencodeJson, convertQoderJsonl, reasonixStemTime, mintSessionId, parseTime, SESSION_FORMAT_VERSION, tailSessionEvents, codexCustomToolArguments, jsObjectLiteralToJson, estimateTokens, cropContentBlocks, trimTurns, applyBudgetTrim, TEXT_BLOCK_CHAR_LIMIT, TOOL_RESULT_CHAR_LIMIT, validateSessionEvents, isEnvInjectionEvent } from '../convert.mjs'
 import { pinSourcedSessionTitle } from '../lib/sourced-title.mjs'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
@@ -94,9 +94,9 @@ test('convertClaudeJsonl: 简单问答合成平衡回合', () => {
 
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'user/message', 'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
-  // seq 连续从 0 开始；首事件是内部标记
+  // seq 连续从 0 开始；环境变更声明（plugin 注入）在首个 step/start 之后、真实提问之前
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   assertEnvelopeHygiene(out.events)
   // surface 事件带 surfaceOp
@@ -177,7 +177,8 @@ test('convertClaudeJsonl: 未回答的提问也成回合', () => {
   assert.equal(out.turns.length, 1)
   assert.equal(out.messages, 1)
   const types = out.events.map((e) => e.type)
-  assert.deepEqual(types, ['user/message', 'turn/start', 'user/message', 'turn/end'])
+  // 首轮无 step（只有提问、没有回复）：无 step/start 可锚 → 环境变更声明不注入
+  assert.deepEqual(types, ['turn/start', 'user/message', 'turn/end'])
 })
 
 test('convertClaudeJsonl: 数组格式 user content（纯文本块）开新轮（issue #21 复现）', () => {
@@ -448,7 +449,7 @@ test('convertCodexJsonl: 简单问答合成平衡回合（元数据来自 sessio
 
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'user/message', 'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
   // seq 连续从 0 开始；最后一个事件是 turn/end（平衡）
   out.events.forEach((e, i) => assert.equal(e.seq, i))
@@ -524,14 +525,14 @@ test('convertCodexJsonl: importSystemPrompt 开关收集 developer 为上下文�
   const offPlugin = off.events.filter((e) => e.data && e.data.source && e.data.source.kind === 'plugin')
   assert.equal(offPlugin.length, 1)
   assert.ok(!offPlugin[0].data.content[0].text.includes('You are Codex.'))
-  // 开：developer 作为上下文注入附在环境变更声明之后（source.kind='plugin'，plugin='chat-import'）钉在最前
+  // 开：developer 作为上下文注入附在环境变更声明之后（source.kind='plugin'，plugin='chat-import'）钉在会话最前（首个 step/start 之后，issue #66）
   const on = convertCodexJsonl(raw, { sessionId: 'codex-sp', importSystemPrompt: true })
   const first = on.events.find((e) => e.type === 'user/message')
   assert.equal(first.data.source.kind, 'plugin')
   assert.equal(first.data.source.plugin, 'chat-import')
   assert.ok(first.data.content[0].text.includes('You are Codex.'))
   assert.ok(first.data.content[0].text.includes('DeepSeek Harness'))
-  assert.ok(first.seq < on.events.find((e) => e.type === 'turn/start').seq)
+  assert.ok(first.seq > on.events.find((e) => e.type === 'step/start').seq)
 })
 
 test('上下文注入按 dsh 惯例包 <system-reminder> 信封：英文正文 + 闭合标签转义', () => {
@@ -544,7 +545,8 @@ test('上下文注入按 dsh 惯例包 <system-reminder> 信封：英文正文 +
   ].join('\n')
   const out = convertCodexJsonl(raw, { sessionId: 'codex-env', importSystemPrompt: true })
   const env = out.events.find((e) => e.data && e.data.id === 'import:codex-env:env')
-  assert.ok(env, '环境变更声明应钉在首个 turn 之前')
+  assert.ok(env, '环境变更声明应在首个 step/start 之后（issue #66）')
+  assert.ok(env.seq > out.events.find((e) => e.type === 'step/start').seq)
   const text = env.data.content[0].text
   assert.ok(text.startsWith('<system-reminder>\n'), '信封以 <system-reminder> 行开头')
   assert.ok(text.endsWith('\n</system-reminder>'), '信封以 </system-reminder> 行结尾')
@@ -857,7 +859,7 @@ test('convertChatgptJson: importSystemPrompt 开关收集 system 角色为上下
   assert.equal(first.data.source.kind, 'plugin')
   assert.equal(first.data.source.plugin, 'chat-import')
   assert.ok(first.data.content[0].text.includes('You are a helpful assistant.'))
-  assert.ok(first.seq < c1.events.find((e) => e.type === 'turn/start').seq)
+  assert.ok(first.seq > c1.events.find((e) => e.type === 'step/start').seq)
 })
 
 test('convertChatgptJson: tool 节点降级为文本块，不再产生孤儿 tool/result', () => {
@@ -1803,6 +1805,22 @@ test('tailSessionEvents: 尾内 tool/result 的 sourceEventSeqs 重映射到新 
   }
 })
 
+test('tailSessionEvents: 续写尾部不重复注入环境变更声明（issue #66）', () => {
+  const out = convertClaudeJsonl(threeTurnClaude(), { sourcePath: 'D:\\demo\\proj\\sess-incr-001.jsonl' })
+  const env = out.events.find(isEnvInjectionEvent)
+  assert.ok(env, '完整转换含一条环境变更声明')
+  // 声明位于首个 step/start 之后（写入位契约）
+  const firstStep = out.events.find((e) => e.type === 'step/start')
+  assert.ok(env.seq > firstStep.seq)
+  // 尾部（含首轮切片的极端情形）不携带声明：前段已有一条，续写不得在对话中间再插一条
+  for (const fromTurn of [1, 2, 3]) {
+    const tail = tailSessionEvents(out, { fromTurn, fromSeq: 50 })
+    assert.ok(!tail.events.some(isEnvInjectionEvent), 'fromTurn=' + fromTurn + ' 的尾部不得含声明')
+  }
+  // 声明是 plugin 注入：不计入真实消息数（既有口径不变）——3 问 + 4 条 assistant
+  assert.equal(out.messages, 7)
+})
+
 test('tailSessionEvents: dropSessionEvents=false 保留 session/title（标题 last-wins 无害）', () => {
   const out = convertClaudeJsonl(threeTurnClaude(), { sourcePath: 'D:\\demo\\proj\\sess-incr-001.jsonl' })
   const tail = tailSessionEvents(out, { fromTurn: 3, fromSeq: 200, dropSessionEvents: false })
@@ -2154,6 +2172,42 @@ test('validateSessionEvents：非数组 / 畸形条目报告且封顶', () => {
   const many = validateSessionEvents(Array.from({ length: 100 }, (_, i) => ev(i, 'bogus/event')))
   assert.ok(many.problems.length <= 20) // VALIDATION_PROBLEM_CAP
   assert.equal(many.ok, false)
+})
+
+test('validateSessionEvents：首个 step/start 之前的 surface 事件被点名（issue #66）', () => {
+  // 旧版本（≤0.18.3）导入日志的形状：环境变更声明排在首个 turn/start 之前。
+  // 宿主 v2→v3 迁移对「首个 step/start 之前的 surface」fail-closed 拒载，此形状
+  // 必须在导入/校验时被点名，而不是等宿主迁移时静默打不开。
+  const legacy = [
+    ev(0, 'user/message', { surfaceOp: 'append' }),
+    ev(1, 'turn/start'),
+    ev(2, 'step/start'),
+    ev(3, 'user/message', { surfaceOp: 'append' }),
+    ev(4, 'assistant/message', { surfaceOp: 'append' }),
+    ev(5, 'step/end'),
+    ev(6, 'turn/end'),
+  ]
+  const r = validateSessionEvents(legacy)
+  assert.equal(r.ok, false)
+  assert.deepEqual(r.problems.map((p) => p.kind), ['surface-before-first-step'])
+  assert.equal(r.problems[0].seq, 0)
+  // 新注入位（step/start 之后）同形状不报
+  const fixed = validateSessionEvents([
+    ev(0, 'turn/start'),
+    ev(1, 'step/start'),
+    ev(2, 'user/message', { surfaceOp: 'append' }),
+    ev(3, 'assistant/message', { surfaceOp: 'append' }),
+    ev(4, 'step/end'),
+    ev(5, 'turn/end'),
+  ])
+  assert.equal(fixed.ok, true)
+  // 无任何 step/start（只有提问没有回复）时不适用该约束
+  const noStep = validateSessionEvents([
+    ev(0, 'turn/start'),
+    ev(1, 'user/message', { surfaceOp: 'append' }),
+    ev(2, 'turn/end'),
+  ])
+  assert.equal(noStep.ok, true)
 })
 
 // ===== 失败重发 step 清洗（ghost retry dedupe）=====

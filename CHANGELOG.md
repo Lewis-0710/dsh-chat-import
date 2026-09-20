@@ -4,6 +4,11 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 ## [Unreleased]
 
+## [0.18.4] - 2026-09-20
+
+- 环境变更提示改到首个 `step/start` 之后：旧格式（v0–v2）导入会话不再因宿主 v2→v3 格式迁移被拒载（surface 事件早于首个 step 的形状会被迁移器 fail-closed 拒绝）。
+- `verify_session` 新增 `surface-before-first-step` 检查与重导提示：存量旧格式会话被点名，不再等宿主迁移时才暴露。
+- 增量续写不再重复注入环境变更提示。
 - Kimi Code 缺少 `state.json` 时保留工作区归属。
 - 失效旧版 scan-cache，修复 Grok Build 工作区名仍显示 %XX。
 - 导入面板图标选中态遮罩按强调色明度选黑/白。

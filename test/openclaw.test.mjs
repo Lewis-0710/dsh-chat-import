@@ -74,7 +74,7 @@ test('convertOpenclawJson: session 事件 + 简单问答合成平衡回合（标
   assert.equal(out.events.some((e) => e.type === 'session/title'), false)
   assertEnvelopeHygiene(out.events)
   const types = out.events.map((e) => e.type)
-  assert.deepEqual(types, ['user/message', 'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end'])
+  assert.deepEqual(types, ['turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end'])
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   const user = out.events.find((e) => e.type === 'user/message' && e.data.source.kind === 'user')
   assert.equal(user.data.content[0].text, '帮我看看构建失败')

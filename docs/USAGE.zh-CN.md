@@ -115,11 +115,13 @@ restore_bundle({ path: "D:\backup\bundle-dir", preview: true })      // dry-run
 
 ### verify_session — 只读结构审计
 
-`verify_session({ sessionId })` 对任意 DSH 会话做只读结构校验：seq 连续、事件类型白名单、surface 事件带 `surfaceOp`、`sourceEventSeqs` 指向真实 `tool/call`、turn/step 平衡、工具调用↔结果配对。问题逐条定位（kind + seq + message），并按 kind 给出 `repairHints`（`force` 重导 / 闭合半开轮 / 源转录中途开始的边界说明）：
+`verify_session({ sessionId })` 对任意 DSH 会话做只读结构校验：seq 连续、事件类型白名单、surface 事件带 `surfaceOp`、`sourceEventSeqs` 指向真实 `tool/call`、surface 事件不早于首个 `step/start`、turn/step 平衡、工具调用↔结果配对。问题逐条定位（kind + seq + message），并按 kind 给出 `repairHints`（`force` 重导 / 闭合半开轮 / 源转录中途开始的边界说明）：
 
 ```
 verify_session({ sessionId: "import-019f5f27-…" })
 ```
+
+> 环境变更提示注入在首个 `step/start` 之后（`turn/start → step/start → 提示 → 该轮提问`）。它仍是模型看到的第一条消息，但日志里没有任何 surface 事件早于第一个 step——旧格式（v0–v2）日志若把提示写在首个 step 之前，宿主做 v2→v3 格式迁移时会 fail-closed 拒载（`surface before first step cannot acquire a system head`），会话打不开、导出/同步/校验也读不到。`verify_session` 会以 `surface-before-first-step` 点名这类存量会话，用 `force: true` 重导（或面板「刷新已导入」）即可按新注入位重写。
 
 ### doctor — 只读迁移健康检查
 

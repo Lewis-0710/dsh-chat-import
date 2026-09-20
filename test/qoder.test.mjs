@@ -144,14 +144,14 @@ test('多轮对话：每条直连 user 提问开新轮', () => {
   assert.equal(out.messages, 4)
 })
 
-test('导入归属外置 registry：日志无标记，首事件为环境变更声明（issue #34）', () => {
+test('导入归属外置 registry：日志无标记，环境变更声明在首个 step/start 之后（issue #34 / #66）', () => {
   const raw = qoder([
     userRec('hi'),
     assistantRec([{ type: 'text', text: 'yo' }]),
   ])
   const out = convertQoderJsonl(raw, { sourcePath: '/home/u/.qoder/projects/p/' + SID + '.jsonl' })
   assert.ok(out.events.every((e) => e.type !== 'session/imported'))
-  assert.equal(out.events[0].type, 'user/message')
-  assert.equal(out.events[0].data.source.kind, 'plugin')
-  assert.equal(out.events[1].type, 'turn/start')
+  // issue #66：声明不再早于首个 step/start（宿主 v2→v3 迁移对该形状 fail-closed）
+  assert.deepEqual(out.events.slice(0, 3).map((e) => e.type), ['turn/start', 'step/start', 'user/message'])
+  assert.equal(out.events[2].data.source.kind, 'plugin')
 })
