@@ -1,5 +1,5 @@
 diff --git a/README.md b/README.md
-index 3a6b16a..385e393 100644
+index 1dfec49..4fb519d 100644
 --- a/README.md
 +++ b/README.md
 @@ -1,3 +1,13 @@
@@ -17,10 +17,10 @@ index 3a6b16a..385e393 100644
  
  <img src="./assets/dci-promo.png" alt="DSH Chat Import" width="100%" />
 diff --git a/lib/client.js b/lib/client.js
-index 1adea0c..d3c444e 100644
+index 13153e0..ec550d6 100644
 --- a/lib/client.js
 +++ b/lib/client.js
-@@ -71,6 +71,9 @@ window.__ModuleLoader__.load({
+@@ -61,6 +61,9 @@ window.__ModuleLoader__.load({
          "selected.count": "已选 {n}",
          "importing": "导入中…",
          "import.selected": "导入所选 ({n})",
@@ -30,7 +30,7 @@ index 1adea0c..d3c444e 100644
          "pageSize": "每页",
          "search": "搜索",
          "previous": "上一页",
-@@ -86,6 +89,8 @@ window.__ModuleLoader__.load({
+@@ -75,6 +78,8 @@ window.__ModuleLoader__.load({
          "history.confirm.title": "确认删除",
          "history.confirm.all": "将删除 {n} 个本插件导入的会话及其工件，并清理空工作区。此操作不可撤销，确定继续？",
          "history.confirm.one": "将删除会话 {id} 及其工件。此操作不可撤销，确定继续？",
@@ -39,7 +39,7 @@ index 1adea0c..d3c444e 100644
          "history.confirm.ok": "确认删除",
          "history.confirm.cancel": "取消",
          "history.purge.done": "删除完成：成功 {deleted}，失败 {failed}",
-@@ -190,6 +195,9 @@ window.__ModuleLoader__.load({
+@@ -196,6 +201,9 @@ window.__ModuleLoader__.load({
          "selected.count": "{n} selected",
          "importing": "Importing…",
          "import.selected": "Import selected ({n})",
@@ -49,7 +49,7 @@ index 1adea0c..d3c444e 100644
          "pageSize": "Per page",
          "search": "Search",
          "previous": "Previous",
-@@ -205,6 +213,8 @@ window.__ModuleLoader__.load({
+@@ -210,6 +218,8 @@ window.__ModuleLoader__.load({
          "history.confirm.title": "Confirm deletion",
          "history.confirm.all": "This will delete {n} plugin-imported sessions and their artifacts, and clean up empty workspaces. This cannot be undone. Continue?",
          "history.confirm.one": "This will delete session {id} and its artifacts. This cannot be undone. Continue?",
@@ -58,7 +58,7 @@ index 1adea0c..d3c444e 100644
          "history.confirm.ok": "Delete",
          "history.confirm.cancel": "Cancel",
          "history.purge.done": "Removal done: {deleted} succeeded, {failed} failed",
-@@ -566,6 +576,10 @@ window.__ModuleLoader__.load({
+@@ -624,6 +634,10 @@ window.__ModuleLoader__.load({
          flex: "1", background: C.accent, color: C.accentForeground, border: "none", borderRadius: "8px",
          padding: "7px 10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
        },
@@ -69,16 +69,7 @@ index 1adea0c..d3c444e 100644
        result: { padding: "7px 12px", fontSize: "12px", color: C.dim, borderBottom: "1px solid " + C.border, background: C.field },
        // 顶部不留 padding：工作区分组头 sticky 到 top:0 后与列表顶缘齐平，背景
        // 完整盖住背后滚过的行，不再在顶部露出 8px 缝隙泄漏列表背后的内容。
-@@ -1037,7 +1051,7 @@ window.__ModuleLoader__.load({
-      *  原生 tab open 的 revealIfOpened、旧版靠 path seed），组件自身不碰 panel 状态。 */
-     function ImportTabComponent(props) {
-       return React.createElement(ImportTabContent, {
--        onClose: () => { if (betterSidebarService) betterSidebarService.closeTab(props.tab.id); },
-+        onClose: () => { if (betterSidebarService) betterSidebarService.closeTab(props && props.tab ? props.tab.id : IMPORT_TAB_TYPE); },
-       });
-     }
- 
-@@ -1297,6 +1311,9 @@ window.__ModuleLoader__.load({
+@@ -1377,6 +1391,9 @@ window.__ModuleLoader__.load({
        const [page, setPage] = useState(0); // 当前页（0 基）
        const [pageSize, setPageSize] = useState(50); // 每页条数（50/100/500）
        const [collapsed, setCollapsed] = useState(new Set()); // 已折叠的工作区分组名
@@ -88,7 +79,7 @@ index 1adea0c..d3c444e 100644
  
        // 流式加载：后台扫描 + after 游标轮询——会话按发现顺序逐条 append 到缓冲，
        // 首屏不被全量扫描阻塞；每次请求只取 cursor 之后的增量（服务端 seq 去重）。
-@@ -1402,6 +1419,77 @@ window.__ModuleLoader__.load({
+@@ -1476,6 +1493,77 @@ window.__ModuleLoader__.load({
          }
        };
  
@@ -166,7 +157,7 @@ index 1adea0c..d3c444e 100644
        const toggle = (s) => {
          const key = itemKey(s);
          setSelected((prev) => {
-@@ -1487,8 +1575,7 @@ window.__ModuleLoader__.load({
+@@ -1561,8 +1649,7 @@ window.__ModuleLoader__.load({
            const key = itemKey(s);
            const checked = selected.has(key);
            const ts = s.lastActiveAt || s.createdAt;
@@ -176,7 +167,7 @@ index 1adea0c..d3c444e 100644
            const ctxTok = fmtTokenCount(s.contextTokens);
            return React.createElement("div", {
              key,
-@@ -1497,7 +1584,7 @@ window.__ModuleLoader__.load({
+@@ -1571,7 +1658,7 @@ window.__ModuleLoader__.load({
              onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
            },
              React.createElement(SourceBadge, {
@@ -185,7 +176,7 @@ index 1adea0c..d3c444e 100644
                onClick: () => toggle(s),
                title: sourceLabel(s.format),
                ariaLabel: sourceLabel(s.format) + " · " + t("multiSelect.title"),
-@@ -1510,19 +1597,33 @@ window.__ModuleLoader__.load({
+@@ -1584,19 +1671,33 @@ window.__ModuleLoader__.load({
                    ? React.createElement("span", { title: String(s.contextTokens) }, t("count.contextTokens", { n: ctxTok }))
                    : React.createElement("span", null, t("count.messages", { n: typeof s.messageCount === "number" ? s.messageCount : "—" })),
                  ...(s.gitBranch ? [React.createElement("span", { style: style.git }, s.gitBranch + (s.gitDirty ? " ✗" : ""))] : []),
@@ -232,7 +223,7 @@ index 1adea0c..d3c444e 100644
          });
          return React.createElement(React.Fragment, { key: group.name },
            React.createElement("div", {
-@@ -1604,7 +1705,13 @@ window.__ModuleLoader__.load({
+@@ -1691,7 +1792,13 @@ window.__ModuleLoader__.load({
                style: { ...style.primaryBtn, opacity: selected.size === 0 || importing ? 0.55 : 1 },
                disabled: selected.size === 0 || importing,
                onClick: () => doImport([...selected.values()].map(toItem)),
@@ -247,7 +238,7 @@ index 1adea0c..d3c444e 100644
            result && React.createElement("div", { style: style.result }, result),
            scanHint && React.createElement("div", { style: style.scanning }, scanHint),
            !stream.started && !error && !scanHint && React.createElement("div", { style: style.status }, t("loading")),
-@@ -1636,16 +1743,72 @@ window.__ModuleLoader__.load({
+@@ -1723,8 +1830,64 @@ window.__ModuleLoader__.load({
                disabled: importing,
                onChange: (e) => { setPageSize(Number(e.target.value)); setPage(0); },
              }, PAGE_SIZES.map((n) => React.createElement("option", { key: n, value: n }, String(n))))));
@@ -307,23 +298,14 @@ index 1adea0c..d3c444e 100644
 +              onClick: () => doDeleteSelected(selectedDeleteSelected),
 +            }, t("history.confirm.ok")))));
 +
-       if (embedded) {
-         return React.createElement("div", { ref: rootRef, style: { display: "flex", flexDirection: "column", minHeight: 0, flex: 1, position: "relative" } },
--          body);
-+          body, deleteDialog, deleteBatchDialog);
-       }
-       return React.createElement("div", { style: style.overlay, onClick: onClose },
-         React.createElement("div", { ref: rootRef, style: { ...style.panel, position: "relative" }, onClick: (e) => e.stopPropagation() },
-           React.createElement("div", { style: style.header },
-             React.createElement("span", { style: style.title }, t("panel.title")),
-             React.createElement("button", { style: style.close, onClick: onClose, title: t("close") }, "✕")),
--          body));
-+          body, deleteDialog, deleteBatchDialog));
+       return React.createElement("div", { ref: rootRef, style: { display: "flex", flexDirection: "column", minHeight: 0, flex: 1, position: "relative" } },
+-        body);
++        body, deleteDialog, deleteBatchDialog);
      }
  
      /** 插件 logo（assets/import.svg 内联，跟随 currentColor 适配明暗主题） */
 diff --git a/lib/panel.mjs b/lib/panel.mjs
-index e9bf8d7..d8ad2ab 100644
+index 5f8d470..370998d 100644
 --- a/lib/panel.mjs
 +++ b/lib/panel.mjs
 @@ -25,7 +25,7 @@ import { makeDiscoveryHost } from './discovery-host.mjs'
@@ -332,10 +314,10 @@ index e9bf8d7..d8ad2ab 100644
  import { describeImportPrefs, readImportPrefs, updateImportPrefs, INJECT_MODES } from './import-prefs.mjs'
 -import { listImportHistory, purgeAllImports, purgeBySourcePath, deleteImportedSession } from './purge.mjs'
 +import { listImportHistory, purgeAllImports, purgeBySourcePath, deleteImportedSession, deleteSourceFile } from './purge.mjs'
+ import { isTransferTarget, transferDiscoveryItem } from './transfer.mjs'
  
- // 客户端来源 id（claude-code 等 19 个）→ discovery format 短名（FORMATS）。
- const SOURCE_FORMAT = {
-@@ -362,6 +362,40 @@ export function registerPanelRoutes(ctx, ws, registryDir) {
+ // 客户端来源 id（claude-code 等）→ discovery format 短名（权威清单见 discovery 的 FORMATS）。
+@@ -402,6 +402,40 @@ export function registerPanelRoutes(ctx, ws, registryDir) {
        }
      },
    })
@@ -377,7 +359,7 @@ index e9bf8d7..d8ad2ab 100644
      kind: 'exact',
      path: '/api-import/prefs',
 diff --git a/lib/purge.mjs b/lib/purge.mjs
-index 81564ef..f6213df 100644
+index 1b59ad0..170b3c5 100644
 --- a/lib/purge.mjs
 +++ b/lib/purge.mjs
 @@ -7,10 +7,11 @@
@@ -391,9 +373,9 @@ index 81564ef..f6213df 100644
  import { loadImports, removeImport, saveImports, unwrapRecord, readSessionEvents, canReadSessionEvents } from './imports.mjs'
 +import { clearScanCache, SCAN_CACHE_FILE } from './discovery.mjs'
  
- const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,127}$/
- 
-@@ -366,3 +367,27 @@ export async function purgeBySourcePath(ctx, registryDir, sourcePath, { confirm
+ // DSH 会话 id 合法字符：支持字母、数字、连字符以及下划线（mintSessionId 会引入下划线），长 1~128。
+ const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+@@ -367,3 +368,27 @@ export async function purgeBySourcePath(ctx, registryDir, sourcePath, { confirm
    await removeImport(registryDir, sourcePath)
    return { sourcePath, deleted, failed, results }
  }
@@ -421,3 +403,177 @@ index 81564ef..f6213df 100644
 +  }
 +  return { sourcePath, sourceDeleted }
 +}
+diff --git a/sync.sh b/sync.sh
+new file mode 100755
+index 0000000..a55205f
+--- /dev/null
++++ b/sync.sh
+@@ -0,0 +1,147 @@
++#!/usr/bin/env bash
++#==============================================================================
++# sync.sh — dsh-chat-import 上游同步脚本
++#==============================================================================
++#
++# 功能：
++#   将本地修改同步到上游最新代码。采用 **Patch-First, Smart-Merge** 策略：
++#   优先用 patch 方案保持干净的线性历史；若 patch 冲突则按文件类型智能处理。
++#
++# 作用范围：
++#   - 仅针对当前仓库（dsh-chat-import）
++#   - 需要 remote 配置：upstream（原上游）、origin（你的 fork）
++#   - 需要分支：custom（本地修改）、main（跟踪 upstream/main）
++#   - 需要文件：sync.patch（本地修改的快照）
++#
++# 实现策略（Patch-First, Smart-Merge）：
++#
++#   ── 策略 1：Patch Apply（优先）──────────────────────────────
++#   步骤：
++#     1. git checkout main && git reset --hard upstream/main
++#     2. git checkout -b custom-new main
++#     3. git apply sync.patch
++#     4. git branch -f custom custom-new && git checkout custom
++#
++#   ── 策略 2：Smart Merge（回退，按文件类型处理）──────────────
++#   README 文件（README*.md）：
++#     - 保持本地头部的 Fork 维护说明（> [!NOTE] 块）
++#     - 其余部分全部使用上游版本
++#
++#   其他文件：
++#     - 列出上游与本地的具体差异
++#     - 冲突以本地优先（-X ours）
++#
++#==============================================================================
++
++set -e
++
++SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
++cd "$SCRIPT_DIR"
++
++REPO_NAME="$(basename "$SCRIPT_DIR")"
++PATCH_FILE="$SCRIPT_DIR/sync.patch"
++
++echo "=== 同步 $REPO_NAME (Patch-First, Smart-Merge) ==="
++
++# Step 1: 拉取上游最新
++echo "[1/4] 拉取上游最新代码..."
++git fetch upstream
++
++# Step 1.5: 暂存本地未提交的修改
++echo "[1.5] 暂存本地未提交修改..."
++STASHED=false
++if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
++    git stash push -m "sync.sh auto-stash" -- sync.patch sync.sh 2>/dev/null || true
++    STASHED=true
++fi
++
++# Step 2: 重置 main 到上游最新
++echo "[2/4] 重置 main 到 upstream/main..."
++git checkout main
++git reset --hard upstream/main
++
++# Step 3: 尝试 Patch Apply（策略 1）
++echo "[3/4] 尝试 Patch Apply..."
++git checkout -b custom-new main
++
++if git apply --check "$PATCH_FILE" 2>/dev/null; then
++    git apply "$PATCH_FILE"
++    git branch -f custom custom-new
++    git checkout custom
++    git branch -D custom-new 2>/dev/null || true
++    echo "✅ Patch 应用成功（策略 1：线性历史）"
++else
++    # Patch 冲突，进入策略 2
++    echo "⚠️  Patch 存在冲突，进入 Smart Merge..."
++    git checkout custom
++    git branch -D custom-new 2>/dev/null || true
++
++    echo "[3/4] Smart Merge 处理冲突..."
++
++    # 先执行 merge 获取冲突列表，但不提交
++    git merge main --no-commit --no-ff 2>/dev/null || true
++
++    # 获取冲突文件列表
++    CONFLICTS=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
++
++    if [ -z "$CONFLICTS" ]; then
++        git add -A
++        git commit -m "merge: sync upstream/main $(date +%Y-%m-%d)" 2>/dev/null || true
++    else
++        for f in $CONFLICTS; do
++            case "$f" in
++                README*|readme*)
++                    echo ""
++                    echo "📄 $f — README 文件：保持 Fork 说明 + 其余使用上游版本"
++                    FORK_HEADER=$(awk '/^> \[!NOTE\]/{p=1} p{print} /^$/{if(p)exit}' "$f" 2>/dev/null || true)
++                    if [ -n "$FORK_HEADER" ]; then
++                        git show "upstream/main:$f" > "$f.upstream"
++                        printf '%s\n' "$FORK_HEADER" > "$f.header"
++                        cat "$f.header" "$f.upstream" > "$f"
++                        rm -f "$f.upstream" "$f.header"
++                        echo "   ✅ Fork 说明已保留，其余使用上游版本"
++                    else
++                        git checkout upstream/main -- "$f"
++                        echo "   ✅ 无 Fork 说明，使用上游版本"
++                    fi
++                    git add "$f"
++                    ;;
++                *)
++                    echo ""
++                    echo "📄 $f — 其他冲突文件"
++                    echo "   ┌─ 上游修改（upstream/main）："
++                    git show "upstream/main:$f" 2>/dev/null | head -30 | diff - "$f" 2>/dev/null | head -20 | sed 's/^/   │ /' || true
++                    echo "   └─ 本地版本优先（ours）"
++                    git checkout --ours "$f"
++                    git add "$f"
++                    ;;
++            esac
++        done
++
++        git add -A
++        git commit -m "merge: sync upstream/main (smart merge, $(date +%Y-%m-%d))" 2>/dev/null || true
++        echo "✅ Smart Merge 完成"
++    fi
++fi
++
++# 恢复暂存的修改
++if [ "$STASHED" = true ]; then
++    git stash pop 2>/dev/null || true
++fi
++
++# Step 4: 重新生成 patch
++echo "[4/4] 重新生成 sync.patch..."
++git diff upstream/main...custom > "$PATCH_FILE"
++echo "✅ sync.patch 已更新 ($(wc -l < "$PATCH_FILE") 行)"
++
++# 推送到 fork
++read -p "是否推送到 origin/custom? [y/N] " -n 1 -r < /dev/tty
++echo
++if [[ $REPLY =~ ^[Yy]$ ]]; then
++    git push origin custom
++    echo "✅ 已推送到 origin/custom"
++else
++    echo "跳过推送"
++fi
++
++echo "=== $REPO_NAME 同步完成 ==="
+diff --git a/test/goose.test.mjs b/test/goose.test.mjs
+index 20599f3..a11c142 100644
+--- a/test/goose.test.mjs
++++ b/test/goose.test.mjs
+@@ -253,13 +253,13 @@ test('非 Goose 结构（无 messages 数组 / 非法 JSON）→ skipReason，
+ test('路径解析：GOOSE_PATH_ROOT 仅绝对路径生效，三平台默认根各自正确', () => {
+   const home = join('home', 'u')
+   const p = join   // 本机平台口径（跨平台断言用 posix.join/win32.join 显式指定）
+-  assert.equal(gooseDataDir(home, { GOOSE_PATH_ROOT: join('rel', 'root') }, process.platform),
++  assert.equal(gooseDataDir(home, { GOOSE_PATH_ROOT: join('rel', 'root') }, 'linux'),
+     p(home, '.local', 'share', 'goose'))
+   assert.equal(gooseDataDir(home, { GOOSE_PATH_ROOT: 'D:\\g' }, 'win32'), 'D:\\g\\data')
+   assert.equal(gooseDataDir('/h/u', { GOOSE_PATH_ROOT: '/mnt/d/g' }, 'linux'), '/mnt/d/g/data')
+-  assert.equal(gooseSessionsDir(home, {}, process.platform), p(home, '.local', 'share', 'goose', 'sessions'))
++  assert.equal(gooseSessionsDir(home, {}, 'linux'), p(home, '.local', 'share', 'goose', 'sessions'))
+   assert.equal(gooseSessionsDir('/h/u', {}, 'darwin'), '/h/u/Library/Application Support/Block/goose/sessions')
+   assert.equal(gooseSessionsDir('C:\\Users\\u', { APPDATA: 'C:\\Users\\u\\AppData\\Roaming' }, 'win32'),
+     'C:\\Users\\u\\AppData\\Roaming\\Block\\goose\\data\\sessions')
+-  assert.equal(gooseDefaultDbPath(home, {}, process.platform), p(home, '.local', 'share', 'goose', 'sessions', 'sessions.db'))
++  assert.equal(gooseDefaultDbPath(home, {}, 'linux'), p(home, '.local', 'share', 'goose', 'sessions', 'sessions.db'))
+ })
