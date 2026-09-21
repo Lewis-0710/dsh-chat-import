@@ -87,7 +87,6 @@ test('readCrushSessions：root 会话摘要 + Unix 秒时间戳；子会话与 t
     assert.deepEqual(rows.map((r) => r.id).sort(), [SID, 'second'])
     const first = rows.find((r) => r.id === SID)
     assert.equal(first.title, 'Add retry to fetch')
-    assert.equal(first.messageCount, 4)
     assert.equal(first.createdAt, CREATED * 1000) // Unix 秒 → 毫秒
     assert.equal(first.updatedAt, UPDATED * 1000)
   })

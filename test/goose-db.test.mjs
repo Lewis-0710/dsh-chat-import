@@ -75,7 +75,7 @@ function messageRow(over = {}) {
   }
 }
 
-test('readGooseSessions：「CURRENT_TIMESTAMP 文本按 UTC 解析」+ 标题 name 优先 + 消息数口径', () => {
+test('readGooseSessions：「CURRENT_TIMESTAMP 文本按 UTC 解析」+ 标题 name 优先', () => {
   withTmp((root) => {
     const dbPath = makeDb(join(root, 'goose', 'sessions', 'sessions.db'), {
       sessions: [sessionRow()],
@@ -92,7 +92,6 @@ test('readGooseSessions：「CURRENT_TIMESTAMP 文本按 UTC 解析」+ 标题 n
     assert.equal(s.id, SID)
     assert.equal(s.title, '修登录页分页')
     assert.equal(s.cwd, CWD)
-    assert.equal(s.messageCount, 2)
     // SQLite CURRENT_TIMESTAMP 是 UTC 但不带时区 → 必须按 UTC 解析（否则按本地时区偏几个小时）
     assert.equal(s.createdAt, Date.parse('2026-04-22T17:40:00Z'))
     assert.equal(s.updatedAt, Date.parse('2026-04-22T17:42:10Z'))
@@ -164,7 +163,6 @@ CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, ro
     assert.equal(s.name, '') // 旧库没有标题列（中间 JSON 保持 goose 原生字段名 name/description）
     assert.equal(s.workingDir, CWD)
     assert.equal(s.messages.length, 1)
-    assert.equal(readGooseSessions(dbPath)[0].messageCount, 1)
   })
 })
 

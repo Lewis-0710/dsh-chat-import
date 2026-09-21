@@ -557,7 +557,6 @@ export interface DiscoveredSession {
   cwd?: string | null
   createdAt?: number | null
   lastActiveAt?: number | null
-  messageCount?: number | null
   sourcePath: string
   gitBranch?: string | null
   gitDirty?: boolean | null

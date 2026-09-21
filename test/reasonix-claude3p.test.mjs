@@ -128,13 +128,11 @@ test('REQ-45 发现：Claude-3p 元数据 → cliSessionId 反查 jsonl 合并�
   assert.equal(linked.title, '修复登录')
   assert.equal(linked.cwd, hostAbs('C:/work/proj-a'))
   assert.equal(linked.sourcePath, jsonlPath)
-  assert.equal(linked.messageCount, null) // jsonl 只读文件头
 
   const metaOnly = r.sessions.find((s) => s.sessionId === 'local_nolink')
   assert.ok(metaOnly)
-  // 无 jsonl → 降级为元数据会话（sourcePath = 元数据 json，messageCount 0）
+  // 无 jsonl → 降级为元数据会话（sourcePath = 元数据 json，无消息可导）
   assert.equal(metaOnly.sourcePath, join(root, 'acct', 'org', 'local_nolink.json'))
-  assert.equal(metaOnly.messageCount, 0)
   assert.equal(metaOnly.title, '无 jsonl 的元数据会话')
 })
 

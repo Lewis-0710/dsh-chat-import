@@ -409,8 +409,9 @@ test('scan_discover：目录探测 claude、注入过滤、schema 稳定、零�
   assert.equal(aaa.title, '帮我重构这个模块')
   assert.equal(aaa.project, 'claude-proj') // 记录内 cwd basename（REQ-40 项目名提取）
   assert.equal(aaa.importStatus, 'not-imported') // registry 为空
-  assert.equal(aaa.messageCount, null) // claude 只读文件头，不计数
   assert.equal(aaa.sourcePath, root + '\\proj-a\\sess-aaa.jsonl')
+  // 面板不再展示消息条数 → 发现条目不带 messageCount（schema 同步剔除）
+  assert.ok(!('messageCount' in aaa))
 
   const bbb = first.sessions.find((s) => s.sessionId === 'sess-bbb')
   assert.equal(bbb.title, '真实问题') // 注入首行被过滤（REQ-40 标题提取）
@@ -841,7 +842,7 @@ function continueSession(history, over = {}) {
   })
 }
 const continueIndex = JSON.stringify([
-  { sessionId: CID, title: '修登录页分页', dateCreated: String(CONTINUE_TS), workspaceDirectory: CCWD, messageCount: 2 },
+  { sessionId: CID, title: '修登录页分页', dateCreated: String(CONTINUE_TS), workspaceDirectory: CCWD},
 ])
 
 test('import_continue 单文件导入：落盘、归组、索引带出的创建时间、返回值符合 schema', async () => {

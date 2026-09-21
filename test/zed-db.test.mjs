@@ -82,7 +82,6 @@ test('readZedThreads：标题取 summary 列、cwd 取 folder_paths 首项、时
     assert.deepEqual(first.folderPaths, ['/home/u/proj'])
     assert.equal(first.createdAt, TS)
     assert.equal(first.updatedAt, TS)
-    assert.equal(first.messageCount, null) // 线程库没有消息数列，发现层不为此解压 blob
     const multi = rows.find((r) => r.id === 'multi')
     assert.equal(multi.cwd, '/a') // order=1,0 → /a 在前
     assert.deepEqual(multi.folderPaths, ['/a', '/b'])

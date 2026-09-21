@@ -250,21 +250,19 @@ test('非 Continue 结构（无 history 数组 / 非法 JSON）→ skipReason，
 
 test('readContinueIndex：解析索引数组，脏条目跳过（非数组 / 缺 sessionId）', () => {
   const index = readContinueIndex(JSON.stringify([
-    { sessionId: SID, title: '修登录页', dateCreated: String(TS), workspaceDirectory: CWD, messageCount: 7 },
+    { sessionId: SID, title: '修登录页', dateCreated: String(TS), workspaceDirectory: CWD},
     { title: '缺 id' },
     null,
-    { sessionId: 'other', title: '', dateCreated: '2026-09-15T00:00:00.000Z', messageCount: 'x' },
+    { sessionId: 'other', title: '', dateCreated: '2026-09-15T00:00:00.000Z'},
   ]))
   assert.equal(index.size, 2)
   const first = index.get(SID)
   assert.equal(first.title, '修登录页')
   assert.equal(first.createdAt, TS)
   assert.equal(first.cwd, CWD)
-  assert.equal(first.messageCount, 7)
   const second = index.get('other')
   assert.equal(second.title, '')
   assert.equal(second.cwd, null)
-  assert.equal(second.messageCount, null)
   assert.equal(second.createdAt, Date.parse('2026-09-15T00:00:00.000Z'))
 
   assert.equal(readContinueIndex('{oops').size, 0)

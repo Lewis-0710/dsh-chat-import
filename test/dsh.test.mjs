@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { convertDshJsonl } from '../lib/convert/dsh.mjs'
 import { defaultRoots, discoverSessions } from '../lib/discovery.mjs'
-import { dshSessionLogVersion, isDshSessionFile, readDshText } from '../lib/sources/dsh.mjs'
+import { dshSessionLogVersion, isDshSessionFile, readDshText, decodeZstdText } from '../lib/sources/dsh.mjs'
 
 const SESSION_LINES = [
   { type: 'session', id: 'session-dsh-test', cwd: '/tmp/proj', createdAt: 1700000000000 },
@@ -169,7 +169,6 @@ test('discoverSessions format=dsh 发现 session.jsonl 会话', async () => {
     assert.equal(found.sessions[0].format, 'dsh')
     assert.equal(found.sessions[0].sessionId, 'session-dsh-test')
     assert.equal(found.sessions[0].title, 'DSH 导入测试')
-    assert.equal(found.sessions[0].messageCount, 2)
     assert.equal(found.sessions[0].sourcePath, file)
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -225,13 +224,26 @@ test('discoverSessions format=dsh：超过阈值的 .zstd 不解压，按目录�
     const big = found.sessions.find((s) => s.sessionId === 'session-large-test')
     assert.ok(big, '大文件按目录名兜底出现在列表')
     assert.equal(big.title, null)
-    assert.equal(big.messageCount, 0)
     assert.equal(big.project, 'big-proj')
     // 小文件 sessionId 来自日志头（权威）；大文件兜底目录名——DSH 布局两者同构
     assert.equal(found.sessions.find((s) => s.sessionId === 'session-dsh-test').title, 'DSH 导入测试')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('decodeZstdText：原生异步解码与 fzstd 回退产出同一文本（Node < 22.15 回退路径）', async () => {
+  const fixture = fileURLToPath(new URL('./fixtures/session.jsonl.zstd', import.meta.url))
+  const buf = await readFile(fixture)
+  const native = await decodeZstdText(buf)
+  const fallback = await decodeZstdText(buf, { preferNative: false })
+  assert.equal(native, fallback, '两条解码路径必须给出同一 UTF-8 文本')
+  assert.match(native, /"id": "session-zstd-test"/)
+  assert.equal(native.split('\n').filter(Boolean).length, 4)
+})
+
+test('decodeZstdText：非法载荷大声抛错（不静默返回空文本）', async () => {
+  await assert.rejects(() => decodeZstdText(Buffer.from('not a zstd frame')), /./)
 })
 
 test('discoverSessions format=dsh：导入产物目录（import-<id>）不当源扫出', async () => {
@@ -251,8 +263,9 @@ test('discoverSessions format=dsh：导入产物目录（import-<id>）不当源
 // session.jsonl.zstd 的最小 zstd 帧 fixture（Python zstandard 压缩
 // session/turn/user/title 四条 JSONL 记录生成，raw 431B → zstd 243B），
 // 以二进制文件存放避免 dsh.so 把超长 base64 字面量判为疑似混淆载荷。
-// 路线 A 用 fzstd 纯 JS 解压替代系统 zstd 二进制（child_process 判为 critical）。
-test('readDshText 用 fzstd 纯 JS 解压 session.jsonl.zstd', async () => {
+// 路线 A 用 zstd 解压替代系统 zstd 二进制（child_process 判为 critical）：
+// decodeZstdText 优先 node:zlib 原生异步解码（不占事件循环），Node < 22.15 回退 fzstd。
+test('readDshText 解压 session.jsonl.zstd（原生 zstd / fzstd 回退同一文本）', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-zstd-test-'))
   try {
     const file = join(root, 'session.jsonl.zstd')

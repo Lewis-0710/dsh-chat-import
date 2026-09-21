@@ -4,6 +4,9 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 ## [Unreleased]
 
+- 面板不再展示消息条数后，发现层同步去掉为统计它而做的整读：SQLite 源（opencode 系 / zcode / hermes）改走**会话摘要读取器**——只查 session 表加每会话一条「最近消息时间」聚合，不再逐会话读出 message/part 正文并逐 cell JSON.parse（本机 zcode 实测同步块 185ms → 1ms）；goose 发现路径不再逐会话做 userVisible 计数。dsh 的 `.zstd` 会话改走 **node:zlib 原生异步 zstd 解码**（libuv 线程池，Node < 22.15 自动回退 fzstd），本机 60 个会话实测同步阻塞 3.8s → 异步 0.2s 且不再顶住事件循环。`scan_discover` 输出条目与 schema 同步去掉 `messageCount`。
+- 发现层尾部读取（claude / kimi 的 context token）改为 chunks 数组滚动窗口：原实现每块 `(tail+chunk).slice(-n)` 会对整条尾串全量复制，大 transcript 的尾部读取主要开销就在这块 memcpy 上。
+
 - 底栏再收：总数不足 500（换档没有意义）时连「每页」选择器一起隐藏，条高由 8px 内边距收到 4px。
 
 - 工具栏两个筛选改成「标签即按钮」：按钮文字就是「筛选：路径」/「筛选：时间」，选中后补「· 值」后缀（只是标签旁边再放一颗芯片，两段冗余）。
