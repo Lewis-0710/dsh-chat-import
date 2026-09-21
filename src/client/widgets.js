@@ -1,8 +1,8 @@
     // 窄宽降级用内联 SVG 图标（stroke 风格，继承 currentColor 随按钮文字色走明暗主题）。
-    function Icon({ name, size = 14 }) {
+    function Icon({ name, size = 14, strokeWidth = 2 }) {
       const common = {
         width: size, height: size, viewBox: "0 0 24 24", fill: "none",
-        stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round",
+        stroke: "currentColor", strokeWidth, strokeLinecap: "round", strokeLinejoin: "round",
         xmlns: "http://www.w3.org/2000/svg", "aria-hidden": true, style: { flex: "none", display: "block" },
       };
       const shapes = {
@@ -24,6 +24,8 @@
           React.createElement("circle", { cx: 11, cy: 11, r: 7 }),
           React.createElement("path", { d: "m21 21-4.3-4.3" })),
         check: React.createElement("path", { d: "m4.5 12.5 5 5 10.5-11" }),
+        // 折叠箭头（分组头，悬停才出现；收起时整体 rotate(-90deg)）
+        chevronDown: React.createElement("path", { d: "m6 9 6 6 6-6" }),
       };
       return React.createElement("svg", common, shapes[name]);
     }

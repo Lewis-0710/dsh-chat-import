@@ -134,7 +134,7 @@
         !loading && entries.length > 0 && React.createElement("div", { style: { ...style.list, paddingTop: "8px" } },
           entries.map((e) => React.createElement("div", {
             key: e.sessionId + "\u0000" + e.sourcePath,
-            style: { ...style.item, flexDirection: "column", alignItems: "stretch", gap: "4px" },
+            style: { ...style.historyItem, flexDirection: "column", alignItems: "stretch", gap: "4px" },
           },
             React.createElement("div", { style: { fontSize: "13px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
               e.title || t("noTitle")),
@@ -160,7 +160,7 @@
      *  当标签。弹层是同一套二级弹层口径：12px 圆角容器、30px 行高、6px 行圆角、品牌标 +
      *  名称 + 当前项末尾 ✓，顶部保留搜索框（自动聚焦）。替代原生 <select>：来源 / 目标 /
      *  工作区选项多时既好看也能检索。受控组件：value + onChange；点击外部 / Esc 关闭。 */
-    function SearchableSelect({ value, options, onChange, disabled, title, colors, searchPlaceholder, noMatchLabel }) {
+    function SearchableSelect({ value, options, onChange, disabled, title, colors, searchPlaceholder, noMatchLabel, searchable = true, triggerLabel }) {
       const style = makeStyles(colors);
       const [open, setOpen] = useState(false);
       const [filter, setFilter] = useState("");
@@ -178,6 +178,7 @@
         const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); setFilter(""); } };
         document.addEventListener("mousedown", onDown);
         document.addEventListener("keydown", onKey);
+        // 短菜单（searchable: false）不渲染搜索框，自然也没有需要聚焦的输入
         if (inputRef.current) inputRef.current.focus();
         return () => {
           document.removeEventListener("mousedown", onDown);
@@ -222,9 +223,10 @@
           onMouseLeave: () => setHot(false),
           onClick: () => { setOpen(!open); setFilter(""); setHover(null); },
         },
-          React.createElement("span", { style: style.selectValue }, current ? current.label : "")),
+          React.createElement("span", { style: style.selectValue },
+            triggerLabel !== undefined ? triggerLabel : (current ? current.label : ""))),
         open && React.createElement("div", { ref: popRef, style: style.selectPopover },
-          React.createElement("div", { style: style.selectSearchRow },
+          searchable ? React.createElement("div", { style: style.selectSearchRow },
             React.createElement("span", { style: style.selectSearchIcon }, React.createElement(Icon, { name: "search", size: 13 })),
             React.createElement("input", {
               ref: inputRef, value: filter, placeholder: searchPlaceholder,
@@ -245,8 +247,8 @@
                 }
               },
               style: style.selectSearchInput,
-            })),
-          React.createElement("div", { style: style.selectDivider }),
+            })) : null,
+          searchable ? React.createElement("div", { style: style.selectDivider }) : null,
           React.createElement("div", { style: { ...style.selectList, maxHeight: listMax + "px" }, role: "listbox" },
             shown.length === 0 && React.createElement("div", { style: style.selectEmpty }, noMatchLabel),
             shown.map((o) => React.createElement("button", {

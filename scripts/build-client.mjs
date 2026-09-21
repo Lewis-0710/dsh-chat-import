@@ -13,7 +13,11 @@
 // 用法：
 //   node scripts/build-client.mjs          # 组装并写 lib/client.js
 //   node scripts/build-client.mjs --check  # 只校验产物新鲜度（npm run build 用）
-import { readFileSync, writeFileSync } from 'node:fs'
+//   node scripts/build-client.mjs --out=dev/preview/client.variant.js
+//                                          # 写别处：做测量/实验时用，避免把实验配置带进
+//                                          # 宿主正在 HMR 加载的 lib/client.js（写它会触发宿主
+//                                          # 重新加载面板，实验配置会被真实 UI 看到）
+import { readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
@@ -37,7 +41,7 @@ const FRAGMENTS = [
   'entry.js',     // ImportButton + apply()（槽注册、tab 类型注册）
 ]
 
-const HEADER = `/* global window, document, fetch, getComputedStyle, MutationObserver, ResizeObserver, setTimeout, Worker, Blob */
+const HEADER = `/* global window, document, fetch, getComputedStyle, MutationObserver, ResizeObserver, setTimeout, requestAnimationFrame, cancelAnimationFrame, Worker, Blob */
  // lib/client.js — DSH Web 侧面板 bundle：右侧栏「导入会话」tab，支持发现、搜索、分页、多选导入。
  // 纯前端，只消费注入的 slots / locale / react，不 import DSH host 模块。
  //
@@ -49,7 +53,7 @@ window.__ModuleLoader__.load({
     var exports = module.exports;
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
     const React = require("react");
-    const { useState, useEffect, useLayoutEffect, useRef } = React;
+    const { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } = React;
 `
 
 const FOOTER = `    module.exports = { name, inject, apply };
@@ -88,6 +92,10 @@ try {
   process.exit(1)
 }
 
+const outArg = process.argv.find((arg) => arg.startsWith('--out='))
+/** 写入目标：默认 lib/client.js；--out= 时写别处（不参与新鲜度校验）。 */
+const TARGET = outArg === undefined ? OUT : resolve(root, outArg.slice('--out='.length))
+
 if (process.argv.includes('--check')) {
   const onDisk = readFileSync(OUT, 'utf8').replace(/\r\n/g, '\n')
   if (onDisk !== bundle) {
@@ -96,6 +104,22 @@ if (process.argv.includes('--check')) {
   }
   console.log(`build-client: OK — lib/client.js 与 src/client/（${FRAGMENTS.length} 片）同步`)
 } else {
-  writeFileSync(OUT, bundle)
-  console.log(`build-client: built lib/client.js（${bundle.split('\n').length - 1} 行，${bundle.length} 字节，${FRAGMENTS.length} 片）`)
+  // 原子写：先写同目录临时文件，再 rename 覆盖目标。
+  //
+  // 为什么必须原子（血泪）：宿主的客户端 HMR 会轮询 lib/client.js 的 stat（mtime/size），
+  // 一旦变化就 clientModules.rebuilt(id) —— 注册表随即 readFileSync 重新取内容，按「内容
+  // 哈希」作为版本号发给浏览器，并带一年 immutable 缓存。直接 writeFileSync 覆写 180KB+
+  // 会留出一个「读者拿到半截 bundle」的窗口：那一版会被当成合法版本发出去并被浏览器长期
+  // 缓存（URL 由哈希决定，正常构建也换不回它），表现就是「构建一次有概率崩界面」。
+  // rename 在同一目录内是原子的：读者要么看到旧版本，要么看到完整的新版本。
+  const tmp = `${TARGET}.tmp-${process.pid}`
+  writeFileSync(tmp, bundle)
+  try {
+    renameSync(tmp, TARGET)
+  } catch (error) {
+    try { unlinkSync(tmp) } catch { /* 临时文件可能已不存在；下面原样抛出真正的失败原因 */ }
+    throw error
+  }
+  const rel = TARGET === OUT ? 'lib/client.js' : TARGET.slice(root.length + 1).replace(/\\/g, '/')
+  console.log(`build-client: built ${rel}（${bundle.split('\n').length - 1} 行，${bundle.length} 字节，${FRAGMENTS.length} 片，原子写）`)
 }

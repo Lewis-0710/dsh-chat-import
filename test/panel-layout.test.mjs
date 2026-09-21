@@ -77,7 +77,7 @@ test('选择区只剩一行（来源 + 落点），无分隔线（组边界由�
 test('选择区一行读完：来源下拉 → 连接词「导入到」→ 落点下拉；工作区筛选在筛选层', () => {
   const body = panelBody()
   const selects = [...body.matchAll(/SearchableSelect/g)].map((m) => m.index)
-  assert.equal(selects.length, 3, '面板应有来源 / 落点 / 工作区三个下拉')
+  assert.equal(selects.length, 4, '面板应有来源 / 落点 / 路径筛选 / 时间筛选四个下拉')
   const joins = [...body.matchAll(/style\.rowJoin/g)].map((m) => m.index)
   assert.equal(joins.length, 2, '本行有两个连接词：「从」与「导入到」')
   assert.ok(joins[0] < selects[0], '「从」应排在来源下拉之前')
@@ -88,7 +88,11 @@ test('选择区一行读完：来源下拉 → 连接词「导入到」→ 落�
   const toolbar = body.slice(toolbarAt, listAt)
   assert.equal((toolbar.match(/toolBtn\(/g) || []).length, 5, '工具栏的五个动作按钮走 toolBtn')
   assert.ok(toolbar.indexOf('t("workspace.title")') > toolbar.lastIndexOf('toolBtn('),
-    '工作区筛选不是 toolBtn 条目：窄面板下工具按钮降级成图标时它仍保持文字')
+    '路径筛选不是 toolBtn 条目：窄面板下工具按钮降级成图标时它仍保持文字')
+  assert.ok(toolbar.indexOf('t("filter.time")') > toolbar.lastIndexOf('toolBtn('),
+    '时间筛选同样不经 toolBtn，窄面板下也保持文字')
+  assert.ok(toolbar.indexOf('t("workspace.title")') < toolbar.indexOf('t("filter.time")'),
+    '两个筛选控件相邻：路径在前、时间在后')
   assert.equal(body.includes('selected.count'), false, '已选条数由底部主按钮承担，工具栏不再重复显示')
 })
 

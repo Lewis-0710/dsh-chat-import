@@ -113,10 +113,22 @@
       },
       // 工具栏：全选 / 清空 / 刷新 + 已选计数
       // position: relative —— 末位的工作区筛选在这里，弹层对着工具栏定位（触发器根节点不定位）
-      toolbar: { position: "relative", display: "flex", gap: "6px", alignItems: "center", padding: "8px 12px", borderBottom: "1px solid " + C.border },
+      toolbar: { position: "relative", display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", padding: "8px 12px", borderBottom: "1px solid " + C.border },
       toolBtn: {
         background: "transparent", border: "1px solid " + C.border, color: C.text,
         borderRadius: "8px", padding: "4px 10px", fontSize: "13px", cursor: "pointer",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      },
+      // 动作按钮组：吃满芯片之外的全部宽度——它的实测宽度就是「按钮还能用多少地方」，
+      // 降级判据取它而不是面板宽度（芯片宽度随工作区名变化）
+      toolbarActions: { display: "flex", gap: "6px", alignItems: "center", flex: "1 1 auto", minWidth: 0 },
+      // 量「文字形态五个按钮需要多宽」的隐藏探针：绝对定位（不参与排版）、不可见、不可点。
+      // 用真的 button 元素，字体与真实按钮完全一致
+      // width: max-content —— 绝对定位盒默认是 shrink-to-fit，会被工具栏宽度钳住，量出来的
+      // 就是「钳制值」而不是「文字形态真正需要多宽」；max-content 让它按内容撑开
+      toolbarProbe: {
+        position: "absolute", left: 0, top: 0, width: "max-content",
+        display: "flex", gap: "6px", visibility: "hidden", pointerEvents: "none", whiteSpace: "nowrap",
       },
       // 工具栏末位的工作区筛选：与左侧动作按钮用 auto 外边距分开；限宽保护按钮，
       // 且它不经 toolBtn（窄面板下也保持文字，不降级成图标）
@@ -140,35 +152,92 @@
       // 顶部不留 padding：工作区分组头 sticky 到 top:0 后与列表顶缘齐平，背景
       // 完整盖住背后滚过的行，不再在顶部露出 8px 缝隙泄漏列表背后的内容。
       list: { flex: "1", minHeight: "0", overflowY: "auto", padding: "0 8px 8px" },
-      // 工作区文件夹分组头
+      // 工作区分组头（对标皮肤工作区行）：28px 高、0 6px 内边距、6px 圆角；它是标题不是
+      // 目标——悬停不浮背景矩形，提示靠文字变亮 + 悬停才露出的折叠箭头
       group: {
-        display: "flex", alignItems: "center", gap: "6px", padding: "8px 10px 4px",
-        fontSize: "12px", fontWeight: 600, color: C.dim, position: "sticky", top: 0,
-        background: C.bg, zIndex: 1,
+        display: "flex", alignItems: "center", gap: "4px", height: "28px", minHeight: "28px",
+        padding: "0 6px", marginTop: "6px", borderRadius: "6px",
+        fontSize: "13px", lineHeight: "18px", fontWeight: 500, color: C.dim,
+        position: "sticky", top: 0, background: C.bg, zIndex: 1, cursor: "pointer",
       },
+      groupLabel: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", transition: "color .12s ease" },
+      groupChevron: { display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", width: "14px", height: "14px" },
       groupCount: { marginLeft: "auto", fontSize: "11px", fontWeight: 400, color: C.dimmer },
-      item: { display: "flex", gap: "8px", alignItems: "flex-start", padding: "8px 10px", borderRadius: "8px", marginBottom: "2px" },
+      // 会话行（对标皮肤会话行）：28px 高、0 6px 内边距、6px 圆角、行距 1px
+      item: {
+        display: "flex", alignItems: "center", height: "28px", minHeight: "28px",
+        padding: "0 6px", borderRadius: "6px", marginTop: "1px",
+      },
       itemMain: { flex: "1", minWidth: "0" },
-      itemTitle: { fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+      // 标题默认 label-secondary，悬停 / 选中才变 label-primary（皮肤里就是这条规则）
+      itemTitle: {
+        fontSize: "13px", lineHeight: "18px", margin: "0 4px", color: C.dim,
+        transition: "color .12s ease", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      },
+      itemTitleActive: { color: C.text },
+      // 历史面板仍是两行式条目（沿用旧行样式）
+      historyItem: { display: "flex", gap: "8px", alignItems: "flex-start", padding: "8px 10px", borderRadius: "8px", marginBottom: "2px" },
       itemMeta: { color: C.dimmer, fontSize: "12px", marginTop: "2px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" },
-      badge: { marginLeft: "auto", fontSize: "11px", padding: "1px 6px", borderRadius: "8px", border: "1px solid " + C.border, color: C.dim, flex: "none" },
-      git: { fontSize: "11px", padding: "0 6px", borderRadius: "8px", border: "1px dashed " + C.border, color: C.dim, flex: "none" },
+      // 行右侧槽位：默认放相对时间，悬停时换成导入 / 同步按钮——同一个槽位互斥，布局不跳
+      rowSlot: {
+        position: "relative", flex: "none", display: "flex", alignItems: "center",
+        justifyContent: "flex-end", minWidth: "56px", marginLeft: "auto",
+      },
+      rowTime: { color: C.dimmer, fontSize: "11px", lineHeight: "16px", whiteSpace: "nowrap" },
+      // 未悬停 / 未聚焦时的按钮：绝对定位 + 不可见但仍可 Tab 到（聚焦即由行状态点亮）
+      rowBtnIdle: {
+        position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+        opacity: 0, pointerEvents: "none", background: "transparent", border: "none",
+        color: "transparent", padding: "2px 8px", fontSize: "12px", whiteSpace: "nowrap",
+      },
       importBtn: {
         flex: "none", background: C.accent, color: C.accentForeground, border: "none", borderRadius: "8px",
-        padding: "3px 10px", fontSize: "12px", cursor: "pointer", marginTop: "2px",
+        padding: "2px 8px", fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap",
       },
       syncBtn: {
         flex: "none", background: "transparent", color: C.dim, border: "1px solid " + C.border,
-        borderRadius: "8px", padding: "2px 8px", fontSize: "12px", cursor: "pointer", marginTop: "2px",
+        borderRadius: "8px", padding: "2px 8px", fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap",
       },
       status: { padding: "40px 16px", textAlign: "center", color: C.dimmer },
-      scanning: { padding: "8px 12px", color: C.dimmer, fontSize: "12px" },
       error: { padding: "16px", textAlign: "center", color: C.error },
       // 分页条：上一页 / 页码 / 下一页
-      pageBar: { display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", padding: "8px 12px", borderTop: "1px solid " + C.border },
+      pageBar: { display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", padding: "4px 12px", borderTop: "1px solid " + C.border },
       pageBtn: {
         background: "transparent", border: "1px solid " + C.border, color: C.text,
         borderRadius: "8px", padding: "4px 12px", fontSize: "13px", cursor: "pointer",
       },
-      pageInfo: { color: C.dimmer, fontSize: "12px" },
+      // 底栏状态文案占满中间弹性区，过长截断（title 里有全文）
+      // 翻页：无框图标钮（hover 直接改 DOM 背景，不走 state）
+      pageNavBtn: {
+        flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: "26px", height: "26px", padding: 0, background: "transparent", border: "none",
+        borderRadius: "6px", color: C.dim, cursor: "pointer",
+      },
+      // 页控件（点开是页码网格）：与筛选按钮同款边框
+      pageChip: {
+        flex: "none", display: "inline-flex", alignItems: "center", gap: "4px", height: "26px",
+        padding: "0 8px", background: "transparent", border: "1px solid " + C.border,
+        borderRadius: "8px", color: C.text, fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap",
+      },
+      // 页码网格（像选集）：贴着底栏向上弹，多页时自身滚动
+      pageGrid: {
+        position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 30,
+        display: "grid", gridTemplateColumns: "repeat(6, 34px)", gap: "4px", maxHeight: "240px",
+        overflowY: "auto", padding: "6px", background: C.bg, border: "1px solid " + C.border,
+        borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.08)",
+        boxSizing: "border-box",
+      },
+      pageCell: {
+        height: "30px", padding: 0, background: "transparent", border: "none", borderRadius: "6px",
+        color: C.text, fontSize: "12px", cursor: "pointer",
+      },
+      pageCellActive: { background: C.accent, color: C.accentForeground, fontWeight: 600 },
+      // 工具栏里的两个筛选控件：标签 + 芯片
+      toolbarFilter: { marginLeft: "auto", display: "flex", alignItems: "center", gap: "4px", minWidth: 0, maxWidth: "60%" },
+      filterGroup: { display: "flex", alignItems: "center", gap: "4px", minWidth: 0, flex: "0 1 auto" },
+      pageInfo: {
+        flex: "1 1 auto", minWidth: 0, textAlign: "center", color: C.dimmer, fontSize: "12px",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      },
+      pageSizeLabel: { flex: "none", color: C.dimmer, fontSize: "12px", marginLeft: "4px" },
     });

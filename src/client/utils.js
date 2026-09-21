@@ -30,7 +30,6 @@
     }
 
     const statusLabel = (st, t) => (st === "imported" ? t("status.imported") : st === "partial" ? t("status.partial") : st === "archived" ? t("status.archived") : t("status.notImported"));
-    const statusColor = (st, colors) => (st === "imported" ? colors.success : st === "partial" ? colors.warn : st === "archived" ? "#8250df" : colors.dimmer);
 
     // 会话条目唯一键（format + sourcePath + sessionId；\u0000 不在路径中出现）
     const itemKey = (s) => s.format + "\u0000" + s.sourcePath + "\u0000" + s.sessionId;

@@ -1,9 +1,101 @@
+    // 列表窗口化的尺寸常量：行高 28px + 行距 1px，分组头 28px + 组间距 6px（见 styles.js）。
+    // 固定高度 → 可见区间是纯算术，不需要测量每一行。
+    const LIST_ROW_H = 29;
+    const LIST_HEAD_H = 34;
+    // 视口上下各多渲染「一屏」（原来的 ±10 行在快滚时会露白，观感像「停下来才渲染」）
+    const LIST_OVERSCAN_MIN = 10;
+
+    /** 页控件：显示「第 x / y 页」，点开在底栏之上弹出页码网格（像选集），点数字直接跳页。
+     *  页多时网格自身滚动，并停在当前页附近。 */
+    function PageJump({ page, totalPages, colors, style, onPick }) {
+      const t = useTranslate();
+      const [open, setOpen] = useState(false);
+      const rootRef = useRef(null);
+      const gridRef = useRef(null);
+      useEffect(() => {
+        if (!open) return undefined;
+        const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+        const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+        document.addEventListener("mousedown", onDown);
+        document.addEventListener("keydown", onKey);
+        return () => {
+          document.removeEventListener("mousedown", onDown);
+          document.removeEventListener("keydown", onKey);
+        };
+      }, [open]);
+      // 打开时把当前页滚进可视区（网格每行 6 格、每行 34px）
+      useEffect(() => {
+        if (open && gridRef.current) {
+          gridRef.current.scrollTop = Math.max(0, Math.floor(page / 6) * 34 - 68);
+        }
+      }, [open, page]);
+      const cells = [];
+      for (let i = 0; i < totalPages; i += 1) {
+        cells.push(React.createElement("button", {
+          key: i, type: "button", style: { ...style.pageCell, ...(i === page ? style.pageCellActive : null) },
+          onClick: () => { onPick(i); setOpen(false); },
+          onMouseEnter: (e) => { if (i !== page) e.currentTarget.style.background = colors.hover; },
+          onMouseLeave: (e) => { if (i !== page) e.currentTarget.style.background = "transparent"; },
+        }, String(i + 1)));
+      }
+      return React.createElement("span", {
+        ref: rootRef, style: { position: "relative", display: "inline-flex", flex: "none" },
+      },
+        React.createElement("button", {
+          type: "button", style: style.pageChip, "aria-haspopup": "true", "aria-expanded": open,
+          title: t("page.jump.title"),
+          onClick: () => setOpen((v) => !v),
+        }, t("page.jump", { page: page + 1, pages: totalPages }),
+          React.createElement(Icon, { name: "chevronDown", size: 12, strokeWidth: 1.5 })),
+        open && React.createElement("div", { ref: gridRef, style: style.pageGrid, role: "menu" }, cells));
+    }
+
+    /** 会话行（memo）：悬停 / 勾选一次只影响自己这一行——父级重渲染时其余行直接复用上次的
+     *  元素树，不再重建（大档位下这是主要开销）。比较字段全是标量，回调由父级 useCallback
+     *  固定引用。 */
+    const SessionRow = React.memo(function SessionRow(props) {
+      const { s, style, colors, badgeOverlay, label, time, tip, checked, hot, importing, onToggle, onImport, groupName } = props;
+      const imported = s.importStatus === "imported";
+      const lit = hot || checked;
+      return React.createElement("div", {
+        style: { ...style.item, background: hot ? colors.hover : "transparent" },
+        title: tip,
+        onMouseEnter: () => props.onHot(itemKey(s), null, groupName),
+        onMouseLeave: () => props.onHot(null, itemKey(s), groupName),
+      },
+        React.createElement(SourceBadge, {
+          format: s.format, checked, disabled: importing, size: 22,
+          onClick: () => onToggle(itemKey(s)),
+          title: label,
+          ariaLabel: label + " · " + props.multiSelectTitle,
+          palette: { border: colors.border, accent: colors.accent, text: colors.text, overlay: badgeOverlay },
+        }),
+        React.createElement("div", { style: style.itemMain },
+          React.createElement("div", {
+            style: { ...style.itemTitle, ...(lit ? style.itemTitleActive : null) },
+          }, s.title || props.noTitle)),
+        React.createElement("div", { style: style.rowSlot },
+          hot ? null : React.createElement("span", { style: style.rowTime }, time),
+          React.createElement("button", {
+            style: hot ? (imported ? style.syncBtn : style.importBtn) : style.rowBtnIdle,
+            disabled: importing,
+            onClick: () => onImport(s),
+            onFocus: () => props.onHot(itemKey(s), null, groupName),
+            onBlur: () => props.onHot(null, itemKey(s), groupName),
+            title: imported ? props.syncTitle : props.importTitle,
+          }, imported ? props.syncLabel : props.importLabel)));
+    }, (a, b) => a.s === b.s && a.checked === b.checked && a.hot === b.hot && a.importing === b.importing
+      && a.label === b.label && a.time === b.time && a.tip === b.tip
+      && a.colors === b.colors && a.badgeOverlay === b.badgeOverlay && a.style === b.style
+      && a.onToggle === b.onToggle && a.onImport === b.onImport && a.onHot === b.onHot);
+
     /** 发现 + 导入面板：来源过滤 + 按工作区文件夹分组 + 单选/多选导入 */
     function DiscoveryPanel() {
       const t = useTranslate();
-      const colors = themeColors();
+      // colors / style 引用必须稳定：它们是 memo 行的 props，每次新建会让 memo 失效
+      const colors = useMemo(() => themeColors(), []);
       const badgeOverlay = overlayColorForAccent(colors.accent);
-      const style = makeStyles(colors);
+      const style = useMemo(() => makeStyles(colors), [colors]);
       // 容器宽度（侧边栏可拖宽）：低于阈值时按钮/分页降级为图标、页码压缩为 1/N。
       const [rootRef, panelWidth] = useContainerWidth();
       const narrow = panelWidth !== 0 && panelWidth < NARROW_MAX_WIDTH;
@@ -11,6 +103,7 @@
       // 「导入到」：默认 DSH 会话环境（既有行为不变）；非 dsh → 转投到目标工具格式
       const [target, setTarget] = useState(IMPORT_TARGETS[0]);
       const [workspaceFilter, setWorkspaceFilter] = useState("");
+      const [timeFilter, setTimeFilter] = useState(TIME_FILTERS[0]); // '' = 不筛选
       const [items, setItems] = useState([]); // 流式累计缓冲（scan 逐条按发现顺序插入）
       const [stream, setStream] = useState({ done: false, cursor: 0, total: 0, started: false });
       const [error, setError] = useState(null);
@@ -21,8 +114,20 @@
       const [queryInput, setQueryInput] = useState(""); // 搜索框输入（未提交）
       const [query, setQuery] = useState(""); // 已提交的搜索词（请求用）
       const [page, setPage] = useState(0); // 当前页（0 基）
-      const [pageSize, setPageSize] = useState(50); // 每页条数（50/100/500）
+      // 每页条数：默认 25（列表视口约 16 行 → 25 行≈1.6 屏、渲染约 3ms；50 行要滚 3 屏才够到分页条）
+      // 每页条数：默认 500（窗口化后档位大小不影响渲染开销，放大只是少翻几次页）
+      const [pageSize, setPageSize] = useState(500);
       const [collapsed, setCollapsed] = useState(new Set()); // 已折叠的工作区分组名
+      // 工具栏动作按钮的降级判据：看「动作按钮组」实测到的可用宽度，而不是面板宽度——
+      // 工作区筛选芯片也在这条工具栏上，它会按工作区名吃掉宽度，只看面板宽度会让按钮在
+      // 中间那一段宽度里被压扁/折行。探针量出文字形态需要多宽，两者一比即可（字体大小
+      // 随主题偏好变化，所以不写死阈值）。
+      const [toolsRef, toolsWidth] = useContainerWidth();
+      const toolsProbeRef = useRef(null);
+      const [toolsNeed, setToolsNeed] = useState(0);
+      const [hotKey, setHotKey] = useState(null); // 点亮中的会话行（悬停或行内按钮聚焦）
+      const [hotKeyGroup, setHotKeyGroup] = useState(null); // 该行所属分组（组头随之变亮，O(1)）
+      const [hotGroup, setHotGroup] = useState(null); // 悬停的工作区分组头
 
       // 流式加载：后台扫描 + after 游标轮询——会话按发现顺序逐条 append 到缓冲，
       // 首屏不被全量扫描阻塞；每次请求只取 cursor 之后的增量（服务端 seq 去重）。
@@ -89,8 +194,22 @@
         return () => { cancelled = true; };
       }, [source, query, epoch]);
 
+      useEffect(() => {
+        const node = toolsProbeRef.current;
+        if (!node) return undefined;
+        const update = () => setToolsNeed(node.getBoundingClientRect().width);
+        update();
+        if (typeof ResizeObserver === "function") {
+          const ro = new ResizeObserver(update);
+          ro.observe(node);
+          return () => ro.disconnect();
+        }
+        window.addEventListener("resize", update);
+        return () => window.removeEventListener("resize", update);
+      }, []);
+
       // 来源/搜索词/工作区变化 → 清空跨页选择（换页/刷新保留选择，支持跨页多选）
-      useEffect(() => { setSelected(new Map()); }, [source, query, workspaceFilter]);
+      useEffect(() => { setSelected(new Map()); }, [source, query, workspaceFilter, timeFilter]);
 
       // 执行导入（单选/多选共用）：POST /api-import/import → 摘要 → 重取列表刷新状态
       const doImport = async (items, { replace = false } = {}) => {
@@ -122,16 +241,6 @@
         }
       };
 
-      const toggle = (s) => {
-        const key = itemKey(s);
-        setSelected((prev) => {
-          const next = new Map(prev);
-          if (next.has(key)) next.delete(key);
-          else next.set(key, s);
-          return next;
-        });
-      };
-
       const toggleAll = () => {
         if (!sessions || sessions.length === 0) return;
         const allKeys = sessions.map(itemKey);
@@ -151,32 +260,98 @@
         setPage(0);
         setEpoch((n) => n + 1);
       };
-      const filteredItems = filterByWorkspace(items, workspaceFilter);
-      const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
-      // 当前页窗口 = 工作区筛选后的缓冲切片（服务端不再分页；翻页零重扫）
-      const sessions = filteredItems.slice(page * pageSize, (page + 1) * pageSize);
+      // 以下派生数据全部 memo：悬停 / 勾选引起的重渲染（每行一次）不再重算过滤、分组、排序。
+      // 大档位（几百上千行）时这一步才是真正的热点。
+      // 列表窗口：只挂载可见区间那几十行（大档位下元素创建 / DOM / 布局都不再随档位线性增长）
+      const [listEl, setListEl] = useState(null);
+      const [win, setWin] = useState({ top: 0, h: 600 });
+      useEffect(() => {
+        if (!listEl) return undefined;
+        let frame = 0;
+        const sync = () => {
+          frame = 0;
+          const next = { top: listEl.scrollTop, h: listEl.clientHeight };
+          setWin((prev) => (prev.top === next.top && prev.h === next.h ? prev : next));
+        };
+        const onScroll = () => { if (frame === 0) frame = requestAnimationFrame(sync); };
+        sync();
+        listEl.addEventListener("scroll", onScroll, { passive: true });
+        let ro = null;
+        if (typeof ResizeObserver === "function") { ro = new ResizeObserver(sync); ro.observe(listEl); }
+        return () => {
+          listEl.removeEventListener("scroll", onScroll);
+          if (frame) cancelAnimationFrame(frame);
+          if (ro) ro.disconnect();
+        };
+      }, [listEl]);
+      // 换页 / 改每页条数 → 回到列表顶部（否则从第 3 屏切到新页会停在半空）
+      useEffect(() => { if (listEl) listEl.scrollTop = 0; }, [listEl, page, pageSize]);
+
+      // memo 行的回调：实现随每次渲染更新，但暴露给行的函数引用恒定（否则 memo 白做）
+      const rowActions = useRef({});
+      rowActions.current = {
+        hot: (key, only, group) => {
+          if (key !== null) { setHotKey(key); setHotKeyGroup(group || null); return; }
+          setHotKey((k) => (k === only ? null : k));
+          setHotKeyGroup((current) => (only && current === null ? null : current));
+        },
+        toggle: (key) => {
+          setSelected((prev) => {
+            const next = new Map(prev);
+            if (next.has(key)) { next.delete(key); return next; }
+            for (const s of items) {
+              if (itemKey(s) === key) { next.set(key, s); break; }
+            }
+            return next;
+          });
+        },
+        import: (s) => doImport([toItem(s)]),
+      };
+      const onHot = useCallback((key, only, group) => rowActions.current.hot(key, only, group), []);
+      const onToggle = useCallback((key) => rowActions.current.toggle(key), []);
+      const onImport = useCallback((s) => rowActions.current.import(s), []);
+
+      // 路径筛选（工作区）+ 时间筛选（最后活跃/创建时间落在窗口内）叠加
+      const filteredItems = useMemo(() => {
+        const byPath = filterByWorkspace(items, workspaceFilter);
+        const span = TIME_FILTER_MS[timeFilter];
+        if (!span) return byPath;
+        const floor = Date.now() - span;
+        return byPath.filter((s) => ((s.lastActiveAt || s.createdAt) || 0) >= floor);
+      }, [items, workspaceFilter, timeFilter]);
+      const allRows = pageSize === ALL_PAGE_SIZE;
+      const totalPages = allRows ? 1 : Math.max(1, Math.ceil(filteredItems.length / pageSize));
+      // 当前页窗口 = 工作区筛选后的缓冲切片（服务端不再分页；翻页零重扫）；「全部」档不分页
+      const sessions = useMemo(
+        () => (allRows ? filteredItems : filteredItems.slice(page * pageSize, (page + 1) * pageSize)),
+        [filteredItems, page, pageSize, allRows],
+      );
       // 未导入/已导入条目（跨页全量，供「仅选未导入 / 仅选已导入」批量勾选）
-      const importableFiltered = stream.done
-        ? importableSessions(items, workspaceFilter)
-        : [];
-      const refreshableFiltered = stream.done
-        ? refreshableSessions(items, workspaceFilter)
-        : [];
-      const workspaceOptions = buildWorkspaceOptions(items);
+      const importableFiltered = useMemo(
+        () => (stream.done ? importableSessions(items, workspaceFilter) : []),
+        [items, workspaceFilter, stream.done],
+      );
+      const refreshableFiltered = useMemo(
+        () => (stream.done ? refreshableSessions(items, workspaceFilter) : []),
+        [items, workspaceFilter, stream.done],
+      );
+      const workspaceOptions = useMemo(() => buildWorkspaceOptions(items), [items]);
       // 分页文案总数：扫描完成后用服务端 total（过滤后总数）；扫描中显示已发现数
       const displayTotal = filteredItems.length;
-      const scanHint = !error && !stream.started
-        ? t("scan.hint.start")
-        : (!error && stream.started && !stream.done
-          ? t("scan.hint.progress", { n: items.length })
-          : (!error && stream.done ? t("scan.hint.done", { n: stream.total || items.length }) : null));
+      // 底部一条的状态文案：扫描中报进度，扫描完成报「第 x / y 页 · 共 N 个」（合并掉原来
+      // 列表上方那条独立状态行）；「全部」档没有页码，只报总数。
+      const scanning = !error && stream.started && !stream.done;
+      const barText = scanning
+        ? t("scan.status.progress", { n: items.length })
+        : t("count.total", { n: displayTotal });
 
       // 组内最新会话的最后编辑时间（组排序键：最近活跃的工作区置顶）
       const groupLatest = (list) => list.reduce((m, s) => Math.max(m, s.lastActiveAt ?? s.createdAt ?? 0), 0);
       // 按工作区文件夹（project）分组：组按组内最新会话的最后编辑时间降序（最近活跃
       // 的工作区置顶，时间并列按工作区名升序稳定），组内按最后编辑时间降序；未分组钉最后
-      const groups = [];
-      if (sessions && sessions.length > 0) {
+      const groups = useMemo(() => {
+        const out = [];
+        if (!sessions || sessions.length === 0) return out;
         const byProject = new Map();
         for (const s of sessions) {
           const key = workspaceKey(s);
@@ -188,12 +363,28 @@
           if (b === NO_WORKSPACE_KEY) return -1;
           return (groupLatest(byProject.get(b)) - groupLatest(byProject.get(a))) || a.localeCompare(b);
         });
-        for (const name of names) groups.push({ name, list: [...byProject.get(name)].sort(byTimeDesc) });
-      }
+        for (const name of names) out.push({ name, list: [...byProject.get(name)].sort(byTimeDesc) });
+        return out;
+      }, [sessions]);
 
-      const allSelected = sessions && sessions.length > 0 && sessions.every((s) => selected.has(itemKey(s)));
+      // allSelected 是 O(页大小)：无分页时每次渲染都要扫一遍 10 万行 → memo 到 selected/sessions
+      const allSelected = useMemo(
+        () => sessions && sessions.length > 0 && sessions.every((s) => selected.has(itemKey(s))),
+        [sessions, selected],
+      );
 
-      const renderGroup = (group) => {
+      // 每组在列表中的纵向偏移（固定行高 → 纯算术；折叠组只算组头）
+      const laid = useMemo(() => {
+        let cursor = 0;
+        return groups.map((group) => {
+          const rowsTop = cursor + LIST_HEAD_H;
+          cursor += LIST_HEAD_H + (collapsed.has(group.name) ? 0 : group.list.length * LIST_ROW_H);
+          return { group, rowsTop };
+        });
+      }, [groups, collapsed]);
+
+      const renderGroup = (entry) => {
+        const group = entry.group;
         const isCollapsed = collapsed.has(group.name);
         const toggleGroup = () => {
           setCollapsed((prev) => {
@@ -203,65 +394,101 @@
             return next;
           });
         };
-        const rows = isCollapsed ? [] : group.list.map((s) => {
+        // 窗口切片：只把可见区间（上下各 LIST_OVERSCAN 行）交给 React，其余用等高占位块撑住，
+        // 滚动条长度与分组头 sticky 行为都不变
+        let visible = [];
+        let padTop = 0;
+        let padBottom = 0;
+        if (!isCollapsed) {
+          const total = group.list.length * LIST_ROW_H;
+          const pad = Math.max(LIST_OVERSCAN_MIN, Math.ceil(win.h / LIST_ROW_H));
+          const first = Math.max(0, Math.floor((win.top - entry.rowsTop) / LIST_ROW_H) - pad);
+          const last = Math.min(group.list.length, Math.ceil((win.top + win.h - entry.rowsTop) / LIST_ROW_H) + pad);
+          if (last > first) {
+            visible = group.list.slice(first, last);
+            padTop = first * LIST_ROW_H;
+            padBottom = total - padTop - visible.length * LIST_ROW_H;
+          } else {
+            padTop = Math.min(total, Math.max(0, first * LIST_ROW_H));
+            padBottom = total - padTop;
+          }
+        }
+        const rows = visible.map((s) => {
           const key = itemKey(s);
-          const checked = selected.has(key);
           const ts = s.lastActiveAt || s.createdAt;
-          const badgeColor = statusColor(s.importStatus, colors);
-          const imported = s.importStatus === "imported";
           const ctxTok = fmtTokenCount(s.contextTokens);
-          return React.createElement("div", {
+          // 行内只留「工具标 + 标题 + 时间」；来源 / 上下文 / 分支 / 导入状态 / 绝对时间
+          // 收进悬停提示（行内信息越少越好扫）
+          const tip = [
+            sourceLabel(s.format),
+            ctxTok ? t("count.contextTokens", { n: ctxTok }) : null,
+            s.gitBranch ? s.gitBranch + (s.gitDirty ? " ✗" : "") : null,
+            statusLabel(s.importStatus, t),
+            fmtTime(ts),
+          ].filter(Boolean).join(" · ");
+          return React.createElement(SessionRow, {
             key,
-            style: style.item,
-            onMouseEnter: (e) => { e.currentTarget.style.background = colors.hover; },
-            onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
-          },
-            React.createElement(SourceBadge, {
-              format: s.format, checked, disabled: importing,
-              onClick: () => toggle(s),
-              title: sourceLabel(s.format),
-              ariaLabel: sourceLabel(s.format) + " · " + t("multiSelect.title"),
-              palette: { border: colors.border, accent: colors.accent, text: colors.text, overlay: badgeOverlay },
-            }),
-            React.createElement("div", { style: style.itemMain },
-              React.createElement("div", { style: style.itemTitle }, s.title || t("noTitle")),
-              React.createElement("div", { style: style.itemMeta },
-                ctxTok
-                  ? React.createElement("span", { title: String(s.contextTokens) }, t("count.contextTokens", { n: ctxTok }))
-                  : React.createElement("span", null, t("count.messages", { n: typeof s.messageCount === "number" ? s.messageCount : "—" })),
-                ...(s.gitBranch ? [React.createElement("span", { style: style.git }, s.gitBranch + (s.gitDirty ? " ✗" : ""))] : []),
-                React.createElement("span", { title: fmtTime(ts) }, relTime(ts, t) || t("timeUnknown")),
-                React.createElement("span", { style: { ...style.badge, color: badgeColor, borderColor: badgeColor } }, statusLabel(s.importStatus, t)))),
-            imported
-              ? React.createElement("button", {
-                style: style.syncBtn, disabled: importing,
-                onClick: () => doImport([toItem(s)]),
-                title: t("sync.title"),
-              }, t("sync"))
-              : React.createElement("button", {
-                style: style.importBtn, disabled: importing,
-                onClick: () => doImport([toItem(s)]),
-                title: t("import.one.title"),
-              }, t("import.one")));
+            s,
+            style,
+            colors,
+            badgeOverlay,
+            groupName: group.name,
+            label: sourceLabel(s.format),
+            time: relTime(ts, t) || t("timeUnknown"),
+            tip: (s.title || t("noTitle")) + (tip ? "\n" + tip : ""),
+            checked: selected.has(key),
+            hot: hotKey === key,
+            importing,
+            onToggle,
+            onImport,
+            onHot,
+            noTitle: t("noTitle"),
+            multiSelectTitle: t("multiSelect.title"),
+            syncLabel: t("sync"),
+            syncTitle: t("sync.title"),
+            importLabel: t("import.one"),
+            importTitle: t("import.one.title"),
+          });
         });
+        // 分组头：与皮肤一致——悬停（或组内任意行悬停）时文字变亮并露出折叠箭头，
+        // 不浮背景矩形（它是标题不是目标）
+        const headHot = hotGroup === group.name || hotKeyGroup === group.name;
         return React.createElement(React.Fragment, { key: group.name },
           React.createElement("div", {
-            style: style.group, onClick: toggleGroup, title: isCollapsed ? t("group.expand") : t("group.collapse"),
+            style: { ...style.group, ...(headHot ? { color: colors.text } : null) },
+            onClick: toggleGroup,
+            title: isCollapsed ? t("group.expand") : t("group.collapse"),
+            onMouseEnter: () => setHotGroup(group.name),
+            onMouseLeave: () => setHotGroup((g) => (g === group.name ? null : g)),
           },
-            React.createElement("span", { style: { flex: "none" } }, isCollapsed ? "▸" : "▾"),
-            React.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, workspaceLabel(group.name, t)),
+            React.createElement("span", { style: style.groupLabel }, workspaceLabel(group.name, t)),
+            React.createElement("span", {
+              style: {
+                ...style.groupChevron, opacity: headHot ? 1 : 0,
+                transform: isCollapsed ? "rotate(-90deg)" : "none",
+                transition: "opacity .12s ease, transform .15s ease",
+              },
+            }, React.createElement(Icon, { name: "chevronDown", size: 12, strokeWidth: 1.5 })),
             React.createElement("span", { style: style.groupCount }, t("count.sessions", { n: group.list.length }))),
-          rows);
+          padTop > 0 ? React.createElement("div", { key: "pad-top", "aria-hidden": true, style: { height: padTop + "px" } }) : null,
+          rows,
+          padBottom > 0 ? React.createElement("div", { key: "pad-bottom", "aria-hidden": true, style: { height: padBottom + "px" } }) : null);
       };
 
       // 工具栏/分页按钮：宽态文字、窄态图标（title 保留说明，aria-label 保留可访问名；
       // extra.title 可覆盖默认的「文字即标题」，如刷新的详细提示）。
-      const toolBtn = (label, icon, extra) => React.createElement("button", {
-        style: narrow ? style.iconBtn : style.toolBtn,
-        title: label,
-        "aria-label": label,
-        ...(extra || {}),
-      }, narrow ? React.createElement(Icon, { name: icon }) : label);
+      const toolBtn = (label, icon, extra, asIcon) => {
+        const iconOnly = asIcon === undefined ? narrow : asIcon;
+        return React.createElement("button", {
+          style: iconOnly ? style.iconBtn : style.toolBtn,
+          title: label,
+          "aria-label": label,
+          ...(extra || {}),
+        }, iconOnly ? React.createElement(Icon, { name: icon }) : label);
+      };
+      const selectAllLabel = allSelected ? t("deselectAll") : t("selectAll");
+      // 动作按钮降级：窄面板一律图标；否则看动作按钮组的实测宽度够不够放文字形态
+      const toolsIcon = narrow || (toolsWidth !== 0 && toolsNeed !== 0 && toolsWidth < toolsNeed);
 
       const body = React.createElement(React.Fragment, null,
           // 来源与落点读成一行：「从 全部来源 导入到 DSH 会话环境」——「从」与「导入到」都是
@@ -311,63 +538,97 @@
               title: t("clearSearch"), "aria-label": t("clearSearch"),
             }, narrow ? React.createElement(Icon, { name: "x" }) : t("clearSearch"))),
           React.createElement("div", { style: style.toolbar },
-            toolBtn(allSelected ? t("deselectAll") : t("selectAll"), "checkSquare", { onClick: toggleAll, disabled: filteredItems.length === 0 || importing }),
-            toolBtn(t("clearSelection"), "x", { onClick: () => setSelected(new Map()), disabled: selected.size === 0 || importing }),
-            toolBtn(t("refresh"), "refresh", { onClick: () => setEpoch((n) => n + 1), disabled: importing, title: t("refresh.title") }),
-            toolBtn(t("selectImportable"), "circle", {
-              disabled: importableFiltered.length === 0 || importing || !stream.done,
-              onClick: () => setSelected(new Map(importableFiltered.map((s) => [itemKey(s), s]))),
-            }),
-            toolBtn(t("selectImported"), "checkCircle", {
-              disabled: refreshableFiltered.length === 0 || importing || !stream.done,
-              onClick: () => setSelected(new Map(refreshableFiltered.map((s) => [itemKey(s), s]))),
-            }),
+            React.createElement("div", { ref: toolsRef, style: style.toolbarActions },
+              toolBtn(selectAllLabel, "checkSquare", { onClick: toggleAll, disabled: filteredItems.length === 0 || importing }, toolsIcon),
+              toolBtn(t("clearSelection"), "x", { onClick: () => setSelected(new Map()), disabled: selected.size === 0 || importing }, toolsIcon),
+              toolBtn(t("refresh"), "refresh", { onClick: () => setEpoch((n) => n + 1), disabled: importing, title: t("refresh.title") }, toolsIcon),
+              toolBtn(t("selectImportable"), "circle", {
+                disabled: importableFiltered.length === 0 || importing || !stream.done,
+                onClick: () => setSelected(new Map(importableFiltered.map((s) => [itemKey(s), s]))),
+              }, toolsIcon),
+              toolBtn(t("selectImported"), "checkCircle", {
+                disabled: refreshableFiltered.length === 0 || importing || !stream.done,
+                onClick: () => setSelected(new Map(refreshableFiltered.map((s) => [itemKey(s), s]))),
+              }, toolsIcon)),
+            // 探针：与真实按钮同款文字、同款 button 元素，只为量出「文字形态需要多宽」；
+            // 绝对定位 + 不可见，不参与排版也不可交互（tabIndex -1 保证不进键盘序）
+            React.createElement("div", { ref: toolsProbeRef, "aria-hidden": true, style: style.toolbarProbe },
+              [selectAllLabel, t("clearSelection"), t("refresh"), t("selectImportable"), t("selectImported")]
+                .map((label) => React.createElement("button", {
+                  key: label, type: "button", tabIndex: -1, style: style.toolBtn,
+                }, label))),
             // 工作区筛选挂在工具栏末位：与动作按钮分组，且不走 toolBtn——窄面板下工具按钮
             // 降级成图标时它仍保持文字
             React.createElement("span", { style: style.toolbarFilter },
+              // 标签本身就是按钮：默认只写「筛选：路径」，选中后补「· 值」，避免「标签 + 芯片」两段
               React.createElement(SearchableSelect, {
                 value: workspaceFilter, title: t("workspace.title"), colors,
+                triggerLabel: workspaceFilter
+                  ? t("filter.path") + " · " + workspaceLabel(workspaceFilter, t)
+                  : t("filter.path"),
                 disabled: items.length === 0 || importing,
                 searchPlaceholder: t("combobox.search.workspace"),
                 noMatchLabel: t("combobox.noMatch"),
-                options: [{ value: "", label: t("allWorkspaces") }].concat(
+                options: [{ value: "", label: t("filter.all") }].concat(
                   workspaceOptions.map((o) => {
                     const label = workspaceLabel(o.key, t);
                     // 路径与显示名不同才当副标题（同名时画一遍就够）
                     return { value: o.key, label, sub: o.path && o.path !== label ? o.path : null };
                   })),
                 onChange: (v) => { setWorkspaceFilter(v); setPage(0); },
+              })),
+            // 「筛选：时间」：短菜单（4 项）不挂搜索框
+            React.createElement("span", { style: style.filterGroup },
+              React.createElement(SearchableSelect, {
+                value: timeFilter, title: t("filter.time"), colors,
+                searchable: false,
+                triggerLabel: timeFilter
+                  ? t("filter.time") + " · " + t("filter.time." + timeFilter)
+                  : t("filter.time"),
+                disabled: items.length === 0 || importing,
+                options: TIME_FILTERS.map((v) => ({ value: v, label: t("filter.time." + (v || "all")) })),
+                onChange: (v) => { setTimeFilter(v); setPage(0); },
               }))),
-          scanHint && React.createElement("div", { style: style.scanning }, scanHint),
-          !stream.started && !error && !scanHint && React.createElement("div", { style: style.status }, t("loading")),
+          // 还没拿到第一批数据：居中显示连接提示（拿到数据后状态就交给底部那条）
+          !stream.started && !error && React.createElement("div", { style: style.status }, t("scan.hint.start")),
           error && React.createElement("div", { style: style.error }, error),
-          stream.started && !stream.done && !error && items.length > 0
-            && React.createElement("div", { style: style.scanning }, t("scanning", { n: items.length })),
           stream.done && !error && filteredItems.length === 0 && React.createElement("div", { style: style.status }, query || workspaceFilter ? t("noMatch") : t("noSessions")),
           !error && items.length > 0
-            && React.createElement("div", { style: style.list }, groups.map(renderGroup)),
+            && React.createElement("div", { ref: setListEl, style: style.list }, laid.map(renderGroup)),
           items.length > 0 && React.createElement("div", { style: style.pageBar },
-            React.createElement("button", {
-              style: narrow ? style.iconBtn : style.pageBtn,
-              disabled: page === 0 || importing,
+            // 翻页只留图标、不套框；页码由页控件承担（点开是网格）。只有一页时整组不显示
+            totalPages > 1 && React.createElement("button", {
+              type: "button", style: style.pageNavBtn, disabled: page === 0 || importing,
               onClick: () => setPage((p) => Math.max(0, p - 1)),
               title: t("previous"), "aria-label": t("previous"),
-            }, narrow ? React.createElement(Icon, { name: "chevronLeft" }) : t("previous")),
-            React.createElement("span", { style: style.pageInfo },
-              narrow ? (page + 1) + "/" + totalPages : t("pagination", { page: page + 1, pages: totalPages, total: displayTotal })),
-            React.createElement("button", {
-              style: narrow ? style.iconBtn : style.pageBtn,
-              disabled: page >= totalPages - 1 || importing,
+              onMouseEnter: (e) => { e.currentTarget.style.background = colors.hover; },
+              onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
+            }, React.createElement(Icon, { name: "chevronLeft", size: 16 })),
+            totalPages > 1 && React.createElement(PageJump, {
+              page, totalPages, colors, style, onPick: (p) => setPage(p),
+            }),
+            totalPages > 1 && React.createElement("button", {
+              type: "button", style: style.pageNavBtn, disabled: page >= totalPages - 1 || importing,
               onClick: () => setPage((p) => Math.min(totalPages - 1, p + 1)),
               title: t("next"), "aria-label": t("next"),
-            }, narrow ? React.createElement(Icon, { name: "chevronRight" }) : t("next")),
-            React.createElement("span", { style: { color: colors.dimmer, fontSize: "12px", marginLeft: "4px" } }, t("pageSize")),
-            React.createElement("select", {
-              style: { ...style.select, flex: "none", width: "72px", padding: "4px 6px", fontSize: "12px" },
+              onMouseEnter: (e) => { e.currentTarget.style.background = colors.hover; },
+              onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
+            }, React.createElement(Icon, { name: "chevronRight", size: 16 })),
+            React.createElement("span", { style: style.pageInfo, title: barText }, barText),
+            // 总数不足最小档（500）时换档没有意义，连选择器一起隐藏；翻页组同理看页数
+            displayTotal >= 500 && React.createElement("span", { style: style.pageSizeLabel }, t("pageSize")),
+            displayTotal >= 500 && React.createElement("select", {
+              style: { ...style.select, flex: "none", width: "86px", padding: "4px 6px", fontSize: "12px" },
               value: pageSize,
               disabled: importing,
-              onChange: (e) => { setPageSize(Number(e.target.value)); setPage(0); },
-            }, PAGE_SIZES.map((n) => React.createElement("option", { key: n, value: n }, String(n))))),
+              onChange: (e) => {
+                const v = e.target.value;
+                setPageSize(v === ALL_PAGE_SIZE ? ALL_PAGE_SIZE : Number(v));
+                setPage(0);
+              },
+            }, PAGE_SIZES.map((n) => React.createElement("option", {
+              key: n, value: n,
+            }, n === ALL_PAGE_SIZE ? t("pageSizeAll") : String(n))))),
           // 底部主操作区：导入结果 + 导入所选（列表与分页之外的固定区，滚动时始终可见）
           result && React.createElement("div", { style: style.resultBar }, result),
           React.createElement("div", { style: style.importBar },
