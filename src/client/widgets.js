@@ -23,6 +23,7 @@
         search: React.createElement(React.Fragment, null,
           React.createElement("circle", { cx: 11, cy: 11, r: 7 }),
           React.createElement("path", { d: "m21 21-4.3-4.3" })),
+        check: React.createElement("path", { d: "m4.5 12.5 5 5 10.5-11" }),
       };
       return React.createElement("svg", common, shapes[name]);
     }
@@ -54,32 +55,47 @@
       accentOverlayCache = { accent, color };
       return color;
     }
+    /** 品牌标：SOURCE_BADGES 里带 svg 的直接内联（多数自带白卡），只带 path 的套同一白卡
+     *  （simple-icons 单色 brand 标），两者都没有的按格式首字母兜底。徽标卡（26px）与
+     *  下拉行（16px）共用这一份绘制，尺寸与额外样式由调用方给。svg 是静态受信标记，
+     *  经 dangerouslySetInnerHTML 注入。 */
+    function BrandMark({ id, format, size = 16, style }) {
+      const key = format || SOURCE_MARK_KEY[id] || id;
+      const badge = SOURCE_BADGES[key] || { color: "#64748B", text: String(key || "?").slice(0, 2).toUpperCase() };
+      const box = { width: size, height: size, flex: "none", display: "block", ...(style || {}) };
+      if (badge.svg) {
+        return React.createElement("span", {
+          style: box, "aria-hidden": true, dangerouslySetInnerHTML: { __html: badge.svg },
+        });
+      }
+      if (badge.path) {
+        return React.createElement("svg", {
+          viewBox: "-4 -4 32 32", width: size, height: size, "aria-hidden": true, style: box,
+        }, React.createElement("rect", { x: -4, y: -4, width: 32, height: 32, rx: 6, fill: "#fff" }),
+          React.createElement("path", { d: badge.path, fill: badge.color }));
+      }
+      return React.createElement("span", {
+        style: {
+          ...box, borderRadius: "4px", background: "#ffffff", color: badge.color, fontWeight: 700,
+          lineHeight: size + "px", textAlign: "center", letterSpacing: "-0.02em",
+          fontSize: size * (badge.text.length <= 1 ? 0.46 : badge.text.length === 2 ? 0.4 : 0.34),
+        },
+        "aria-hidden": true,
+      }, badge.text);
+    }
+
     // 多选徽标（替换原生 checkbox）：白色圆角卡 + 品牌标/缩写。未选中只显徽标；选中时
     // 叠一层半透明固定黑/白遮罩（按强调色明度选择）+ 带环 tick（环/勾用强调色）。path
     // 条目套同一白卡渲染为单色 brand 标（simple-icons）。role=checkbox + aria-checked +
     // 键盘切换保留可访问性。
     function SourceBadge({ format, checked, size = 26, onClick, title, ariaLabel, disabled, palette }) {
-      const badge = SOURCE_BADGES[format] || { color: "#64748B", text: (format || "?").slice(0, 2).toUpperCase() };
       const card = {
         width: size, height: size, borderRadius: "6px", background: "#ffffff", flex: "none", alignSelf: "center",
         cursor: disabled ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative", overflow: "hidden",
         padding: 0, opacity: disabled ? 0.5 : 1,
       };
-      const logo = badge.svg
-        ? React.createElement("div", { style: { width: "100%", height: "100%" }, dangerouslySetInnerHTML: { __html: badge.svg } })
-        : badge.path
-          ? React.createElement("svg", {
-            viewBox: "-4 -4 32 32", width: size, height: size, "aria-hidden": true, style: { display: "block" },
-          }, React.createElement("rect", { x: -4, y: -4, width: 32, height: 32, rx: 6, fill: "#fff" }),
-            React.createElement("path", { d: badge.path, fill: badge.color }))
-          : React.createElement("span", {
-            style: {
-              color: badge.color, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em",
-              fontSize: size * (badge.text.length <= 1 ? 0.46 : badge.text.length === 2 ? 0.4 : 0.34),
-            },
-            "aria-hidden": true,
-          }, badge.text);
+      const logo = React.createElement(BrandMark, { format, size });
       const overlay = checked
         ? React.createElement("div", { style: { position: "absolute", inset: 0, background: palette.overlay || overlayColorForAccent(palette.accent), opacity: 0.6 } })
         : null;

@@ -24,6 +24,9 @@
       hermes: "Hermes", kimi: "Kimi CLI", qoder: "Qoder CLI", workbuddy: "WorkBuddy",
       qwen: "QwenWork", continue: "Continue", cline: "Cline", goose: "Goose", zed: "Zed", crush: "Crush", dsh: "DSH",
     };
+    // 来源 id → 徽标键（SOURCE_BADGES 按 discovery format 短名键控，claude-code 的徽标键
+    // 是 claude；其余同名，查不到即由 BrandMark 按首字母兜底）。
+    const SOURCE_MARK_KEY = { "claude-code": "claude" };
     // 会话条目来源徽标（按 discovery format 短名键控）：白色圆角卡 + 品牌标。有公开 logo
     // 的来源用 session-migrate 站点的 agent 徽标（完整内联 SVG，商标归各自权利人）；无
     // logo 的用 brand 色缩写。path 条目 = 单一品牌标路径（simple-icons，CC0），渲染时套

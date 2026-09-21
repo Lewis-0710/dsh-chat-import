@@ -264,14 +264,16 @@
       }, narrow ? React.createElement(Icon, { name: icon }) : label);
 
       const body = React.createElement(React.Fragment, null,
+          // 来源与落点读成一行：「从 全部来源 导入到 DSH 会话环境」——「从」与「导入到」都是
+          // 连接词，两个下拉只显文本（品牌标只在下拉弹层里出现）
           React.createElement("div", { style: style.rowPlain },
-            React.createElement("span", { style: style.label }, t("source")),
+            React.createElement("span", { style: style.rowJoin }, t("from")),
             React.createElement(SearchableSelect, {
               value: source, title: t("source.title"), colors,
               disabled: importing,
               searchPlaceholder: t("combobox.search.source"),
               noMatchLabel: t("combobox.noMatch"),
-              options: SOURCES.map((s) => ({ value: s, label: s ? (SOURCE_LABELS[s] || s) : t("allSources") })),
+              options: SOURCES.map((s) => ({ value: s, label: s ? (SOURCE_LABELS[s] || s) : t("allSources"), mark: s || null })),
               onChange: (v) => {
                 setSource(v);
                 setWorkspaceFilter("");
@@ -279,31 +281,20 @@
                 setQuery("");
                 setQueryInput("");
               },
-            })),
-          React.createElement("div", { style: style.rowPlain },
-            React.createElement("span", { style: style.label }, t("importTo")),
+            }),
+            React.createElement("span", { style: style.rowJoin }, t("importTo")),
             React.createElement(SearchableSelect, {
               value: target, title: t("importTo.title"), colors,
               disabled: importing,
               searchPlaceholder: t("combobox.search.target"),
               noMatchLabel: t("combobox.noMatch"),
-              options: IMPORT_TARGETS.map((v) => ({ value: v, label: t("target." + v) })),
+              options: IMPORT_TARGETS.map((v) => ({ value: v, label: t("target." + v), mark: v })),
               onChange: (v) => setTarget(v),
             })),
           target === "dsh"
             ? null
             : React.createElement("div", { style: style.targetHint }, t("target.hint." + target)),
-          React.createElement("div", { style: style.rowPlain },
-            React.createElement("span", { style: style.label }, t("workspace")),
-            React.createElement(SearchableSelect, {
-              value: workspaceFilter, title: t("workspace.title"), colors,
-              disabled: items.length === 0 || importing,
-              searchPlaceholder: t("combobox.search.workspace"),
-              noMatchLabel: t("combobox.noMatch"),
-              options: [{ value: "", label: t("allWorkspaces") }].concat(
-                workspaceOptions.map((o) => ({ value: o.key, label: workspaceLabel(o.key, t) }))),
-              onChange: (v) => { setWorkspaceFilter(v); setPage(0); },
-            })),
+          // 筛选层：搜索词（搜索按钮 / Enter 提交）
           React.createElement("div", { style: style.searchRow },
             React.createElement("input", {
               style: style.searchInput, value: queryInput, placeholder: t("search.placeholder"),
@@ -331,7 +322,22 @@
               disabled: refreshableFiltered.length === 0 || importing || !stream.done,
               onClick: () => setSelected(new Map(refreshableFiltered.map((s) => [itemKey(s), s]))),
             }),
-            React.createElement("span", { style: style.count }, t("selected.count", { n: selected.size }))),
+            // 工作区筛选挂在工具栏末位：与动作按钮分组，且不走 toolBtn——窄面板下工具按钮
+            // 降级成图标时它仍保持文字
+            React.createElement("span", { style: style.toolbarFilter },
+              React.createElement(SearchableSelect, {
+                value: workspaceFilter, title: t("workspace.title"), colors,
+                disabled: items.length === 0 || importing,
+                searchPlaceholder: t("combobox.search.workspace"),
+                noMatchLabel: t("combobox.noMatch"),
+                options: [{ value: "", label: t("allWorkspaces") }].concat(
+                  workspaceOptions.map((o) => {
+                    const label = workspaceLabel(o.key, t);
+                    // 路径与显示名不同才当副标题（同名时画一遍就够）
+                    return { value: o.key, label, sub: o.path && o.path !== label ? o.path : null };
+                  })),
+                onChange: (v) => { setWorkspaceFilter(v); setPage(0); },
+              }))),
           scanHint && React.createElement("div", { style: style.scanning }, scanHint),
           !stream.started && !error && !scanHint && React.createElement("div", { style: style.status }, t("loading")),
           error && React.createElement("div", { style: style.error }, error),

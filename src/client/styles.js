@@ -21,13 +21,80 @@
       row: { display: "flex", gap: "8px", alignItems: "center", padding: "10px 16px", borderBottom: "1px solid " + C.border },
       // 无分隔线的选择行：来源 / 导入到 / 工作区三行同属一组，行间不画横线
       //（组与下方搜索区的分界由 searchRow 的 borderTop 一条线承担）
-      rowPlain: { display: "flex", gap: "8px", alignItems: "center", padding: "10px 16px" },
-      label: { color: C.dim, flex: "none" },
+      // position: relative —— 下拉弹层对着这一行定位（触发器根节点不定位），弹层宽度 = 行宽，
+      // 面板再窄也不会把弹层挤出左/右边界
+      // alignItems: baseline —— 触发器与「从 / 导入到 / 工作区」这些 label 按文字基线对齐，
+      // 三者的字形底边在同一条线上（居中会因为各自盒高不同而错开）
+      rowPlain: { position: "relative", display: "flex", gap: "8px", alignItems: "baseline", padding: "8px 12px" },
+      // 来源与落点之间的连接词（「导入到」），把两个下拉读成一句话
+      rowJoin: { color: C.dim, flex: "none", fontSize: "13px", lineHeight: "20px", whiteSpace: "nowrap" },
       targetHint: { padding: "0 16px 10px", fontSize: "12px", color: C.dimmer, lineHeight: 1.5 },
       select: {
         flex: "1", background: C.field, border: "1px solid " + C.border, color: C.text,
         borderRadius: "8px", padding: "6px 8px", fontSize: "13px", outline: "none",
       },
+      // 下拉触发器：无边框、无输入框外观（claude-style 模型选择器同款）——hover / 展开时
+      // 由调用方补一层背景矩形（颜色走 colors.hover，即 --dsw-alias-interactive-bg-hover，
+      // 皮肤里被重定向到它自己的 hover 色）。矩形的宽度贴着内容，所以这里不 flex-grow。
+      // 触发器根节点：只做尺寸约束，不定位（弹层挂在行上），也不占满行——芯片贴着内容，
+      // 同一行可以并排两个下拉
+      selectRoot: { display: "flex", minWidth: 0, flex: "0 1 auto" },
+      selectTrigger: {
+        display: "inline-flex", alignItems: "center", gap: "6px", flex: "0 1 auto",
+        maxWidth: "100%", minWidth: 0, height: "28px", padding: "0 6px",
+        // 边框 / 圆角 / 文字色与工具栏（筛选）按钮同款：1px border-l2 + 8px 圆角 + label-primary
+        background: "transparent", border: "1px solid " + C.border, borderRadius: "8px",
+        color: C.text, font: "inherit", fontSize: "13px", fontWeight: 400, lineHeight: "20px",
+        textAlign: "left", boxSizing: "border-box",
+      },
+      // 行首品牌标槽位：定宽 16px——没有品牌标的行（全部来源 / 工作区）也占住这一格，
+      // 文字与有标行左对齐
+      selectMarkSlot: {
+        flex: "none", display: "flex", alignItems: "center", justifyContent: "center",
+        width: "16px", height: "16px", borderRadius: "4px", overflow: "hidden",
+      },
+      selectValue: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+      // 弹层容器：12px 圆角 + 6px 内边距，行距 2px（二级弹层的尺寸口径）
+      selectPopover: {
+        position: "absolute", top: "calc(100% + 2px)", left: "12px", right: "12px", minWidth: "200px", zIndex: 30,
+        display: "flex", flexDirection: "column", gap: "4px", boxSizing: "border-box",
+        padding: "6px", background: C.bg, border: "1px solid " + C.border, borderRadius: "12px",
+        boxShadow: "0 8px 30px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.08)",
+      },
+      selectSearchRow: { display: "flex", alignItems: "center", gap: "6px", padding: "2px 8px 4px" },
+      // 搜索框与列表之间的横线：独立元素、撑满弹层（负外边距抵消容器 6px 内边距）。
+      // 颜色用 border-l2——宿主自己的菜单分隔线（Menu.module.css .footer）就是这条，
+      // l1 在菜单底色上几乎不可见。
+      selectDivider: { height: "1px", flex: "none", background: C.border, margin: "0 -6px" },
+      selectSearchIcon: { display: "inline-flex", alignItems: "center", flex: "none", color: C.dimmer },
+      selectSearchInput: {
+        flex: "1", minWidth: 0, background: "transparent", border: "none", outline: "none",
+        color: C.text, fontSize: "13px", lineHeight: "20px", padding: "2px 0",
+      },
+      // maxHeight 由组件按可用窗口高度写内联（自适应，见 tabs.js），这里只管排版
+      selectList: { display: "flex", flexDirection: "column", gap: "2px", overflowY: "auto", overflowX: "hidden" },
+      selectRow: {
+        display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "30px",
+        padding: "3px 8px", background: "transparent", border: "none", borderRadius: "6px",
+        color: C.text, font: "inherit", fontSize: "13px", textAlign: "left", cursor: "pointer",
+        boxSizing: "border-box",
+      },
+      // 主标签（文件夹名 / 来源名）不参与收缩：flex 分摊哪怕只压掉 0.0x px，Chromium 也会
+      // 立刻画省略号。空间不够时先由副标题（shrink 1000）吃干净；只有标签自己就超过行宽时，
+      // max-width 才把它压到行宽并截断。
+      selectRowText: {
+        flex: "0 0 auto", maxWidth: "100%", minWidth: 0,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      },
+      // 副标题（工作区的绝对路径）：更淡更小，过长截断（全文留在 title 里）
+      selectRowSub: {
+        // shrink 取极大值：空间不够时先把副标题（路径）压到 0，再轮到主标签（文件夹名）——
+        // flex 的收缩量按「shrink × 基准宽度」分摊，1000 对 1 等于路径先被吃干净
+        flex: "0 1000 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        color: C.dimmer, fontSize: "12px",
+      },
+      selectCheck: { display: "inline-flex", alignItems: "center", flex: "none", marginLeft: "auto", color: C.accent },
+      selectEmpty: { padding: "8px", color: C.dimmer, fontSize: "12px", textAlign: "center" },
       // 搜索行：输入 + 搜索/清除（query 服务端过滤标题/项目/路径）
       searchRow: { display: "flex", gap: "6px", alignItems: "center", padding: "8px 12px", borderTop: "1px solid " + C.border, borderBottom: "1px solid " + C.border },
       searchInput: {
@@ -45,18 +112,21 @@
         display: "flex", alignItems: "center", justifyContent: "center",
       },
       // 工具栏：全选 / 清空 / 刷新 + 已选计数
-      toolbar: { display: "flex", gap: "6px", alignItems: "center", padding: "8px 12px", borderBottom: "1px solid " + C.border },
+      // position: relative —— 末位的工作区筛选在这里，弹层对着工具栏定位（触发器根节点不定位）
+      toolbar: { position: "relative", display: "flex", gap: "6px", alignItems: "center", padding: "8px 12px", borderBottom: "1px solid " + C.border },
       toolBtn: {
         background: "transparent", border: "1px solid " + C.border, color: C.text,
         borderRadius: "8px", padding: "4px 10px", fontSize: "13px", cursor: "pointer",
       },
+      // 工具栏末位的工作区筛选：与左侧动作按钮用 auto 外边距分开；限宽保护按钮，
+      // 且它不经 toolBtn（窄面板下也保持文字，不降级成图标）
+      toolbarFilter: { marginLeft: "auto", display: "flex", minWidth: 0, maxWidth: "52%" },
       // 窄宽降级的方形图标按钮（工具栏/分页/清除共用，26×26 居中图标）
       iconBtn: {
         background: "transparent", border: "1px solid " + C.border, color: C.text,
         borderRadius: "8px", width: "26px", height: "26px", padding: "0", cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center", flex: "none",
       },
-      count: { marginLeft: "auto", color: C.dimmer, fontSize: "12px", flex: "none" },
       // 导入操作条：面板底部的主操作区（列表/分页之下，贴面板底缘），
       // 与列表的分界走上边框；结果摘要紧贴其上方（见 resultBar）
       importBar: { display: "flex", gap: "8px", alignItems: "center", padding: "8px 12px", borderTop: "1px solid " + C.border, flexWrap: "wrap" },

@@ -177,7 +177,7 @@ The dsh web UI opens the import window from one entry in the left sidebar: the *
 
 Each row supports **single import**, and the checkboxes enable **multi-select import** ("导入所选 (N)"): the panel calls the same host import pipeline as the `import_*` tools, so idempotent skip / incremental append / `force` / context-budget semantics are identical, and the list refreshes with the new statuses after importing. A multi-session source (e.g. `conversations.json`, an opencode/zcode/hermes DB) is imported whole — opencode/zcode restrict to the selected `sessionId`s.
 
-Under the source filter there is an **导入到 / Import to** dropdown that picks where the conversation lands:
+The top row reads **From <source> Import to <target>**: the left dropdown picks the source, the right one picks where the conversation lands (brand marks appear inside the popover only — the trigger is plain text). The search box filters by title / workspace / path, and the **workspace filter** ("All workspaces" dropdown) sits at the end of the toolbar, separated from the action buttons and never collapsing into an icon on a narrow panel; the selected count shows only on the primary button ("Import selected (N)"):
 
 | Choice | What happens |
 | --- | --- |

@@ -1,6 +1,8 @@
 // panel-layout.test.mjs — 导入面板骨架（lib/client.js 内联 JSX 源码）的结构契约：
-// 面板按「选择区 → 搜索 → 工具栏 → 列表 → 分页 → 底部主操作区」自上而下排布，
-// 且来源/导入到/工作区三行同属一组、行间不画分隔线。
+// 面板按「选择区 → 筛选层 → 工具栏 → 列表 → 分页 → 底部主操作区」自上而下排布：
+// 选择区只有一行、读成「从 全部来源 导入到 DSH 会话环境」（「从」与「导入到」当连接词、
+// 行内不画分隔线），工作区筛选并入筛选层与搜索框同排，工具栏只留选择类动作
+//（已选条数由底部主按钮的「导入所选 (N)」承担，不再单独占一个 label）。
 //
 // 为什么读源码断言：面板是 client.js 里的 React.createElement 内联树，零构建、
 // 无 DOM 测试环境（devDependencies 只有 eslint）。这些约定在真实 UI 上肉眼可见、
@@ -28,14 +30,16 @@ const at = (haystack, needle) => {
   return i
 }
 
-test('面板纵向顺序：选择区 → 搜索 → 工具栏 → 列表 → 分页 → 底部主操作区', () => {
+test('面板纵向顺序：选择区 → 筛选层 → 工具栏 → 列表 → 分页 → 底部主操作区', () => {
   const body = panelBody()
   const order = [
-    't("source")',
+    'style.rowPlain',
+    't("from")',
+    't("source.title")',
     't("importTo")',
-    't("workspace")',
     'style.searchRow',
     'style.toolbar',
+    't("workspace.title")',
     'style.list',
     'style.pageBar',
     'style.resultBar',
@@ -54,10 +58,10 @@ test('导入按钮置底：主按钮排在列表与分页之后，不再夹在�
   assert.ok(primary > at(body, 'style.toolbar'), '导入所选不应再紧跟工具栏')
 })
 
-test('来源 / 导入到 / 工作区三行无分隔线，组边界由搜索行的上边框承担', () => {
+test('选择区只剩一行（来源 + 落点），无分隔线（组边界由筛选层的上边框承担）', () => {
   const body = panelBody()
-  // 三行都用 rowPlain（无 borderBottom 的行样式）
-  assert.equal((body.match(/style\.rowPlain/g) || []).length, 3, '来源/导入到/工作区三行应统一使用 rowPlain')
+  // 选择区一行用 rowPlain（无 borderBottom 的行样式）
+  assert.equal((body.match(/style\.rowPlain/g) || []).length, 1, '选择区只有「来源 + 落点」一行，应使用 rowPlain')
   assert.equal((body.match(/style\.row\b/g) || []).length, 0, '选择行不应再使用带下边框的 style.row')
   const stylesAt = source.indexOf('const makeStyles = (C) => ({')
   assert.notEqual(stylesAt, -1)
@@ -68,6 +72,24 @@ test('来源 / 导入到 / 工作区三行无分隔线，组边界由搜索行�
   const searchRow = styles.match(/searchRow:\s*\{([^}]*)\}/)
   assert.ok(searchRow, 'makeStyles 缺少 searchRow 定义')
   assert.match(searchRow[1], /borderTop/, 'searchRow 应承担选择区的组边界（borderTop）')
+})
+
+test('选择区一行读完：来源下拉 → 连接词「导入到」→ 落点下拉；工作区筛选在筛选层', () => {
+  const body = panelBody()
+  const selects = [...body.matchAll(/SearchableSelect/g)].map((m) => m.index)
+  assert.equal(selects.length, 3, '面板应有来源 / 落点 / 工作区三个下拉')
+  const joins = [...body.matchAll(/style\.rowJoin/g)].map((m) => m.index)
+  assert.equal(joins.length, 2, '本行有两个连接词：「从」与「导入到」')
+  assert.ok(joins[0] < selects[0], '「从」应排在来源下拉之前')
+  assert.ok(selects[0] < joins[1] && joins[1] < selects[1], '「导入到」应夹在来源与落点两个下拉之间（同一行）')
+  const toolbarAt = at(body, 'style.toolbar')
+  const listAt = at(body, 'style.list')
+  assert.ok(toolbarAt < selects[2] && selects[2] < listAt, '工作区筛选挂在工具栏末位，排在列表之前')
+  const toolbar = body.slice(toolbarAt, listAt)
+  assert.equal((toolbar.match(/toolBtn\(/g) || []).length, 5, '工具栏的五个动作按钮走 toolBtn')
+  assert.ok(toolbar.indexOf('t("workspace.title")') > toolbar.lastIndexOf('toolBtn('),
+    '工作区筛选不是 toolBtn 条目：窄面板下工具按钮降级成图标时它仍保持文字')
+  assert.equal(body.includes('selected.count'), false, '已选条数由底部主按钮承担，工具栏不再重复显示')
 })
 
 test('底部主操作区自带上边框，与列表/分页分区；导入结果条紧贴主按钮之上', () => {

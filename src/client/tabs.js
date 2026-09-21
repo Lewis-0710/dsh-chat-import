@@ -154,15 +154,22 @@
         body, confirmDialog);
     }
 
-    /** 可搜索下拉（combobox）：替代原生 <select>——原生 option 列表在来源/工作区
-     * 选项多时既不好看也没法检索。样式跟随面板明暗主题（colors），弹出层带搜索框
-     *（自动聚焦）、当前项高亮 ✓、点击外部/Esc 关闭。受控组件：value + onChange。 */
+    /** 可搜索下拉（combobox）：触发器按皮肤里模型选择器的形态重绘——没有边框也没有
+     *  输入框外观，只有「品牌标 + 当前项文本 + 细箭头」，hover / 展开时浮出一层背景矩形
+     *  （矩形贴着内容，所以按钮不 flex-grow）；前缀文本（来源 / 导入到 / 工作区）留在行里
+     *  当标签。弹层是同一套二级弹层口径：12px 圆角容器、30px 行高、6px 行圆角、品牌标 +
+     *  名称 + 当前项末尾 ✓，顶部保留搜索框（自动聚焦）。替代原生 <select>：来源 / 目标 /
+     *  工作区选项多时既好看也能检索。受控组件：value + onChange；点击外部 / Esc 关闭。 */
     function SearchableSelect({ value, options, onChange, disabled, title, colors, searchPlaceholder, noMatchLabel }) {
+      const style = makeStyles(colors);
       const [open, setOpen] = useState(false);
       const [filter, setFilter] = useState("");
       const [hover, setHover] = useState(null);
+      const [hot, setHot] = useState(false); // 触发器 hover 态（内联样式没有 :hover）
+      const [listMax, setListMax] = useState(260); // 列表可用高度（开弹层时按窗口实测）
       const rootRef = useRef(null);
       const inputRef = useRef(null);
+      const popRef = useRef(null);
       useEffect(() => {
         if (!open) return undefined;
         const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) { setOpen(false); setFilter(""); } };
@@ -177,73 +184,88 @@
           document.removeEventListener("keydown", onKey);
         };
       }, [open]);
+      // 弹层高度自适应：列表上限 = 视口底部到弹层顶端的距离，再扣掉弹层自己的头部
+      //（搜索行 + 分隔线 + 内外边距 ≈ 46px）与底部留白。锚点在上方、弹层只向下长，
+      // 所以这轮测量不受上一次结果影响，不会来回抖。用 layout effect：首帧就是最终高度。
+      useLayoutEffect(() => {
+        if (!open) return undefined;
+        const measure = () => {
+          const node = popRef.current;
+          if (!node) return;
+          const top = node.getBoundingClientRect().top;
+          setListMax(Math.max(180, Math.round(window.innerHeight - top - 20 - 46)));
+        };
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+      }, [open]);
       const current = options.find((o) => o.value === value);
+      // 整份选项都没有品牌标（例如工作区）时不再留 16px 槽位——文字直接贴左边，不被白占
+      const hasMarks = options.some((o) => o.mark);
       const needle = filter.trim().toLowerCase();
       const shown = !needle ? options : options.filter((o) =>
-        String(o.label).toLowerCase().includes(needle) || String(o.value).toLowerCase().includes(needle));
+        String(o.label).toLowerCase().includes(needle) || String(o.value).toLowerCase().includes(needle)
+        || String(o.sub || "").toLowerCase().includes(needle));
       const pick = (v) => { onChange(v); setOpen(false); setFilter(""); };
-      return React.createElement("div", { ref: rootRef, style: { position: "relative", flex: 1, minWidth: 0 }, title },
+      const lit = open || (hot && !disabled); // 背景矩形：hover 或展开时出现
+      return React.createElement("div", { ref: rootRef, style: style.selectRoot, title },
         React.createElement("button", {
           type: "button", disabled,
+          "aria-haspopup": "listbox", "aria-expanded": open,
           style: {
-            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px",
-            background: colors.field, border: "1px solid " + (open ? colors.accent : colors.border),
-            color: colors.text, borderRadius: "8px", padding: "6px 8px", fontSize: "13px",
-            cursor: disabled ? "default" : "pointer", outline: "none", opacity: disabled ? 0.55 : 1,
+            ...style.selectTrigger,
+            background: lit ? colors.hover : "transparent",
+            opacity: disabled ? 0.55 : 1,
+            cursor: disabled ? "default" : "pointer",
           },
+          onMouseEnter: () => setHot(true),
+          onMouseLeave: () => setHot(false),
           onClick: () => { setOpen(!open); setFilter(""); setHover(null); },
         },
-          React.createElement("span", {
-            style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" },
-          }, current ? current.label : ""),
-          React.createElement("span", { style: { color: colors.dim, fontSize: "11px", flex: "none" } }, open ? "▲" : "▼")),
-        open && React.createElement("div", {
-          style: {
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30,
-            background: colors.bg, border: "1px solid " + colors.border, borderRadius: "8px",
-            boxShadow: "0 8px 24px rgba(0,0,0,.25)", overflow: "hidden",
-          },
-        },
-          React.createElement("input", {
-            ref: inputRef, value: filter, placeholder: searchPlaceholder,
-            onChange: (e) => { setFilter(e.target.value); setHover(null); },
-            onKeyDown: (e) => {
-              if (e.key === "Enter") {
-                const idx = hover !== null && shown.some((o) => o.value === hover) ? shown.findIndex((o) => o.value === hover) : 0;
-                const target = shown[idx >= 0 ? idx : 0];
-                if (target) pick(target.value);
-              } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                e.preventDefault();
-                if (shown.length === 0) return;
-                const idx = hover !== null ? shown.findIndex((o) => o.value === hover) : -1;
-                const next = e.key === "ArrowDown"
-                  ? Math.min(shown.length - 1, idx + 1)
-                  : Math.max(0, idx <= 0 ? 0 : idx - 1);
-                setHover(shown[next].value);
-              }
-            },
-            style: {
-              width: "100%", boxSizing: "border-box", background: colors.field, border: "none",
-              borderBottom: "1px solid " + colors.border, color: colors.text,
-              padding: "7px 10px", fontSize: "13px", outline: "none",
-            },
-          }),
-          React.createElement("div", { style: { maxHeight: "240px", overflowY: "auto" } },
-            shown.length === 0 && React.createElement("div", {
-              style: { padding: "10px", color: colors.dimmer, fontSize: "12px", textAlign: "center" },
-            }, noMatchLabel),
-            shown.map((o) => React.createElement("div", {
-              key: o.value,
+          React.createElement("span", { style: style.selectValue }, current ? current.label : "")),
+        open && React.createElement("div", { ref: popRef, style: style.selectPopover },
+          React.createElement("div", { style: style.selectSearchRow },
+            React.createElement("span", { style: style.selectSearchIcon }, React.createElement(Icon, { name: "search", size: 13 })),
+            React.createElement("input", {
+              ref: inputRef, value: filter, placeholder: searchPlaceholder,
+              onChange: (e) => { setFilter(e.target.value); setHover(null); },
+              onKeyDown: (e) => {
+                if (e.key === "Enter") {
+                  const idx = hover !== null && shown.some((o) => o.value === hover) ? shown.findIndex((o) => o.value === hover) : 0;
+                  const target = shown[idx >= 0 ? idx : 0];
+                  if (target) pick(target.value);
+                } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  if (shown.length === 0) return;
+                  const idx = hover !== null ? shown.findIndex((o) => o.value === hover) : -1;
+                  const next = e.key === "ArrowDown"
+                    ? Math.min(shown.length - 1, idx + 1)
+                    : Math.max(0, idx <= 0 ? 0 : idx - 1);
+                  setHover(shown[next].value);
+                }
+              },
+              style: style.selectSearchInput,
+            })),
+          React.createElement("div", { style: style.selectDivider }),
+          React.createElement("div", { style: { ...style.selectList, maxHeight: listMax + "px" }, role: "listbox" },
+            shown.length === 0 && React.createElement("div", { style: style.selectEmpty }, noMatchLabel),
+            shown.map((o) => React.createElement("button", {
+              key: o.value, type: "button", role: "option", "aria-selected": o.value === value,
               onClick: () => pick(o.value),
               onMouseEnter: () => setHover(o.value),
               onMouseLeave: () => setHover((h) => (h === o.value ? null : h)),
               style: {
-                padding: "7px 10px", fontSize: "13px", cursor: "pointer", color: colors.text,
-                display: "flex", alignItems: "center", gap: "6px",
-                background: o.value === value ? colors.hover : (hover === o.value ? colors.hover : "transparent"),
-                fontWeight: o.value === value ? 600 : 400,
+                ...style.selectRow,
+                fontWeight: o.value === value ? 500 : 400,
+                background: hover === o.value ? colors.hover : "transparent",
               },
             },
-              React.createElement("span", { style: { color: colors.accent, flex: "none", width: "12px" } }, o.value === value ? "✓" : ""),
-              React.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, o.label))))));
+              hasMarks
+                ? React.createElement("span", { style: style.selectMarkSlot },
+                  o.mark ? React.createElement(BrandMark, { id: o.mark, size: 16 }) : null)
+                : null,
+              React.createElement("span", { style: style.selectRowText }, o.label),
+              o.sub ? React.createElement("span", { style: style.selectRowSub, title: o.sub }, o.sub) : null,
+              React.createElement("span", { style: style.selectCheck },
+                o.value === value ? React.createElement(Icon, { name: "check", size: 13 }) : null))))));
     }

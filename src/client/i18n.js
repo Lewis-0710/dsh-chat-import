@@ -8,12 +8,24 @@
     const filterByWorkspace = (list, ws) => (!ws ? list : list.filter((s) => workspaceKey(s) === ws));
     const importableSessions = (list, ws) => filterByWorkspace(list, ws).filter((s) => s.importStatus !== "imported" && s.importStatus !== "archived");
     const refreshableSessions = (list, ws) => filterByWorkspace(list, ws).filter((s) => s.importStatus === "imported");
+    // 工作区下拉的选项：key/latest 供排序与过滤，path 是该组里最新会话的绝对路径
+    //（discovery 的 project 通常只是文件夹名，下拉里用更淡的字把它后面的路径画出来；
+    // 同名不同路径时以最活跃的那个会话为准）。
     const buildWorkspaceOptions = (list) => {
       const map = new Map();
       for (const s of list) {
         const key = workspaceKey(s);
         const t0 = (typeof s.lastActiveAt === "number" ? s.lastActiveAt : 0) || (typeof s.createdAt === "number" ? s.createdAt : 0);
-        map.set(key, { key, latest: Math.max(map.has(key) ? map.get(key).latest : 0, t0) });
+        const prev = map.get(key);
+        if (!prev) {
+          map.set(key, { key, latest: t0, at: t0, path: typeof s.cwd === "string" ? s.cwd : "" });
+        } else {
+          prev.latest = Math.max(prev.latest, t0);
+          if (t0 >= prev.at) {
+            prev.at = t0;
+            prev.path = typeof s.cwd === "string" ? s.cwd : "";
+          }
+        }
       }
       return [...map.values()].sort((a, b) => {
         if (a.key === NO_WORKSPACE_KEY) return 1;
@@ -46,7 +58,6 @@
         "selectImported": "仅选已导入",
         "refresh": "刷新",
         "refresh.title": "重新扫描；源文件未改时复用 scan-cache，通常几秒完成",
-        "selected.count": "已选 {n}",
         "importing": "导入中…",
         "import.selected": "导入所选 ({n})",
         "pageSize": "每页",
@@ -111,6 +122,7 @@
         "result.separator": "，",
         "result.done": "导入完成：{bits}",
         "result.nochange": "无变化",
+        "from": "从",
         "importTo": "导入到",
         "importTo.title": "选择落点：DSH 会话环境可继续对话；选其他工具则转换成它的格式落盘，不在 DSH 留副本",
         "combobox.search.target": "搜索目标…",
@@ -181,7 +193,6 @@
         "selectImported": "Select imported",
         "refresh": "Refresh",
         "refresh.title": "Rescan; unchanged files reuse scan-cache and finish in seconds",
-        "selected.count": "{n} selected",
         "importing": "Importing…",
         "import.selected": "Import selected ({n})",
         "pageSize": "Per page",
@@ -246,6 +257,7 @@
         "result.separator": ", ",
         "result.done": "Import done: {bits}",
         "result.nochange": "no change",
+        "from": "From",
         "importTo": "Import to",
         "importTo.title": "Where the imported conversation lands: DSH sessions stay resumable; other targets are converted into that tool's own format (no DSH copy left behind)",
         "combobox.search.target": "Search targets…",
