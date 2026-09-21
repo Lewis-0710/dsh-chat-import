@@ -20,22 +20,26 @@ jobs:
       # 严格按 package-lock.json 复现依赖树（与 npm install 不同，lockfile 与 package.json 不一致时直接失败）
       - run: npm ci --no-audit --no-fund
       - run: npm test
-      # REQ-13：覆盖率护栏——line ≥ 75%（基线 81.48%，宽松下限防显著回归）。
+      # 覆盖率护栏——line ≥ 75%（基线 81.48%，宽松下限防显著回归）。
       # --test-coverage-lines 阈值 flag 需 node >= 22.7（CI 用 latest 22.x）。
       - run: npm run coverage
-      # REQ-10：eslint flat config（无插件），与 test 同机跑，违规即红
+      # eslint flat config（无插件），与 test 同机跑，违规即红
       - run: npm run lint
       # 跨平台路径纪律护栏（check-linux-compat）：mock 树查找必须分隔符归一、node:path
       # 结果不得与写死反斜杠字面量比较——防「本地绿、Linux CI 红」的回归（2026-08-14
       # 曾长期红：测试反斜杠合成路径 + posix join() 混合分隔符，mock 裸查找落空）
       - run: npm run check:linux
-      # 提交泄漏扫描（check-leaks）：凭据模式 + dev/ 误 stage；内部项目名黑名单在 CI 缺失
-      #（黑名单文件 dev/leak-blocklist.txt 是 gitignore 本地文件，绝不入库），自动降级为
+      # 提交泄漏扫描（check-leaks）：凭据模式 + dev/ 误 stage；内部项目名黑名单为可选本地文件
+      # 不存在时自动降级为
       # 通用规则——本地 pre-commit（dev/hooks/pre-commit）覆盖完整规则。
       - run: npm run check:leaks
-      # 双语 README 结构同步护栏（REQ-06）：README.md 与 README.zh-CN.md 的
+      # 双语 README 结构同步护栏：README.md 与 README.zh-CN.md 的
       # 标题层级序列与语言无关锚点键必须一致；某一版删/加/改标题即红（翻译差异不误报）
       - run: node .github/scripts/check-readme-sync.mjs
+      # 文档相对链接护栏（check-doc-links）：受版本管理的 .md 里所有相对链接必须解析到
+      # 存在的路径——docs/ 下的文件把同目录目标写成 docs/… 会解析成 docs/docs/…（GitHub
+      # 404 且本地打不开），而单测 / lint / 标题同步护栏都看不见这类失效（issue #56）
+      - run: npm run check:links
       # 锁文件漂移护栏：package.json 改了版本/依赖而未同步 lockfile 时，
       # npm 重算出的 lockfile 与仓库版本不一致 → git diff 非空 → 该步红
       - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
@@ -43,7 +47,7 @@ jobs:
       # 发布面回归护栏：files 白名单缺失/拼错会在此失败
       - run: npm pack --dry-run
 
-  # REQ-05 headless 真实加载冒烟：装 npm latest 的 dsh CLI → link 装本 checkout 插件 →
+  # headless 真实加载冒烟：装 npm latest 的 dsh CLI → link 装本 checkout 插件 →
   # 起本地 mock LLM（CI 无 API key，DEEPSEEK_BASE_URL 指向本地 mock，全程离线）→
   # dsh --profile headless "hi" 完整走真实 boot + 插件激活审计（assertEntriesActivated）+
   # 一次 LLM 回合，exit 0 才绿。

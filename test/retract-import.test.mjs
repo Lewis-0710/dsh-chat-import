@@ -1,4 +1,4 @@
-// req33.test.mjs — REQ-33 导入识别 / 撤回（只读）：自包含 mock 集成测试。
+// retract-import.test.mjs — 导入识别 / 撤回（只读）：自包含 mock 集成测试。
 // 走真实 apply → register → execute 路径：mock sessionPersistence（list /
 // readFrom / locate，刻意不提供 delete / remove 面）+ mock fs（追踪调用，REQ-33
 // 工具不应触碰）+ 真实 imports registry（$DSH_HOME/dsh-chat-import）。

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { convertClaudeJsonl, convertCodexJsonl, convertChatgptJson, convertCursorJsonl, convertGeminiJson, convertReasonixJsonl, convertPiJsonl, convertOpencodeJson, convertQoderJsonl, reasonixStemTime, mintSessionId, parseTime, SESSION_FORMAT_VERSION, tailSessionEvents, codexCustomToolArguments, jsObjectLiteralToJson, estimateTokens, cropContentBlocks, trimTurns, applyBudgetTrim, TEXT_BLOCK_CHAR_LIMIT, TOOL_RESULT_CHAR_LIMIT, validateSessionEvents } from '../convert.mjs'
+import { convertClaudeJsonl, convertCodexJsonl, convertChatgptJson, convertCursorJsonl, convertGeminiJson, convertReasonixJsonl, convertPiJsonl, convertOpencodeJson, convertQoderJsonl, reasonixStemTime, mintSessionId, parseTime, SESSION_FORMAT_VERSION, tailSessionEvents, codexCustomToolArguments, jsObjectLiteralToJson, estimateTokens, cropContentBlocks, trimTurns, applyBudgetTrim, TEXT_BLOCK_CHAR_LIMIT, TOOL_RESULT_CHAR_LIMIT, validateSessionEvents, isEnvInjectionEvent } from '../convert.mjs'
 import { pinSourcedSessionTitle } from '../lib/sourced-title.mjs'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
@@ -94,9 +94,9 @@ test('convertClaudeJsonl: 简单问答合成平衡回合', () => {
 
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'user/message', 'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
-  // seq 连续从 0 开始；首事件是内部标记
+  // seq 连续从 0 开始；环境变更声明（plugin 注入）在首个 step/start 之后、真实提问之前
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   assertEnvelopeHygiene(out.events)
   // surface 事件带 surfaceOp
@@ -177,7 +177,8 @@ test('convertClaudeJsonl: 未回答的提问也成回合', () => {
   assert.equal(out.turns.length, 1)
   assert.equal(out.messages, 1)
   const types = out.events.map((e) => e.type)
-  assert.deepEqual(types, ['user/message', 'turn/start', 'user/message', 'turn/end'])
+  // 首轮无 step（只有提问、没有回复）：无 step/start 可锚 → 环境变更声明不注入
+  assert.deepEqual(types, ['turn/start', 'user/message', 'turn/end'])
 })
 
 test('convertClaudeJsonl: 数组格式 user content（纯文本块）开新轮（issue #21 复现）', () => {
@@ -448,7 +449,7 @@ test('convertCodexJsonl: 简单问答合成平衡回合（元数据来自 sessio
 
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'user/message', 'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
   // seq 连续从 0 开始；最后一个事件是 turn/end（平衡）
   out.events.forEach((e, i) => assert.equal(e.seq, i))
@@ -487,13 +488,13 @@ test('convertCodexJsonl: function_call + function_call_output 按 call_id 跨行
   assertMessageOrderLegal(out.events)
 })
 
-test('convertCodexJsonl: 注入块被过滤、reasoning 加密被跳过、custom_tool_call 用 input', () => {
+test('convertCodexJsonl: 注入块被过滤、无 summary 的 reasoning 不产生块、custom_tool_call 用 input', () => {
   const out = convertCodexJsonl(load('codex-custom-tool.jsonl'))
   assert.equal(out.turns.length, 1)
   // 注入的 <environment_context> 不进入 prompt
   const user = out.events.find((e) => e.type === 'user/message' && e.data.source.kind === 'user').data
   assert.equal(user.content[0].text, '帮我修这个 bug')
-  // 加密 reasoning 不产生 reasoning 块
+  // reasoning 的 summary 为空 → 不产生 reasoning 块，也不塞空文本（密文 encrypted_content 不读）
   assert.equal(out.events.filter((e) => e.type === 'assistant/message').length, 2)
   const asst = out.events.filter((e) => e.type === 'assistant/message').map((e) => e.data.message)
   for (const m of asst) {
@@ -524,14 +525,14 @@ test('convertCodexJsonl: importSystemPrompt 开关收集 developer 为上下文�
   const offPlugin = off.events.filter((e) => e.data && e.data.source && e.data.source.kind === 'plugin')
   assert.equal(offPlugin.length, 1)
   assert.ok(!offPlugin[0].data.content[0].text.includes('You are Codex.'))
-  // 开：developer 作为上下文注入附在环境变更声明之后（source.kind='plugin'，plugin='chat-import'）钉在最前
+  // 开：developer 作为上下文注入附在环境变更声明之后（source.kind='plugin'，plugin='chat-import'）钉在会话最前（首个 step/start 之后，issue #66）
   const on = convertCodexJsonl(raw, { sessionId: 'codex-sp', importSystemPrompt: true })
   const first = on.events.find((e) => e.type === 'user/message')
   assert.equal(first.data.source.kind, 'plugin')
   assert.equal(first.data.source.plugin, 'chat-import')
   assert.ok(first.data.content[0].text.includes('You are Codex.'))
   assert.ok(first.data.content[0].text.includes('DeepSeek Harness'))
-  assert.ok(first.seq < on.events.find((e) => e.type === 'turn/start').seq)
+  assert.ok(first.seq > on.events.find((e) => e.type === 'step/start').seq)
 })
 
 test('上下文注入按 dsh 惯例包 <system-reminder> 信封：英文正文 + 闭合标签转义', () => {
@@ -544,7 +545,8 @@ test('上下文注入按 dsh 惯例包 <system-reminder> 信封：英文正文 +
   ].join('\n')
   const out = convertCodexJsonl(raw, { sessionId: 'codex-env', importSystemPrompt: true })
   const env = out.events.find((e) => e.data && e.data.id === 'import:codex-env:env')
-  assert.ok(env, '环境变更声明应钉在首个 turn 之前')
+  assert.ok(env, '环境变更声明应在首个 step/start 之后（issue #66）')
+  assert.ok(env.seq > out.events.find((e) => e.type === 'step/start').seq)
   const text = env.data.content[0].text
   assert.ok(text.startsWith('<system-reminder>\n'), '信封以 <system-reminder> 行开头')
   assert.ok(text.endsWith('\n</system-reminder>'), '信封以 </system-reminder> 行结尾')
@@ -756,6 +758,33 @@ test('jsObjectLiteralToJson: 不支持的结构返回 null（尾逗号 / 注释 
   assert.equal(jsObjectLiteralToJson('{a: [], b: {c: "d"}, e: -1.5, f: 1e3, g: .5}'), '{"a":[],"b":{"c":"d"},"e":-1.5,"f":1000,"g":0.5}')
 })
 
+// codex：event_msg/turn_aborted 表示该回合被用户中断。实测 40 条真实记录里 reason 恒为
+// 'interrupted'，不区分用户 / hook / 销毁，故映射为宿主为「导入且原始粗粒度记录未携带
+// 原因」预留的 legacy 原因，而不是臆测一个更具体的原因。
+test('codex：turn_aborted 标为该回合中断，后续回合不受影响', () => {
+  const out = convertCodexJsonl(load('codex-turn-aborted.jsonl'))
+  const ends = out.events.filter((e) => e.type === 'turn/end').map((e) => e.data.reason)
+  assert.equal(ends.length, 2)
+  assert.deepEqual(ends[0], { kind: 'aborted', reason: { kind: 'legacy' } })
+  assert.deepEqual(ends[1], { kind: 'completed' }, '中断只影响它所在的回合')
+})
+
+test('codex：没有 turn_aborted 时回合照常标记完成', () => {
+  const out = convertCodexJsonl(load('codex-simple.jsonl'))
+  const ends = out.events.filter((e) => e.type === 'turn/end').map((e) => e.data.reason)
+  assert.deepEqual(ends, [{ kind: 'completed' }])
+})
+
+// 生产导入恒走预算裁剪（resolveImportBudget 恒返回数字），因此「中断标记」必须在裁剪后
+// 仍然存在：trimTurns 的 L1 克隆只取 { prompt, steps } 时会把 aborted 丢掉，被裁的会话
+// 会静默变回「正常完成」——这里用与生产同口径的 budget 参数锁定该不变量。
+test('codex：走预算裁剪后仍标 aborted（裁剪不得丢掉回合级标记）', () => {
+  const raw = load('codex-turn-aborted.jsonl')
+  const budgeted = convertCodexJsonl(raw, { budget: 550000 })
+  const ends = budgeted.events.filter((e) => e.type === 'turn/end').map((e) => e.data.reason)
+  assert.deepEqual(ends, [{ kind: 'aborted', reason: { kind: 'legacy' } }, { kind: 'completed' }])
+})
+
 // ---- ChatGPT 网页导出 conversations.json ----
 
 test('convertChatgptJson: 一文件多会话、多轮、mapping 主线程', () => {
@@ -830,7 +859,7 @@ test('convertChatgptJson: importSystemPrompt 开关收集 system 角色为上下
   assert.equal(first.data.source.kind, 'plugin')
   assert.equal(first.data.source.plugin, 'chat-import')
   assert.ok(first.data.content[0].text.includes('You are a helpful assistant.'))
-  assert.ok(first.seq < c1.events.find((e) => e.type === 'turn/start').seq)
+  assert.ok(first.seq > c1.events.find((e) => e.type === 'step/start').seq)
 })
 
 test('convertChatgptJson: tool 节点降级为文本块，不再产生孤儿 tool/result', () => {
@@ -1776,6 +1805,22 @@ test('tailSessionEvents: 尾内 tool/result 的 sourceEventSeqs 重映射到新 
   }
 })
 
+test('tailSessionEvents: 续写尾部不重复注入环境变更声明（issue #66）', () => {
+  const out = convertClaudeJsonl(threeTurnClaude(), { sourcePath: 'D:\\demo\\proj\\sess-incr-001.jsonl' })
+  const env = out.events.find(isEnvInjectionEvent)
+  assert.ok(env, '完整转换含一条环境变更声明')
+  // 声明位于首个 step/start 之后（写入位契约）
+  const firstStep = out.events.find((e) => e.type === 'step/start')
+  assert.ok(env.seq > firstStep.seq)
+  // 尾部（含首轮切片的极端情形）不携带声明：前段已有一条，续写不得在对话中间再插一条
+  for (const fromTurn of [1, 2, 3]) {
+    const tail = tailSessionEvents(out, { fromTurn, fromSeq: 50 })
+    assert.ok(!tail.events.some(isEnvInjectionEvent), 'fromTurn=' + fromTurn + ' 的尾部不得含声明')
+  }
+  // 声明是 plugin 注入：不计入真实消息数（既有口径不变）——3 问 + 4 条 assistant
+  assert.equal(out.messages, 7)
+})
+
 test('tailSessionEvents: dropSessionEvents=false 保留 session/title（标题 last-wins 无害）', () => {
   const out = convertClaudeJsonl(threeTurnClaude(), { sourcePath: 'D:\\demo\\proj\\sess-incr-001.jsonl' })
   const tail = tailSessionEvents(out, { fromTurn: 3, fromSeq: 200, dropSessionEvents: false })
@@ -2129,6 +2174,42 @@ test('validateSessionEvents：非数组 / 畸形条目报告且封顶', () => {
   assert.equal(many.ok, false)
 })
 
+test('validateSessionEvents：首个 step/start 之前的 surface 事件被点名（issue #66）', () => {
+  // 旧版本（≤0.18.3）导入日志的形状：环境变更声明排在首个 turn/start 之前。
+  // 宿主 v2→v3 迁移对「首个 step/start 之前的 surface」fail-closed 拒载，此形状
+  // 必须在导入/校验时被点名，而不是等宿主迁移时静默打不开。
+  const legacy = [
+    ev(0, 'user/message', { surfaceOp: 'append' }),
+    ev(1, 'turn/start'),
+    ev(2, 'step/start'),
+    ev(3, 'user/message', { surfaceOp: 'append' }),
+    ev(4, 'assistant/message', { surfaceOp: 'append' }),
+    ev(5, 'step/end'),
+    ev(6, 'turn/end'),
+  ]
+  const r = validateSessionEvents(legacy)
+  assert.equal(r.ok, false)
+  assert.deepEqual(r.problems.map((p) => p.kind), ['surface-before-first-step'])
+  assert.equal(r.problems[0].seq, 0)
+  // 新注入位（step/start 之后）同形状不报
+  const fixed = validateSessionEvents([
+    ev(0, 'turn/start'),
+    ev(1, 'step/start'),
+    ev(2, 'user/message', { surfaceOp: 'append' }),
+    ev(3, 'assistant/message', { surfaceOp: 'append' }),
+    ev(4, 'step/end'),
+    ev(5, 'turn/end'),
+  ])
+  assert.equal(fixed.ok, true)
+  // 无任何 step/start（只有提问没有回复）时不适用该约束
+  const noStep = validateSessionEvents([
+    ev(0, 'turn/start'),
+    ev(1, 'user/message', { surfaceOp: 'append' }),
+    ev(2, 'turn/end'),
+  ])
+  assert.equal(noStep.ok, true)
+})
+
 // ===== 失败重发 step 清洗（ghost retry dedupe）=====
 // Claude Code 在一轮工具调用没等到结果而中止时，会在紧随的下一步用同一个 tool_use id
 // 原样重发（content 逐字节相同）。两条都保留会产生重复 callId 的 tool/call——DSH 会话
@@ -2191,4 +2272,40 @@ test('所有源的 assistant/message 都带 settlement 字段 stream（issue #41
       assert.ok(Array.isArray(ev.data.stream), name + ' assistant/message 带 stream 数组')
     }
   }
+})
+
+// codex reasoning：可读部分在 summary 块里（实测 81 条真实记录：content 恒为 null，
+// summary 是 [{type:'summary_text',text}] 数组）。encrypted_content 是不透明密文
+// （占 reasoning 的 85.2%），既不读也不搬。
+test('codex：reasoning 的 summary 块转成 reasoning 内容块，密文不进产物', () => {
+  const out = convertCodexJsonl(load('codex-reasoning.jsonl'))
+  const steps = out.turns.flatMap((t) => t.steps)
+  const blocks = steps.flatMap((s) => s.content).filter((c) => c.type === 'reasoning')
+  assert.equal(blocks.length, 2)
+  assert.equal(blocks[0].text, '**Planning a project structure scan**')
+  // 同一条记录里的多个 summary 块按序合并
+  assert.equal(blocks[1].text, '**Reading the manifest**\n**Then listing the tree**')
+  // reasoning 出现在其所属 assistant 步骤之前，必须并入该步而非另开一步
+  assert.equal(steps.length, 1, 'reasoning 不得自开一步')
+  assert.equal(out.messages, 2, 'messages 不得因 reasoning 虚增')
+  assert.equal(out.turns.length, 1)
+  // 密文绝不出现
+  assert.ok(!JSON.stringify(out).includes('fixture-blob'), 'encrypted_content 不得进入转换产物')
+})
+
+test('codex：无 summary 的 reasoning 不产生空块，也不自开步骤', () => {
+  const recs = [
+    '{"timestamp":"2026-05-18T13:21:30.751Z","type":"session_meta","payload":{"id":"x","cwd":"/p"}}',
+    '{"timestamp":"2026-05-18T13:21:30.754Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"hi"}]}}',
+    '{"timestamp":"2026-05-18T13:21:31.000Z","type":"response_item","payload":{"type":"reasoning","id":"r","summary":[],"encrypted_content":"gAAAAAB-fixture-blob-3"}}',
+    '{"timestamp":"2026-05-18T13:21:31.100Z","type":"response_item","payload":{"type":"reasoning","id":"r2","encrypted_content":"gAAAAAB-fixture-blob-4"}}',
+    '{"timestamp":"2026-05-18T13:21:32.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}}',
+  ].join('\n')
+  const out = convertCodexJsonl(recs)
+  const steps = out.turns.flatMap((t) => t.steps)
+  const blocks = steps.flatMap((s) => s.content).filter((c) => c.type === 'reasoning')
+  assert.equal(blocks.length, 0, '没有可读文本时不推空块')
+  assert.equal(steps.length, 1, '不因空 reasoning 自开步骤')
+  assert.equal(out.messages, 2)
+  assert.ok(!JSON.stringify(out).includes('fixture-blob'))
 })

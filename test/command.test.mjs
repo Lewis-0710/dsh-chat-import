@@ -245,9 +245,9 @@ test('REQ-29 /import-all：仅路径（全部格式探测）+ 未知来源提示
   assert.ok(typo.text.includes('未知来源'), typo.text)
 })
 
-// ── REQ-65 /attach-workspaces ──────────────────────────────────────────────
+// ── /attach-workspaces ──────────────────────────────────────────────
 
-test('REQ-65 /attach-workspaces：命令注册 + 按 imports registry 回填', async () => {
+test('/attach-workspaces：命令注册 + 按 imports registry 回填', async () => {
   const env = makeCtx()
   registerTools(env.ctx, env.registryDir)
   registerImportCommand(env.ctx, env.registryDir)
@@ -270,9 +270,9 @@ test('REQ-65 /attach-workspaces：命令注册 + 按 imports registry 回填', a
   assert.ok(env.attached.length >= before, 'attach 应被再次调用/回填')
 })
 
-// ── REQ-66 /doctor ─────────────────────────────────────────────────────────
+// ── /doctor ─────────────────────────────────────────────────────────
 
-test('REQ-66 /doctor：命令注册 + 导入后健康检查通过', async () => {
+test('/doctor：命令注册 + 导入后健康检查通过', async () => {
   const env = makeCtx()
   registerTools(env.ctx, env.registryDir)
   registerImportCommand(env.ctx, env.registryDir)
@@ -320,9 +320,9 @@ test('issue #41 /doctor：报告磁盘上既不在 registry 也不在宿主的�
   assert.ok(!after.text.includes('import-doctor-stray'), after.text)
 })
 
-// ── REQ-74（缓存重置）/import-reset ────────────────────────────────────────
+// ── （缓存重置）/import-reset ────────────────────────────────────────
 
-test('REQ-74 /import-reset：清空扫描缓存与持久书签，不影响导入', async () => {
+test('/import-reset：清空扫描缓存与持久书签，不影响导入', async () => {
   const env = makeCtx()
   registerTools(env.ctx, env.registryDir)
   registerImportCommand(env.ctx, env.registryDir)
@@ -341,9 +341,9 @@ test('REQ-74 /import-reset：清空扫描缓存与持久书签，不影响导入
   assert.ok(!existsSync(cacheFile), 'scan-cache.json 已删除')
 })
 
-// ── REQ-70 workspaceMode：/attach-workspaces --mode dedicated ────────────────
+// ── workspaceMode：/attach-workspaces --mode dedicated ────────────────
 
-test('REQ-70 /attach-workspaces：dedicated 模式把所有导入会话挂到单个工作区', async () => {
+test('/attach-workspaces：dedicated 模式把所有导入会话挂到单个工作区', async () => {
   const env = makeCtx()
   registerTools(env.ctx, env.registryDir)
   registerImportCommand(env.ctx, env.registryDir)

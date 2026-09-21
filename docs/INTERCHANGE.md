@@ -1,9 +1,8 @@
 # Interchange v1 — dsh-chat-import 会话交换协议
 
-> 机器可读实现见 `lib/convert/interchange.mjs`（`INTERCHANGE_SCHEMA` / `validateInterchange` /
-> `SOURCE_CAPABILITIES` / `DEGRADATION_RULES` / `summarizeDegradations`）。
-> 本协议是 REQ-18 的落盘结论：把导入/导出两侧共用的 turns IR 显式化为中立交换格式，
-> 供源↔目标双向适配器与便携 bundle（REQ-56/62）复用。
+> 机器实现见 `lib/convert/interchange.mjs`（`DEGRADATION_RULES` / `summarizeDegradations` / `exportDegradations`）
+
+> 本协议定义导入/导出共用的 turns IR 与便携 bundle 格式。
 
 ## 1. 文档结构（v1）
 
@@ -58,12 +57,13 @@
 | 源 | toolResults | reasoning | cwd | branches | attachments | compacted |
 | --- | --- | --- | --- | --- | --- | --- |
 | claude | ✅ | ✅ | ✅ | — | ✅ | — |
-| codex | ✅ | 加密不可见 | ✅ | — | ✅ | — |
+| codex | ✅ | ✅（summary 可读；密文不可读） | ✅ | — | ✅ | — |
 | chatgpt | ✅（无结构化参数） | — | — | ✅（mapping DAG） | ✅ | — |
 | cursor | —（导入器补空结果） | — | — | — | — | — |
 | gemini | ✅ | ✅ | ✅ | — | — | — |
 | reasonix | ✅ | ✅ | ✅ | — | — | — |
 | opencode | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| teleagent | ✅ | ✅ | ✅ | — | ✅ | ✅（样本 compaction 无 tail_start_id → 不裁剪，全量导入） |
 | zcode | ✅ | ✅ | ✅ | — | — | ✅ |
 | grokbuild | ✅ | ✅ | — | — | — | — |
 | openclaw | ✅ | — | ✅ | — | — | — |
@@ -71,9 +71,14 @@
 | pi | ✅ | ✅ | ✅ | ✅（树形） | — | ✅ |
 | kimi | ✅ | ✅ | ✅ | — | — | — |
 | workbuddy | ✅ | ✅ | ✅ | — | — | — |
+| continue | ✅ | ✅ | ✅ | — | — | ✅（history 不裁剪，摘要挂 reasoning 块） |
+| cline | ✅ | ✅ | ✅ | — | — | ✅（compaction 侧车不改写主转写） |
+| goose | ✅ | ✅ | ✅ | — | — | — |
+| zed | ✅ | ✅ | ✅ | — | — | ✅（Compaction 摘要挂 reasoning 块） |
+| crush | ✅ | ✅ | ✅ | — | — | ✅（自动摘要消息挂 reasoning 块） |
 | dsh | ✅ | ✅ | ✅ | — | ✅ | — |
 
-## 3. 降级规则表（REQ-21）
+## 3. 降级规则表
 
 目标格式缺能力时「失败要大声」：降级必须显式报告（导出/互转结果附 `degradations`
 字段），不能静默。策略三态：`lossless`（无损）/ `text-fallback`（降级文本块）/
@@ -83,15 +88,16 @@
 | --- | --- | --- | --- |
 | `tool-result-missing` | toolResults | skip-placeholder | 目标格式不记录工具结果（Cursor）→ 导入器兜底补发空结果 |
 | `tool-result-text-fallback` | toolResults | text-fallback | 源格式工具消息无结构化参数（ChatGPT 网页导出）→ 按文本挂最近一步 |
-| `reasoning-encrypted` | reasoning | skip-placeholder | 推理内容不可见（Codex 加密）→ 无内容可导入 |
+| `reasoning-encrypted` | reasoning | skip-placeholder | 推理内容不可见（Codex 密文 `encrypted_content`，可读的 summary 仍照常导入）→ 密文部分无内容可导入 |
 | `cwd-missing` | cwd | text-fallback | 无工作目录（ChatGPT / Grok Build）→ 回退源目录归组 |
 | `branch-collapsed` | branches | text-fallback | 目标会话无分支概念 → 分支会话只导主线程 |
 | `attachment-skipped` | attachments | skip-placeholder | 非文本内容块无法表达 → 跳过并计数 |
 | `compacted-unavailable` | compacted | text-fallback | 无压缩摘要 → 超长会话由预算三层保护被动截断 |
 | `injection-skipped` | — | skip-placeholder | 非人类注入消息（system-reminder 等）不进入会话 → 跳过并计数 |
 | `orphan-tool-result` | toolResults | skip-placeholder | 源日志无对应 tool/call 的工具结果（中途开始的 transcript）→ 丢弃并计数 |
+| `usage-unknown` | — | text-fallback | 目标格式要求用量计数（opencode 的 `cost` / `tokens` 是解码必填）而 DSH 会话日志没有这些计数 → 写 0 并显式报告 |
 
-## 4. 便携 bundle（REQ-56/62）
+## 4. 便携 bundle
 
 `export_bundle` 产出 `.dshbundle.json`，是 interchange v1 的备份编码（事件级无损）：
 
@@ -114,6 +120,6 @@
 ```
 
 还原：`restore_bundle` 校验文件级指纹（损坏检测）→ 校验会话级指纹 → 经
-`convertDshJsonl` 导入为可继续 DSH 会话。跨机器（REQ-62）：A 机导出 → B 机（无原路径）
-还原 0 skipped；`originalCwd` 不可达时按 REQ-39-lite 回退到 bundle 文件所在目录归组，
+`convertDshJsonl` 导入为可继续 DSH 会话。跨机器：A 机导出 → B 机（无原路径）
+还原 0 skipped；`originalCwd` 不可达时回退到 bundle 文件所在目录归组，
 结果报告 `cwdAvailable: false` + `groupedTo`（不静默）。

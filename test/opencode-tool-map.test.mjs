@@ -1,4 +1,4 @@
-// opencode-tool-map.test.mjs — REQ-74 opencode 工具名映射
+// opencode-tool-map.test.mjs — opencode 工具名映射
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mapOpencodeToolName, convertOpencodeJson } from '../lib/convert/opencode.mjs'

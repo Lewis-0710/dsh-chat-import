@@ -290,7 +290,7 @@ test('convertZcodeJson: 简单问答、元数据、平衡回合', () => {
   assertEnvelopeHygiene(out.events)
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'user/message', 'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
+    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
   ])
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   for (const e of out.events.filter((e) => e.type === 'user/message' || e.type === 'assistant/message' || e.type === 'tool/result')) {
@@ -653,6 +653,29 @@ test('import_zcode 幂等：重复导入同一库只落盘一次', async () => {
   assert.equal(persistence.sessions.size, 2)
 })
 
+test('import_zcode sessionIds 补导：库未变时再选未导过的会话仍真正落盘', async () => {
+  // 回归：DB version/size 未变时 S3 短路径曾直接对已导子表返回 already-imported，
+  // 忽略 args.sessionIds，导致面板「部分」条目补导无效（闪一下、0 imported）。
+  const dbPath = makeZcodeDb(zcodeTestSessions())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'zcode')
+  const first = await def.execute({ path: dbPath, sessionIds: ['zcs-a'] })
+  assert.equal(first.imported, 1)
+
+  // 同一未变化的库，补导另一个会话：短路径不得吞掉新选中的 zcs-b
+  const second = await def.execute({ path: dbPath, sessionIds: ['zcs-b'] })
+  assert.equal(second.imported, 1)
+  assert.equal(second.results.length, 1)
+  assert.equal(second.results[0].sessionId, 'import-zcs-b')
+  assert.equal(persistence.sessions.size, 2)
+
+  // 再选已导过的会话：仍是幂等 already-imported（短路径对被覆盖选择照常生效）
+  const third = await def.execute({ path: dbPath, sessionIds: ['zcs-a'] })
+  assert.equal(third.imported, 0)
+  assert.equal(persistence.sessions.size, 2)
+})
+
 test('import_zcode db 缺失回退 transcript.jsonl：不报错、0 skipped', async () => {
   const { txPath } = writeZcodeTranscript()
   const { ctx, persistence } = makeCtx({})
@@ -689,4 +712,64 @@ test('import_zcode 读不到 DB：失败大声抛错', async () => {
   apply(ctx)
   const def = chatDef(ctx, 'zcode')
   await assert.rejects(() => def.execute({ path: join(tmpdir(), 'no-such-zcode.db') }))
+})
+
+// 往打开中的 zcode 库连接插入一个会话行（session/message/part 三表，WAL 测试用）。
+function insertZcodeSession(conn, s) {
+  conn.prepare('INSERT INTO session (id, parent_id, title, directory, time_updated) VALUES (?, ?, ?, ?, ?)')
+    .run(s.id, s.parentId ?? null, s.title, s.directory, s.timeUpdated)
+  for (const m of s.messages) {
+    conn.prepare('INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)')
+      .run(m.id, s.id, m.time, JSON.stringify(m.data))
+    for (const p of m.parts) {
+      conn.prepare('INSERT INTO part (id, message_id, time_created, data) VALUES (?, ?, ?, ?)')
+        .run(p.id, m.id, p.time, JSON.stringify(p.data))
+    }
+  }
+}
+
+// 回归（WAL 盲区）：WAL 模式下新会话只写 db.sqlite-wal，主文件 mtime/size 在
+// checkpoint 前不变——S3 短路径只比主文件会把「库已变」判成「未变」，第二次全量
+// 导入永远拿不到新会话。修复后 walSig 并入短路径判定与父记录，新会话被增量导入。
+test('import_zcode WAL 盲区：主文件未变、-wal 增长 → 新会话仍被增量导入', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-zcode-wal-'))
+  const dbPath = join(dir, 'db.sqlite')
+  const conn = new DatabaseSync(dbPath)
+  conn.exec('PRAGMA journal_mode=WAL')
+  conn.exec('PRAGMA wal_autocheckpoint=0') // 阻止自动 checkpoint 合并回主文件
+  conn.exec('CREATE TABLE session (id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, directory TEXT, time_updated INTEGER)')
+  conn.exec('CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT)')
+  conn.exec('CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, time_created INTEGER, data TEXT)')
+  const base = zcodeTestSessions()
+  insertZcodeSession(conn, base[0])
+  insertZcodeSession(conn, base[1])
+  // 连接保持打开（-wal 持续存在；关闭最后一个连接会触发 checkpoint + 删除 -wal）
+  try {
+    const { ctx, persistence } = makeCtx({})
+    apply(ctx)
+    const def = chatDef(ctx, 'zcode')
+    const first = await def.execute({ path: dbPath })
+    assert.equal(first.imported, 2)
+    const mainBefore = statSync(dbPath)
+
+    // 追加第三个会话：只落 -wal，主文件 stat 不变
+    insertZcodeSession(conn, {
+      id: 'zcs-wal', parentId: null, title: 'Wal session', directory: hostAbs('E:/demo/zcode'), timeUpdated: 1786000300000,
+      messages: [
+        { id: 'zm-w1', time: 1786000300001, data: { role: 'user' }, parts: [
+          { id: 'zp-w1', time: 1786000300001, data: { type: 'text', text: '新问题' } },
+        ] },
+      ],
+    })
+    const mainAfter = statSync(dbPath)
+    assert.equal(mainAfter.size, mainBefore.size) // 前提：主文件确实没变（WAL 语义成立）
+
+    const second = await def.execute({ path: dbPath })
+    assert.equal(second.imported, 1)
+    assert.equal(second.alreadyImported, 2)
+    assert.equal(persistence.sessions.size, 3)
+    assert.ok(persistence.sessions.get('import-zcs-wal'))
+  } finally {
+    conn.close()
+  }
 })

@@ -30,7 +30,7 @@ export declare function exportClaudeSession(
 ): Promise<ExportChatResult>
 
 // ---------- 工具调用面（ToolSurface：apply 注册的 13 个工具） ----------
-// import_chat 是 19 个聊天导入源（18 个面板来源 + local-jsonl）的统一分发入口：
+// import_chat 是 27 个聊天导入格式（25 个外部 Agent + DSH + local-jsonl）的统一分发入口：
 // format 必填（源枚举），专属参数（compacted / branch / sessionIds / fullHistory /
 // lineage / lineageMode / parseFormat）只对相应 format 生效。export_chat 是 DSH → Claude/Codex/Kimi
 // 三个出边的统一分发入口：format 必填（claude/codex/kimi），cwd 仅 claude 有效、
@@ -121,7 +121,7 @@ export interface LineIssue {
   error: string
 }
 
-/** REQ-57 落盘会话结构校验报告（导入结果附加字段，仅校验失败时出现）。 */
+/** 落盘会话结构校验报告（导入结果附加字段，仅校验失败时出现）。 */
 export interface ValidationReport {
   ok: boolean
   problems: Array<{
@@ -160,7 +160,7 @@ export interface SingleImportResult {
   droppedBoundaryResults?: number
   trimmed?: TrimReport | null
   forceImported?: { previous: string; current: string }
-  /** issue #22：宿主内存残留幽灵会话（retract 后工件已删）时重导自动另铸后缀新 id，
+  /** 宿主内存残留幽灵会话（retract 后工件已删）时重导自动另铸后缀新 id，
    * previous = 幽灵原 id、current = 新落盘 id。 */
   staleGhost?: { previous: string; current: string }
   validation?: ValidationReport
@@ -185,7 +185,7 @@ export interface BatchItemResult {
   backfilled?: boolean
   trimmed?: TrimReport | null
   forceImported?: { previous: string; current: string }
-  /** issue #22：同 SingleImportResult.staleGhost（批量条目）。 */
+  /** 同 SingleImportResult.staleGhost（批量条目）。 */
   staleGhost?: { previous: string; current: string }
   validation?: ValidationReport
 }
@@ -357,11 +357,11 @@ export interface ExportChatResult {
   /** codex/kimi 分支：工具调用/结果计数（claude 无顶层计数，见 mapping）。 */
   toolCalls?: number
   toolResults?: number
-  /** REQ-21 降级清单（有损项逐条报告；仅非空时出现）。 */
+  /** 降级清单（有损项逐条报告；仅非空时出现）。 */
   degradations?: Array<{ id: string; kind: string; strategy: 'lossless' | 'text-fallback' | 'skip-placeholder'; count: number }>
 }
 
-// ---------- verify_session（REQ-23 只读结构校验 + repair 提示） ----------
+// ---------- verify_session（只读结构校验 + repair 提示） ----------
 
 export interface VerifySessionResult {
   mode: 'single'
@@ -430,7 +430,7 @@ export interface RestoreBundleResult {
   cwdAvailable?: boolean
   /** 建议落点（originalCwd basename）。 */
   landingHint?: string
-  /** 实际归组目录（cwd 不可达时 = bundle 文件目录，REQ-39-lite 回退）。 */
+  /** 实际归组目录（cwd 不可达时 = bundle 文件目录）。 */
   groupedTo?: string
   /** 跨机器还原报告（cwd 不可达时出现，不静默）。 */
   restoreNote?: string

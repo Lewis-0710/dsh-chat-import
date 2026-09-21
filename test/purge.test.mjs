@@ -141,7 +141,8 @@ test('deleteImportedSession：工件被占用（rm 后仍存在）→ 中止且 
   // 重试也解不开），Linux 靠只读目录（unlink 需要目录写权限）
   chmodSync(artDir, 0o555)
   chmodSync(artFile, 0o444)
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 3000)'], { cwd: artDir, stdio: 'ignore' })
+  const child = spawn(process.execPath, ['-e', 'process.stdout.write("ready\\n"); setTimeout(() => {}, 5000)'], { cwd: artDir, stdio: ['ignore', 'pipe', 'ignore'] })
+  await new Promise((resolve) => child.stdout.once('data', resolve))
   persistence.sessions.set(sessionId, {
     meta: { id: sessionId },
     events: [markerEvent(sourcePath)],
@@ -154,8 +155,8 @@ test('deleteImportedSession：工件被占用（rm 后仍存在）→ 中止且 
   } finally {
     child.kill()
     await once(child, 'exit')
-    chmodSync(artDir, 0o755)
-    chmodSync(artFile, 0o644)
+    try { chmodSync(artDir, 0o755) } catch { /* 目录若已被删则忽略 */ }
+    try { chmodSync(artFile, 0o644) } catch { /* 文件若已被删则忽略 */ }
   }
 })
 
@@ -229,6 +230,26 @@ test('面板路由：/api-import/history + /api-import/purge 注册并可调用'
   const hist = JSON.parse(body)
   assert.equal(hist.ok, true)
   assert.equal(hist.total, 1)
+})
+
+test('assertPluginSession / clearSessionArtifactsForReplace：支持带下划线的合法 sessionId（如 import-foo_bar）', async () => {
+  const dir = resolveRegistryDir()
+  const sourcePath = 'D:\\kimi\\wire.jsonl'
+  const sessionId = 'import-my_special_session-123'
+  await rememberImport(dir, sourcePath, {
+    kind: 'single', dshId: sessionId, turns: 1, events: 1, importedAt: T0,
+  })
+  const persistence = makePersistence()
+  const artDir = join(process.env.DSH_HOME, 'sessions', '_proj', sessionId)
+  mkdirSync(artDir, { recursive: true })
+  writeFileSync(join(artDir, 'session.jsonl'), '{"type":"x"}\n')
+  persistence.sessions.set(sessionId, {
+    meta: { id: sessionId },
+    events: [markerEvent(sourcePath)],
+  })
+  const ctx = makeCtx(persistence)
+  const res = await deleteImportedSession(ctx, dir, sessionId)
+  assert.equal(res.sessionId, sessionId)
 })
 
 test('collectRegistryTargets：multi 子表展开', () => {

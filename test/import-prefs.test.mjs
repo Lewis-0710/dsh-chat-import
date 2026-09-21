@@ -73,7 +73,7 @@ test('readImportPrefs：injectTools 缺服务/缺键/异常回退 minimal，历�
   const ctxWith = (stored) => ({
     get(service) { return service === 'settings' ? { get() { return stored } } : undefined },
   })
-  const DEFAULT = { importSystemPrompt: true, injectTools: 'minimal' }
+  const DEFAULT = { importSystemPrompt: true, injectTools: 'minimal', sidebarButton: true }
   assert.deepEqual(IMPORT_PREFS_DEFAULT, DEFAULT)
   // settings 服务缺席 / get 抛错 → 默认
   assert.deepEqual(readImportPrefs({ get(service) { return service === 'settings' ? undefined : undefined } }), DEFAULT)
@@ -83,17 +83,17 @@ test('readImportPrefs：injectTools 缺服务/缺键/异常回退 minimal，历�
   assert.deepEqual(readImportPrefs(ctxWith(undefined)), DEFAULT)
   assert.deepEqual(readImportPrefs(ctxWith({})), DEFAULT)
   assert.deepEqual(readImportPrefs(ctxWith('garbage')), DEFAULT)
-  // 三档字符串按存储值；importSystemPrompt 独立按「!== false」
-  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: true, injectTools: 'full' })), { importSystemPrompt: true, injectTools: 'full' })
-  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false, injectTools: 'off' })), { importSystemPrompt: false, injectTools: 'off' })
-  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false, injectTools: 'minimal' })), { importSystemPrompt: false, injectTools: 'minimal' })
+  // 三档字符串按存储值；importSystemPrompt / sidebarButton 独立按「!== false」
+  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: true, injectTools: 'full', sidebarButton: true })), { importSystemPrompt: true, injectTools: 'full', sidebarButton: true })
+  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false, injectTools: 'off', sidebarButton: false })), { importSystemPrompt: false, injectTools: 'off', sidebarButton: false })
+  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false, injectTools: 'minimal' })), { importSystemPrompt: false, injectTools: 'minimal', sidebarButton: true })
   // 历史持久化 boolean：true→full / false→off
-  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: true, injectTools: true })), { importSystemPrompt: true, injectTools: 'full' })
-  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false, injectTools: false })), { importSystemPrompt: false, injectTools: 'off' })
+  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: true, injectTools: true })), { importSystemPrompt: true, injectTools: 'full', sidebarButton: true })
+  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false, injectTools: false })), { importSystemPrompt: false, injectTools: 'off', sidebarButton: true })
   // 异常值回退 minimal
-  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false, injectTools: 'bogus' })), { importSystemPrompt: false, injectTools: 'minimal' })
+  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false, injectTools: 'bogus' })), { importSystemPrompt: false, injectTools: 'minimal', sidebarButton: true })
   // 缺 injectTools 键 → 该键回退 minimal，另一键按存储值
-  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false })), { importSystemPrompt: false, injectTools: 'minimal' })
+  assert.deepEqual(readImportPrefs(ctxWith({ importSystemPrompt: false })), { importSystemPrompt: false, injectTools: 'minimal', sidebarButton: true })
 })
 
 test('registerImportPrefs: onInjectToolsChange 在注册后初值对账一次（值为归一档位），并在 injectTools 变化时再次触发', () => {

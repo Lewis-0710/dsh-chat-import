@@ -19,6 +19,7 @@ import_codex({ path: "C:\Users\<you>\.codex\sessions\2026\05\18\rollout-2026-05-
 import_chatgpt({ path: "C:\Users\<you>\Downloads\chatgpt-export\conversations.json" })
 import_opencode({ path: "C:\Users\<you>\.local\share\opencode\opencode.db" })
 import_kilocode({ path: "C:\Users\<you>\.local\share\kilo\kilo.db" })
+import_teleagent({ path: "C:\Users\<you>\.local\share\TeleAgent\users\<account>\teleagent.db" })
 import_local_jsonl({ path: "D:\downloads\session.jsonl" })
 ```
 
@@ -29,7 +30,7 @@ import_local_jsonl({ path: "D:\downloads\session.jsonl" })
 import_local_jsonl({ path: "D:\downloads\unknown.jsonl", format: "claude" })
 ```
 
-`import_chatgpt` / `import_opencode` / `import_kilocode` / `import_zcode` / `import_hermes` 恒返回批量结果——一个文件 / 数据库包含全部会话，一次调用即可让每段对话成为独立会话。
+`import_chatgpt` / `import_opencode` / `import_kilocode` / `import_teleagent` / `import_zcode` / `import_hermes` 恒返回批量结果——一个文件 / 数据库包含全部会话，一次调用即可让每段对话成为独立会话。`import_teleagent` 也接受 `users/` 多账户目录（逐账户枚举 `<账户>/teleagent.db`）或 `TeleAgent/` 数据根。
 
 <details>
 <summary><b>导入参数与行为</b></summary>
@@ -71,7 +72,7 @@ import_agents({ codexRoot: "~/.codex", apply: true })  // 显式包含 Codex 资
 
 ### scan_discover — 只读会话发现
 
-`scan_discover` 扫描全部 18 种格式的已知数据根（Windows 上含 Reasonix 桌面版与 Claude-3p 根），返回结构化会话索引（标题、项目、cwd、路径、导入状态，源目录为 git 仓库时附分支/dirty），供批导入前预览。零副作用：
+`scan_discover` 扫描全部已支持格式的已知数据根（包括 Cline 新版 sessions 与 VS Code globalStorage 旧版任务，以及 Windows 上的 Reasonix 桌面版与 Claude-3p 根），返回结构化会话索引（标题、项目、cwd、路径、导入状态，源目录为 git 仓库时附分支/dirty），供批导入前预览。VS Code 使用非标准 globalStorage 路径时可设置 `CLINE_LEGACY_GLOBAL_STORAGE_DIR`。零副作用：
 
 ```
 scan_discover()
@@ -87,21 +88,22 @@ list_imported_sessions()
 retract_import({ sessionId: "import-019f5f27-…" })
 ```
 
-> **撤回后的幽灵会话（#22）** — DSH 宿主没有 delete/forget 面：`retract_import` 并手动删除工件后，会话 id 仍可能占据宿主内存索引（会话列表里可见、直到重启 dsh 才消失），同源重导此前会报 `session "…" already exists in this backend`。现已自愈：重导检测到陈旧条目（list 仍暴露但日志不可读，或 create 拒绝该 id）时**自动另铸后缀新 id**（`import-<id>-1`）完整重导并报告 `staleGhost: { previous, current }`，不再失败；`retract_import` 的 `manualDelete` 引导也注明幽灵会话需重启 dsh 才彻底消失。
+> **撤回后的幽灵会话** — DSH 宿主没有 delete/forget 面：`retract_import` 并手动删除工件后，会话 id 仍可能占据宿主内存索引（会话列表里可见、直到重启 dsh 才消失），同源重导此前会报 `session "…" already exists in this backend`。现已自愈：重导检测到陈旧条目（list 仍暴露但日志不可读，或 create 拒绝该 id）时**自动另铸后缀新 id**（`import-<id>-1`）完整重导并报告 `staleGhost: { previous, current }`，不再失败；`retract_import` 的 `manualDelete` 引导也注明幽灵会话需重启 dsh 才彻底消失。
 
-### export_chat — DSH → Claude / Codex / Kimi（矩阵导出）
+### export_chat — DSH → Claude / Codex / Kimi / opencode（矩阵导出）
 
-`export_chat({ format: "claude", sessionId })` 把现有 DSH 会话（导入的或原生的）序列化为 Claude Code JSONL transcript，可直接 `--resume`。文件写到 `<outputDir>/<slug>/<uuid>.jsonl`（默认 `~/.claude/projects`），文件名是全新 UUID v4——绝不覆盖已有文件。`format: "codex"` 与 `format: "kimi"` 分别写 Codex rollout JSONL 与 Kimi `wire.jsonl`（默认 `~/.dsh/exports`，或用 `path: …` 指定目标）——补齐 DSH↔Claude↔Codex↔Kimi 矩阵（导入边已存在）。每次导出在 `degradations` 字段里逐条列出**有损项**（孤儿工具结果 / 注入跳过 / 附件跳过）——绝不静默丢弃：
+`export_chat({ format: "claude", sessionId })` 把现有 DSH 会话（导入的或原生的）序列化为 Claude Code JSONL transcript，可直接 `--resume`。文件写到 `<outputDir>/<slug>/<uuid>.jsonl`（默认 `~/.claude/projects`），文件名是全新 UUID v4——绝不覆盖已有文件。`format: "codex"` / `format: "kimi"` 分别写 Codex rollout JSONL 与 Kimi `wire.jsonl`；`format: "opencode"` 写 `opencode import <文件>` 能吃下的 JSON 文档（会话 info + messages + parts，id 前缀 `ses` / `msg` / `prt` 是 opencode 解码器的硬要求）。后三者默认写 `~/.dsh/exports`，或用 `path: …` 指定目标——补齐 DSH↔Claude↔Codex↔Kimi↔opencode 矩阵（导入边已存在）。每次导出在 `degradations` 字段里逐条列出**有损项**（孤儿工具结果 / 注入跳过 / 附件跳过，opencode 另有 `usage-unknown`：它要求 `cost`/`tokens` 而 DSH 会话日志没有用量计数，故写 0 并上报）——绝不静默丢弃：
 
 ```
 export_chat({ format: "claude", sessionId: "import-019f5f27-…" })
 export_chat({ format: "codex", sessionId: "…", dryRun: true })
 export_chat({ format: "kimi", sessionId: "…", outputDir: "D:\backup\kimi" })
+export_chat({ format: "opencode", sessionId: "…" })   // → ~/.dsh/exports/<id>.opencode.json，随后：opencode import <文件>
 ```
 
 ### export_bundle / restore_bundle — 便携 interchange bundle
 
-`export_bundle({ sessionId })` 写出 **`.dshbundle.json`**——事件级无损的 interchange bundle（协议见 [docs/INTERCHANGE.md](docs/INTERCHANGE.md)），带双重 SHA-256 指纹（会话级 + 文件级）与机器无关的落点信息（`originalCwd` + `landingHint`）。`restore_bundle({ path })` 先校验指纹（损坏大声报告、绝不静默还原），再经同一幂等状态机导入——重复还原跳过、`force: true` 另存副本、目录模式逐个还原 `.dshbundle.json`：
+`export_bundle({ sessionId })` 写出 **`.dshbundle.json`**——事件级无损的 interchange bundle（协议见 [docs/INTERCHANGE.md](INTERCHANGE.md)），带双重 SHA-256 指纹（会话级 + 文件级）与机器无关的落点信息（`originalCwd` + `landingHint`）。`restore_bundle({ path })` 先校验指纹（损坏大声报告、绝不静默还原），再经同一幂等状态机导入——重复还原跳过、`force: true` 另存副本、目录模式逐个还原 `.dshbundle.json`：
 
 ```
 export_bundle({ sessionId: "import-019f5f27-…" })                    // → ~/.dsh/exports/<id>.dshbundle.json
@@ -109,15 +111,17 @@ restore_bundle({ path: "D:\backup\sess.dshbundle.json" })            // A 机导
 restore_bundle({ path: "D:\backup\bundle-dir", preview: true })      // dry-run
 ```
 
-**跨机器（REQ-62）：** A 机导出 → 拷贝 bundle → B 机还原。原 `cwd` 在 B 机不可达时，会话回退归到 bundle 文件所在目录（REQ-39-lite 归组），结果报告 `cwdAvailable: false` / `groupedTo` / `restoreNote`——绝不静默。
+**跨机器：** A 机导出 → 拷贝 bundle → B 机还原。原 `cwd` 在 B 机不可达时，会话回退归到 bundle 文件所在目录，结果报告 `cwdAvailable: false` / `groupedTo` / `restoreNote`——绝不静默。
 
 ### verify_session — 只读结构审计
 
-`verify_session({ sessionId })` 对任意 DSH 会话做只读结构校验：seq 连续、事件类型白名单、surface 事件带 `surfaceOp`、`sourceEventSeqs` 指向真实 `tool/call`、turn/step 平衡、工具调用↔结果配对。问题逐条定位（kind + seq + message），并按 kind 给出 `repairHints`（`force` 重导 / 闭合半开轮 / 源转录中途开始的边界说明）：
+`verify_session({ sessionId })` 对任意 DSH 会话做只读结构校验：seq 连续、事件类型白名单、surface 事件带 `surfaceOp`、`sourceEventSeqs` 指向真实 `tool/call`、surface 事件不早于首个 `step/start`、turn/step 平衡、工具调用↔结果配对。问题逐条定位（kind + seq + message），并按 kind 给出 `repairHints`（`force` 重导 / 闭合半开轮 / 源转录中途开始的边界说明）：
 
 ```
 verify_session({ sessionId: "import-019f5f27-…" })
 ```
+
+> 环境变更提示注入在首个 `step/start` 之后（`turn/start → step/start → 提示 → 该轮提问`）。它仍是模型看到的第一条消息，但日志里没有任何 surface 事件早于第一个 step——旧格式（v0–v2）日志若把提示写在首个 step 之前，宿主做 v2→v3 格式迁移时会 fail-closed 拒载（`surface before first step cannot acquire a system head`），会话打不开、导出/同步/校验也读不到。`verify_session` 会以 `surface-before-first-step` 点名这类存量会话，用 `force: true` 重导（或面板「刷新已导入」）即可按新注入位重写。
 
 ### doctor — 只读迁移健康检查
 
@@ -171,9 +175,20 @@ sync_to_claude({ sessionId: "…", target: "copy", dryRun: true })
 
 ### 浏览器面板 — 侧边栏发现与导入
 
-dsh web 侧边栏底部有一个「导入会话」入口（`sidebar.footer.action` 槽条目，与同槽其它条目共享那条 footer 行。同槽出现整宽条目——插件徽标、费用卡之类——时整行改为换行堆叠，各条目各占一整行；只是与更窄的入口抢同一行、放不下文字时，入口缩成 36×36 圆钮，文字保留在 tooltip / aria-label 里。两种情况下都不会被截断或遮挡）。打开的面板**按工作区文件夹分组**列出发现的会话（各来源记录里的 `cwd`/项目名，缺省归入「(未分组)」），支持来源过滤——「全部来源」扫描全部格式的默认数据根，单选来源则只看该格式——并带逐会话导入状态徽标（已导入 / 部分 / 未导入）。搜索框按标题 / 工作区 / 路径过滤，列表**分页**展示（每页 50 条），跨页选择保留便于批量操作。面板支持 `Esc` 关闭。
+dsh web 的左侧栏底部有唯一一个「导入会话」入口：**导入会话**按钮（样式对齐「设置」入口、图标用插件 logo；`sidebar.footer.action` 槽条目，与同槽其它条目共享那条 footer 行。同槽出现整宽条目——插件徽标、费用卡之类——时整行改为换行堆叠，各条目各占一整行；只是与更窄的入口抢同一行、放不下文字时，入口缩成 36×36 圆钮，文字保留在 tooltip / aria-label 里。两种情况下都不会被截断或遮挡）。插件**要求 dsh ≥ 0.1.5-rc.1**（`peerDependencies` 已抬门槛）：导入窗口**停靠进官方原生右侧栏**——插件在右侧栏注册「导入会话」tab 类型（guide 页有带图标 / 标题 / 一行描述的胶囊），点按钮即通过 `sidebarRight.openTab('chat-import')` 打开该 tab、中间的对话区保留。无回落链：没有官方右侧栏的老版本不再受客户端支持。窗口内**按工作区文件夹分组**列出发现的会话（各来源记录里的 `cwd`/项目名，缺省归入「(未分组)」），支持来源过滤——「全部来源」扫描全部格式的默认数据根，单选来源则只看该格式——并带逐会话导入状态徽标（已导入 / 部分 / 未导入）。搜索框按标题 / 工作区 / 路径过滤，列表**分页**展示（每页 50 条），跨页选择保留便于批量操作。
 
 每行支持**单选导入**，复选框支持**多选导入**（「导入所选 (N)」）：面板调用与 `import_*` 工具完全相同的 host 导入管线，幂等跳过 / 增量续写 / force / 上下文预算语义完全一致；导入后自动刷新列表展示最新状态。多会话源（如 `conversations.json`、opencode/zcode/hermes 库）整源导入——opencode/zcode 只导所选 `sessionId`。
+
+来源下方有「**导入到**」下拉，决定这次导入的落点：
+
+| 选择 | 行为 |
+| --- | --- |
+| **DSH 会话环境**（默认） | 照常导入为可继续的 DSH 会话（既有行为不变）。 |
+| Claude Code | 转换后写进 `~/.claude/projects/<slug>/<uuid>.jsonl`；Claude Code 直接读该目录（`claude --resume` 打开）。 |
+| Codex / Kimi Code | 分别写成 Codex rollout JSONL / Kimi `wire.jsonl` 落到 `~/.dsh/exports/`，由你放进对应工具的 sessions 目录。 |
+| opencode | 写成 opencode JSON 落到 `~/.dsh/exports/`，随后用 `opencode import <文件>` 导入。 |
+
+非 DSH 目标是**转投而不是导入**：插件用同一套转换器读源会话，序列化成目标工具自己的格式（即 `export_chat` 用的那些序列化器），以 `createIfAbsent` 落盘（绝不覆盖）。为这次转换而临时建立的 DSH 会话会在**导出成功后立刻撤回**，DSH 侧不留副本；但如果会话在你选择转投之前就已存在（already-imported / appended），**绝不删除**——只导出，并在结果里标为保留。撤回失败（会话在运行、工件被占用）会把原因写进结果而不是吞掉。结果行显示落盘路径与该工具的下一步操作，条目级失败与常规 `degradations` 清单照常列出。
 
 > 数据来自与 `scan_discover` 同一套只读发现（30s TTL 缓存 + 持久化 mtime 书签）；面板除你主动触发的导入外零写入。
 

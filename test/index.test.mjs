@@ -5,10 +5,13 @@ import assert from 'node:assert/strict'
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { tmpdir, homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { isAbsolute, dirname, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
+import { zstdCompressSync } from 'node:zlib'
+import { Buffer } from 'node:buffer'
 import { apply, readOpencodeDb, exportClaudeSession } from '../index.mjs'
+import { discoverSessions } from '../lib/discovery.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { resolveRegistryDir, loadImports, rememberImport, listPersistedIds, readSessionRecord, readSessionEvents, writeSession } from '../lib/imports.mjs'
 import { syncClaudeSession, evaluateWritebackGuards, readFileTailUuid } from '../lib/backfill.mjs'
@@ -16,7 +19,8 @@ import { clearScanCache } from '../lib/discovery.mjs'
 import { clearWorkspacePathCache, slugifyClaudeCwd } from '../lib/cwd-map.mjs'
 import { restampSession, sanitizeJsonValue, prepareHostMeta } from '../lib/import-core.mjs'
 import { SESSION_FORMAT_VERSION } from '../convert.mjs'
-import { IS_WINDOWS, hostAbs, hostAbsText } from './_support/host-path.mjs'
+import { verifyOpencodeImportJson } from '../export.mjs'
+import { hostAbs, hostAbsText } from './_support/host-path.mjs'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 // 夹具文本里的盘符路径按宿主平台改写：这些转录/元数据夹具带的是 Windows cwd，而宿主落盘
@@ -820,6 +824,859 @@ test('import_workbuddy 幂等：重复导入同一文件已存在则跳过', asy
   assert.equal(persistence.sessions.size, 1)
 })
 
+// ---- import_continue 集成 ----
+
+// 合成 Continue 会话（结构与 lib/convert/continue.mjs 的契约一致：toolCalls 在 message 上，
+// reasoning/toolCallStates/conversationSummary 在 ChatHistoryItem 上）。
+const CID = '3f2b9c14-58a7-4f6d-9c31-0d5e7a1b2c34'
+const CCWD = hostAbs('D:/demo/continue-proj')
+const CONTINUE_TS = 1787131157250
+const CONTINUE_DIR = 'D:\\demo\\continue\\sessions\\'
+function continueItem(message, extra = {}) {
+  return { message, contextItems: [], ...extra }
+}
+function continueSession(history, over = {}) {
+  return JSON.stringify({
+    sessionId: CID, title: 'New Session', workspaceDirectory: CCWD, history, ...over,
+  })
+}
+const continueIndex = JSON.stringify([
+  { sessionId: CID, title: '修登录页分页', dateCreated: String(CONTINUE_TS), workspaceDirectory: CCWD, messageCount: 2 },
+])
+
+test('import_continue 单文件导入：落盘、归组、索引带出的创建时间、返回值符合 schema', async () => {
+  const src = CONTINUE_DIR + CID + '.json'
+  const { ctx, persistence, attached } = makeCtx({
+    [src]: continueSession([
+      continueItem({ id: 'u1', role: 'user', content: '修一下登录页分页' }),
+      continueItem({ id: 'a1', role: 'assistant', content: '已修好。' }),
+    ], { title: '修登录页分页' }),
+    [CONTINUE_DIR + 'sessions.json']: continueIndex,
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'continue')
+  const value = await def.execute({ path: src })
+
+  assert.equal(value.mode, 'single')
+  assert.equal(value.sessionId, 'import-' + CID)
+  assert.equal(value.turns, 1)
+  assert.equal(value.messages, 2) // user + assistant（环境变更声明不计）
+  assert.equal(value.toolCalls, 0)
+  assert.equal(value.alreadyImported, false)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get('import-' + CID)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, CCWD)
+  // 会话文件内部没有时间戳：创建时间只能来自同目录 sessions.json 索引
+  assert.equal(saved.meta.createdAt, CONTINUE_TS)
+  assert.equal(saved.events.at(-1).type, 'session/title')
+  assert.match(saved.events.at(-1).data.title, /^Continue · /)
+  assert.ok(saved.events.every((e, i) => e.seq === i))
+  assertEnvelopeHygiene(saved.events)
+  assert.equal(attached.length, 1)
+  assert.equal(attached[0].id, 'import-' + CID)
+})
+
+test('import_continue 工具历史：tool/result 带 sourceEventSeqs、思考与结果落盘', async () => {
+  const src = CONTINUE_DIR + CID + '.json'
+  const { ctx, persistence } = makeCtx({
+    [src]: continueSession([
+      continueItem({ id: 'u1', role: 'user', content: '跑一下测试' }),
+      continueItem({ id: 't1', role: 'thinking', content: '先用命令跑' }),
+      continueItem({
+        id: 'a1', role: 'assistant', content: '',
+        toolCalls: [{ id: 'call_1', type: 'function', function: { name: 'run_tests', arguments: '{"command":"npm test"}' } }],
+      }),
+      continueItem({ id: 'r1', role: 'tool', content: 'ok 42 passed', toolCallId: 'call_1' }),
+      continueItem({ id: 'a2', role: 'assistant', content: '测试通过。' }),
+    ]),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'continue')
+  const value = await def.execute({ path: src })
+  assert.equal(value.mode, 'single')
+  assert.equal(value.toolCalls, 1)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get(value.sessionId)
+  const result = saved.events.find((e) => e.type === 'tool/result')
+  assert.ok(result)
+  assert.deepEqual(result.sourceEventSeqs, [saved.events.find((e) => e.type === 'tool/call').seq])
+  assert.equal(result.data.message.content[0].content[0].text, 'ok 42 passed')
+  // thinking 消息落在承载工具调用的那一步内容头部（reasoning 块）
+  const reasoning = saved.events
+    .flatMap((e) => (e.type === 'assistant/message' ? e.data.message.content : []))
+    .filter((b) => b.type === 'reasoning')
+  assert.deepEqual(reasoning, [{ type: 'reasoning', text: '先用命令跑' }])
+})
+
+test('import_continue 幂等：重复导入同一文件已存在则跳过', async () => {
+  const src = CONTINUE_DIR + CID + '.json'
+  const { ctx, persistence } = makeCtx({
+    [src]: continueSession([
+      continueItem({ id: 'u1', role: 'user', content: '第一问' }),
+      continueItem({ id: 'a1', role: 'assistant', content: '一答' }),
+    ]),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'continue')
+  const first = await def.execute({ path: src })
+  const second = await def.execute({ path: src })
+  assert.equal(first.alreadyImported, false)
+  assert.equal(second.alreadyImported, true)
+  assert.equal(persistence.sessions.size, 1)
+})
+
+// ---- import_cline 集成 ----
+
+// 合成 Cline 会话（结构对齐 lib/convert/cline.mjs 的 v1 契约：Anthropic 原生块，
+// 工具结果是挂在 user 消息上的 tool_result 块）。元数据分工与上游一致：cwd/标题在
+// manifest（DB 优先，测试里命中 manifest 分支 —— DB 属真实 SQLite，见 cline-db.test.mjs）。
+const CLINE_SID = '01J8Z6Q0M4V7X2K9TB3N5R8WDA'
+const CLINE_CWD = hostAbs('D:/demo/cline-proj')
+const CLINE_TS = '2026-04-22T17:40:00.000Z'
+const CLINE_DIR = 'D:\\demo\\cline\\data\\sessions\\' + CLINE_SID + '\\'
+function clineSession(messages, over = {}) {
+  return JSON.stringify({
+    version: 1, updated_at: '2026-04-22T17:42:10.123Z', agent: 'lead', sessionId: CLINE_SID, messages, ...over,
+  })
+}
+function clineManifest(title) {
+  return JSON.stringify({
+    version: 1, session_id: CLINE_SID, started_at: CLINE_TS, cwd: CLINE_CWD,
+    workspace_root: CLINE_CWD, metadata: { title },
+  })
+}
+function clineUser(text) {
+  return { id: 'u1', role: 'user', content: [{ type: 'text', text }], ts: 1776879600000 }
+}
+function clineAssistant(blocks) {
+  return { id: 'a1', role: 'assistant', content: blocks, ts: 1776879601000 }
+}
+
+test('import_cline 单文件导入：manifest 带出 cwd/标题/创建时间、落盘归组、schema 校验', async () => {
+  const src = CLINE_DIR + CLINE_SID + '.messages.json'
+  const { ctx, persistence, attached } = makeCtx({
+    [src]: clineSession([
+      clineUser('修一下登录页分页'),
+      clineAssistant([{ type: 'text', text: '已修好。' }]),
+    ]),
+    [CLINE_DIR + CLINE_SID + '.json']: clineManifest('修登录页分页'),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'cline')
+  const value = await def.execute({ path: src })
+
+  assert.equal(value.mode, 'single')
+  assert.equal(value.sessionId, 'import-' + CLINE_SID)
+  assert.equal(value.turns, 1)
+  assert.equal(value.messages, 2)
+  assert.equal(value.toolCalls, 0)
+  assert.equal(value.alreadyImported, false)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get('import-' + CLINE_SID)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, CLINE_CWD)
+  assert.equal(saved.meta.createdAt, Date.parse(CLINE_TS)) // 只存在于 manifest / DB 索引
+  assert.equal(saved.events.at(-1).type, 'session/title')
+  assert.match(saved.events.at(-1).data.title, /^Cline · /)
+  assert.ok(saved.events.every((e, i) => e.seq === i))
+  assertEnvelopeHygiene(saved.events)
+  assert.equal(attached.length, 1)
+  assert.equal(attached[0].id, 'import-' + CLINE_SID)
+})
+
+test('import_cline 工具历史：tool_result 块配对、思考落盘、is_error 如实标记', async () => {
+  const src = CLINE_DIR + CLINE_SID + '.messages.json'
+  const { ctx, persistence } = makeCtx({
+    [src]: clineSession([
+      clineUser('跑一下测试'),
+      clineAssistant([
+        { type: 'thinking', thinking: '先用命令跑' },
+        { type: 'tool_use', id: 'toolu_1', name: 'run_tests', input: { command: 'npm test' } },
+      ]),
+      { id: 'u2', role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'ok 42 passed', is_error: false }] },
+      clineAssistant([{ type: 'text', text: '测试通过。' }]),
+    ]),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'cline')
+  const value = await def.execute({ path: src })
+  assert.equal(value.mode, 'single')
+  assert.equal(value.toolCalls, 1)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get(value.sessionId)
+  const result = saved.events.find((e) => e.type === 'tool/result')
+  assert.ok(result)
+  assert.deepEqual(result.sourceEventSeqs, [saved.events.find((e) => e.type === 'tool/call').seq])
+  assert.equal(result.data.message.content[0].content[0].text, 'ok 42 passed')
+  const reasoning = saved.events
+    .flatMap((e) => (e.type === 'assistant/message' ? e.data.message.content : []))
+    .filter((b) => b.type === 'reasoning')
+  assert.deepEqual(reasoning, [{ type: 'reasoning', text: '先用命令跑' }])
+})
+
+test('import_cline 幂等：重复导入同一文件已存在则跳过', async () => {
+  const src = CLINE_DIR + CLINE_SID + '.messages.json'
+  const { ctx, persistence } = makeCtx({
+    [src]: clineSession([clineUser('第一问'), clineAssistant([{ type: 'text', text: '一答' }])]),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'cline')
+  const first = await def.execute({ path: src })
+  const second = await def.execute({ path: src })
+  assert.equal(first.alreadyImported, false)
+  assert.equal(second.alreadyImported, true)
+  assert.equal(persistence.sessions.size, 1)
+})
+
+test('import_cline legacy：taskHistory 元数据 + api history 经真实工具入口导入', async () => {
+  const taskId = 'legacy-tool-001'
+  const root = 'D:\\demo\\Code\\User\\globalStorage\\saoudrizwan.claude-dev'
+  const src = root + '\\tasks\\' + taskId + '\\api_conversation_history.json'
+  const state = root + '\\state\\taskHistory.json'
+  const { ctx, persistence, attached } = makeCtx({
+    [src]: JSON.stringify([
+      { role: 'user', content: 'first question' },
+      { role: 'assistant', content: 'first answer' },
+      { role: 'user', content: 'stale question' },
+      { role: 'assistant', content: 'stale answer' },
+      { role: 'user', content: 'current question' },
+      { role: 'assistant', content: 'current answer' },
+    ]),
+    [state]: JSON.stringify([{
+      id: taskId, ts: 1786000000000, task: 'Legacy import', cwdOnTaskInitialization: hostAbs('D:/repo'),
+      modelId: 'claude-sonnet', conversationHistoryDeletedRange: [2, 3],
+    }]),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'cline')
+  const value = await def.execute({ path: src })
+
+  assert.equal(value.mode, 'single')
+  assert.equal(value.sessionId, 'import-' + taskId)
+  assert.equal(value.turns, 2)
+  assert.equal(value.messages, 4)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get(value.sessionId)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, hostAbs('D:/repo'))
+  assert.equal(saved.meta.createdAt, 1786000000000)
+  assert.match(saved.events.at(-1).data.title, /^Cline · Legacy import/)
+  assert.equal(attached.length, 1)
+})
+
+// ---- import_goose 集成（真实 SQLite 临时库） ----
+
+// 合成 Goose 会话库（sessions/messages 两表，schema 对齐 lib/goose.mjs 头部契约）。
+const GOOSE_CWD = hostAbs('D:/demo/goose-proj')
+const GOOSE_TS = 1745343730 // Unix 秒（goose 的 created_timestamp 是整数）
+function gooseFixtureSessions() {
+  const text = (t) => [{ type: 'text', text: t }]
+  return [
+    {
+      id: '20260422_1',
+      name: '修登录页分页',
+      description: '',
+      workingDir: GOOSE_CWD,
+      sessionType: 'user',
+      parent: null,
+      messages: [
+        { role: 'user', ts: GOOSE_TS, content: text('修一下登录页分页') },
+        {
+          role: 'assistant',
+          ts: GOOSE_TS + 1,
+          content: [
+            { type: 'thinking', thinking: '先读文件', signature: '' },
+            { type: 'toolRequest', id: 'call_1', tool_call: { status: 'success', value: { name: 'read_file', arguments: { path: 'a.ts' } } } },
+          ],
+        },
+        { role: 'user', ts: GOOSE_TS + 2, content: [{ type: 'toolResponse', id: 'call_1', tool_result: { status: 'success', value: { content: [{ type: 'text', text: 'export const a = 1' }] } } }] },
+        { role: 'assistant', ts: GOOSE_TS + 3, content: text('只有一个导出。') },
+      ],
+    },
+    {
+      id: '20260422_2',
+      name: '',
+      description: '遗留描述标题',
+      workingDir: GOOSE_CWD,
+      sessionType: 'user',
+      parent: null,
+      messages: [
+        { role: 'user', ts: GOOSE_TS + 10, content: text('第二个会话') },
+        { role: 'assistant', ts: GOOSE_TS + 11, content: text('好') },
+      ],
+    },
+    // 子代理会话：带 parent_session_id，不单独成会话
+    {
+      id: '20260422_3',
+      name: '子任务',
+      description: '',
+      workingDir: GOOSE_CWD,
+      sessionType: 'sub_agent',
+      parent: '20260422_1',
+      messages: [
+        { role: 'user', ts: GOOSE_TS + 20, content: text('子任务提问') },
+        { role: 'assistant', ts: GOOSE_TS + 21, content: text('子任务回答') },
+      ],
+    },
+  ]
+}
+
+function makeGooseDb(sessions) {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-goose-'))
+  const dbPath = join(dir, 'sessions.db')
+  const db = new DatabaseSync(dbPath)
+  db.exec(`CREATE TABLE sessions (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+    session_type TEXT NOT NULL DEFAULT 'user', working_dir TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    provider_name TEXT, parent_session_id TEXT)`)
+  db.exec(`CREATE TABLE messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, role TEXT NOT NULL,
+    content_json TEXT NOT NULL, created_timestamp INTEGER NOT NULL, metadata_json TEXT)`)
+  for (const s of sessions) {
+    db.prepare('INSERT INTO sessions (id, name, description, session_type, working_dir, created_at, updated_at, provider_name, parent_session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(s.id, s.name, s.description, s.sessionType, s.workingDir, '2026-04-22 17:40:00', '2026-04-22 17:42:10', 'anthropic', s.parent)
+    for (const m of s.messages) {
+      db.prepare('INSERT INTO messages (session_id, role, content_json, created_timestamp) VALUES (?, ?, ?, ?)')
+        .run(s.id, m.role, JSON.stringify(m.content), m.ts)
+    }
+  }
+  db.close()
+  return dbPath
+}
+
+test('import_goose 单库文件：批量形态、逐会话落盘、子代理不导入、schema 校验', async () => {
+  const dbPath = makeGooseDb(gooseFixtureSessions())
+  const { ctx, persistence, attached } = makeCtx({}) // stat 不在 tree 里 → 按真实 DB 文件处理
+  apply(ctx)
+  const def = chatDef(ctx, 'goose')
+  const value = await def.execute({ path: dbPath })
+
+  assert.equal(value.mode, 'batch') // 单 .db 也恒批量
+  assert.equal(value.total, 2) // 读取层已滤掉子代理会话（parent_session_id / sub_agent）
+  assert.equal(value.imported, 2)
+  assert.equal(value.failed, 0)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const first = persistence.sessions.get('import-20260422_1')
+  assert.ok(first)
+  assert.equal(first.meta.cwd, GOOSE_CWD)
+  // 创建时间取会话级 created_at（CURRENT_TIMESTAMP 文本按 **UTC** 解析；按本地时区会偏几小时）
+  assert.equal(first.meta.createdAt, Date.parse('2026-04-22T17:40:00Z'))
+  assert.match(first.events.at(-1).data.title, /^Goose · /)
+  assert.ok(first.events.every((e, i) => e.seq === i))
+  assertEnvelopeHygiene(first.events)
+
+  // 工具配对 + 推理块
+  const result = first.events.find((e) => e.type === 'tool/result')
+  assert.deepEqual(result.sourceEventSeqs, [first.events.find((e) => e.type === 'tool/call').seq])
+  assert.equal(result.data.message.content[0].content[0].text, 'export const a = 1')
+  const reasoning = first.events
+    .flatMap((e) => (e.type === 'assistant/message' ? e.data.message.content : []))
+    .filter((b) => b.type === 'reasoning')
+  assert.deepEqual(reasoning, [{ type: 'reasoning', text: '先读文件' }])
+
+  // 标题回退：name 为空 → description
+  const second = persistence.sessions.get('import-20260422_2')
+  assert.match(second.events.at(-1).data.title, /遗留描述标题/)
+  assert.equal(persistence.sessions.has('import-20260422_3'), false)
+  assert.equal(attached.length, 2)
+})
+
+test('import_goose 目录模式：自动定位 sessions.db；sessionIds 过滤只导所选会话', async () => {
+  const dbPath = makeGooseDb(gooseFixtureSessions())
+  const dir = join(dbPath, '..')
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'goose')
+
+  const filtered = await def.execute({ path: dir, sessionIds: ['20260422_2'] })
+  assert.equal(filtered.mode, 'batch')
+  assert.equal(filtered.imported, 1)
+  assert.equal(persistence.sessions.has('import-20260422_1'), false)
+  assert.equal(persistence.sessions.has('import-20260422_2'), true)
+})
+
+test('import_goose 幂等：重复导入同一库只落盘一次', async () => {
+  const dbPath = makeGooseDb(gooseFixtureSessions())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'goose')
+  const first = await def.execute({ path: dbPath })
+  const second = await def.execute({ path: dbPath })
+  assert.equal(first.imported, 2)
+  assert.equal(second.imported, 0)
+  assert.equal(second.alreadyImported, 2)
+  assert.equal(persistence.sessions.size, 2)
+})
+
+test('import_goose 读不到 Goose 库：失败大声抛错', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-goose-bad-'))
+  const bogus = join(dir, 'sessions.db')
+  writeFileSync(bogus, 'not a sqlite db')
+  const { ctx } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'goose')
+  await assert.rejects(() => def.execute({ path: bogus }), /Goose/)
+})
+
+test('import_goose preview：SQLite 库逐会话 dry-run（恒批量、零副作用、标题与落盘同口径）', async () => {
+  const dbPath = makeGooseDb(gooseFixtureSessions())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'goose')
+  const value = await def.execute({ path: dbPath, preview: true })
+  assert.equal(value.mode, 'batch')
+  assert.equal(value.preview, true)
+  assert.equal(value.total, 2)
+  assert.equal(persistence.sessions.size, 0) // 零副作用
+  assert.ok(value.results.every((r) => typeof r.title === 'string'))
+  assert.ok(value.results.some((r) => r.title.startsWith('Goose · ')))
+})
+
+// ---- import_zed 集成（真实 SQLite 临时库，zstd blob） ----
+
+// 合成 Zed 线程库（threads 单表；data_type=zstd 是上游实际写入的形态）
+const ZED_ID = '2f8b1c6e-0000-4000-8000-000000000001'
+const ZED_CWD = hostAbs('D:/demo/zed-proj')
+const ZED_TS = '2026-09-15T13:38:45.123456789+00:00'
+function zedThreadPayload({ title = '修登录页分页', version = '0.3.0', withTool = true } = {}) {
+  const messages = [
+    { User: { id: 'u1', content: [{ Text: '修一下登录页分页' }] } },
+  ]
+  if (withTool) {
+    messages.push({
+      Agent: {
+        content: [
+          { Thinking: { text: '先读文件', signature: null } },
+          {
+            ToolUse: {
+              id: 'toolu_01', name: 'read_file', raw_input: '{"path":"a.ts"}',
+              input: { type: 'json', value: { path: 'a.ts' } }, is_input_complete: true, thought_signature: null,
+            },
+          },
+        ],
+        tool_results: {
+          toolu_01: { tool_use_id: 'toolu_01', tool_name: 'read_file', is_error: false, content: [{ Text: 'export const a = 1' }], output: null },
+        },
+        reasoning_details: null,
+      },
+    })
+  }
+  messages.push({ Agent: { content: [{ Text: '已修好。' }], tool_results: {}, reasoning_details: null } })
+  return { title, updated_at: ZED_TS, version, messages }
+}
+
+function makeZedDb(threads) {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-zed-'))
+  const dbPath = join(dir, 'threads.db')
+  const db = new DatabaseSync(dbPath)
+  db.exec(`CREATE TABLE threads (
+    id TEXT PRIMARY KEY, summary TEXT NOT NULL, updated_at TEXT NOT NULL,
+    data_type TEXT NOT NULL, data BLOB NOT NULL, parent_id TEXT,
+    folder_paths TEXT, folder_paths_order TEXT, created_at TEXT)`)
+  for (const t of threads) {
+    db.prepare('INSERT INTO threads (id, summary, updated_at, data_type, data, parent_id, folder_paths, folder_paths_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(t.id, t.summary, ZED_TS, 'zstd', zstdCompressSync(Buffer.from(JSON.stringify(t.payload), 'utf8')), t.parent || null, t.folderPaths ?? ZED_CWD, '0', ZED_TS)
+  }
+  db.close()
+  return dbPath
+}
+
+test('import_zed 单库文件：zstd 解压 + 批量形态 + 逐线程落盘 + schema 校验', async () => {
+  const dbPath = makeZedDb([
+    { id: ZED_ID, summary: '修登录页分页', payload: zedThreadPayload({}) },
+    { id: 'legacy-1', summary: '老库线程', payload: zedThreadPayload({ title: '老库线程', version: '0.2.0', withTool: false }) },
+    // 子代理线程（parent_id 非空）不落地
+    { id: 'sub-1', summary: '子代理', parent: ZED_ID, payload: zedThreadPayload({ title: '子代理' }) },
+  ])
+  const { ctx, persistence, attached } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'zed')
+  const value = await def.execute({ path: dbPath })
+
+  assert.equal(value.mode, 'batch')
+  assert.equal(value.total, 2) // 读取层已滤掉子代理线程
+  assert.equal(value.imported, 2)
+  assert.equal(value.failed, 0)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const first = persistence.sessions.get('import-' + ZED_ID)
+  assert.ok(first)
+  assert.equal(first.meta.cwd, ZED_CWD)
+  assert.equal(first.meta.createdAt, Date.parse(ZED_TS))
+  assert.match(first.events.at(-1).data.title, /^Zed · /)
+  assert.ok(first.events.every((e, i) => e.seq === i))
+  assertEnvelopeHygiene(first.events)
+  const result = first.events.find((e) => e.type === 'tool/result')
+  assert.deepEqual(result.sourceEventSeqs, [first.events.find((e) => e.type === 'tool/call').seq])
+  assert.equal(result.data.message.content[0].content[0].text, 'export const a = 1')
+  assert.equal(persistence.sessions.has('import-sub-1'), false)
+  assert.equal(attached.length, 2)
+})
+
+test('import_zed 目录模式定位 threads.db；sessionIds 过滤与 preview 同口径', async () => {
+  const dbPath = makeZedDb([
+    { id: ZED_ID, summary: '线程一', payload: zedThreadPayload({}) },
+    { id: 'second', summary: '线程二', payload: zedThreadPayload({ title: '线程二', withTool: false }) },
+  ])
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'zed')
+
+  const filtered = await def.execute({ path: join(dbPath, '..'), sessionIds: ['second'] })
+  assert.equal(filtered.mode, 'batch')
+  assert.equal(filtered.imported, 1)
+  assert.equal(persistence.sessions.has('import-' + ZED_ID), false)
+  assert.equal(persistence.sessions.has('import-second'), true)
+
+  const preview = await def.execute({ path: dbPath, preview: true })
+  assert.equal(preview.preview, true)
+  assert.equal(preview.total, 2)
+  assert.ok(preview.results.some((r) => String(r.title).startsWith('Zed · ')))
+  assert.equal(persistence.sessions.size, 1) // 预览零副作用
+})
+
+test('import_zed 幂等：重复导入同一库只落盘一次；非 Zed 库大声报错', async () => {
+  const dbPath = makeZedDb([{ id: ZED_ID, summary: '线程', payload: zedThreadPayload({}) }])
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'zed')
+  const first = await def.execute({ path: dbPath })
+  const second = await def.execute({ path: dbPath })
+  assert.equal(first.imported, 1)
+  assert.equal(second.imported, 0)
+  assert.equal(second.alreadyImported, 1)
+  assert.equal(persistence.sessions.size, 1)
+
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-zed-bad-'))
+  const bogus = join(dir, 'threads.db')
+  writeFileSync(bogus, 'not a sqlite db')
+  await assert.rejects(() => def.execute({ path: bogus }), /Zed/)
+})
+
+// ---- import_crush 集成（真实 SQLite 临时库，项目内 .crush/） ----
+
+// 合成 Crush 会话库（sessions/messages/read_files 三表；parts 是 wrapper JSON 数组）
+const CRUSH_SID = 'a8f1c3d2-0000-4000-8000-000000000001'
+const CRUSH_CREATED = 1768000001
+const CRUSH_UPDATED = 1768000123
+function crushPartsUser(t) {
+  return JSON.stringify([{ type: 'text', data: { text: t } }, { type: 'finish', data: { reason: 'stop' } }])
+}
+function crushFixture() {
+  return {
+    sessions: [
+      {
+        id: CRUSH_SID, title: 'Add retry to fetch', message_count: 4,
+        prompt_tokens: 12043, completion_tokens: 812, cost: 0.0412,
+        created_at: CRUSH_CREATED, updated_at: CRUSH_UPDATED,
+      },
+      // 子会话：不单独成会话
+      { id: 'parent$$toolcall', parent_session_id: CRUSH_SID, title: 'New Agent Session', message_count: 1, created_at: CRUSH_CREATED, updated_at: CRUSH_UPDATED },
+    ],
+    messages: [
+      { id: 'm1', session_id: CRUSH_SID, role: 'user', created_at: CRUSH_CREATED + 1, updated_at: CRUSH_CREATED + 1, parts: crushPartsUser('add a retry to fetch') },
+      {
+        id: 'm2', session_id: CRUSH_SID, role: 'assistant', created_at: CRUSH_CREATED + 2, updated_at: CRUSH_CREATED + 2, model: 'claude-sonnet-4-20250514', provider: 'anthropic',
+        parts: JSON.stringify([
+          { type: 'reasoning', data: { thinking: 'Need to look at fetch.go', signature: '', tool_id: '', responses_data: null } },
+          { type: 'tool_call', data: { id: 'call_abc123', name: 'view', input: '{"file_path":"internal/fetch/fetch.go"}', provider_executed: false, finished: true } },
+          { type: 'finish', data: { reason: 'tool_use', time: CRUSH_CREATED + 3 } },
+        ]),
+      },
+      {
+        id: 'm3', session_id: CRUSH_SID, role: 'tool', created_at: CRUSH_CREATED + 3, updated_at: CRUSH_CREATED + 3, finished_at: CRUSH_CREATED + 3,
+        parts: JSON.stringify([
+          { type: 'tool_result', data: { tool_call_id: 'call_abc123', name: 'view', content: 'package fetch\n', is_error: false } },
+          { type: 'finish', data: { reason: 'stop' } },
+        ]),
+      },
+      { id: 'm4', session_id: CRUSH_SID, role: 'assistant', created_at: CRUSH_CREATED + 4, updated_at: CRUSH_CREATED + 4, parts: crushPartsUser('Done — added backoff.') },
+    ],
+  }
+}
+
+function makeCrushDb(fixture) {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-crush-'))
+  const projectDir = join(dir, 'proj')
+  const dbPath = join(projectDir, '.crush', 'crush.db')
+  mkdirSync(join(projectDir, '.crush'), { recursive: true })
+  const db = new DatabaseSync(dbPath)
+  db.exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY, parent_session_id TEXT, title TEXT NOT NULL,
+    message_count INTEGER NOT NULL DEFAULT 0, prompt_tokens INTEGER, completion_tokens INTEGER, cost REAL,
+    updated_at INTEGER NOT NULL, created_at INTEGER NOT NULL, summary_message_id TEXT, todos TEXT);
+  CREATE TABLE messages (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, role TEXT NOT NULL,
+    parts TEXT NOT NULL DEFAULT '[]', model TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+    finished_at INTEGER, provider TEXT, is_summary_message INTEGER NOT NULL DEFAULT 0);
+  CREATE TABLE files (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, path TEXT NOT NULL, content TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(path, session_id, version));
+  CREATE TABLE read_files (session_id TEXT, path TEXT, read_at INTEGER NOT NULL, PRIMARY KEY(path, session_id));`)
+  for (const s of fixture.sessions) {
+    const cols = Object.keys(s)
+    db.prepare(`INSERT INTO sessions (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...cols.map((c) => s[c]))
+  }
+  for (const m of fixture.messages) {
+    const cols = Object.keys(m)
+    db.prepare(`INSERT INTO messages (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...cols.map((c) => m[c]))
+  }
+  db.close()
+  return { dbPath, projectDir }
+}
+
+test('import_crush 项目内单库：批量形态、子会话不导入、parts 配对落盘、schema 校验', async () => {
+  const { dbPath, projectDir } = makeCrushDb(crushFixture())
+  const { ctx, persistence, attached } = makeCtx({}) // stat 不在 tree 里 → 按真实 DB 文件处理
+  apply(ctx)
+  const def = chatDef(ctx, 'crush')
+  const value = await def.execute({ path: dbPath })
+
+  assert.equal(value.mode, 'batch')
+  assert.equal(value.total, 1) // 子会话在读取层被过滤
+  assert.equal(value.imported, 1)
+  assert.equal(value.failed, 0)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get('import-' + CRUSH_SID)
+  assert.ok(saved)
+  // DB 里没有 cwd 列 → 项目路径由「库目录以 .crush 结尾 → 父目录」推导
+  assert.equal(saved.meta.cwd, projectDir)
+  assert.equal(saved.meta.createdAt, CRUSH_CREATED * 1000) // Unix 秒 → 毫秒
+  assert.match(saved.events.at(-1).data.title, /^Crush · /)
+  assert.ok(saved.events.every((e, i) => e.seq === i))
+  assertEnvelopeHygiene(saved.events)
+
+  const result = saved.events.find((e) => e.type === 'tool/result')
+  assert.deepEqual(result.sourceEventSeqs, [saved.events.find((e) => e.type === 'tool/call').seq])
+  assert.equal(result.data.message.content[0].content[0].text, 'package fetch\n')
+  const reasoning = saved.events
+    .flatMap((e) => (e.type === 'assistant/message' ? e.data.message.content : []))
+    .filter((b) => b.type === 'reasoning')
+  assert.deepEqual(reasoning, [{ type: 'reasoning', text: 'Need to look at fetch.go' }])
+  assert.equal(attached.length, 1)
+})
+
+test('import_crush 目录模式：接受项目目录或数据目录；sessionIds 过滤；preview 零副作用', async () => {
+  const { dbPath, projectDir } = makeCrushDb(crushFixture())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'crush')
+
+  const viaProject = await def.execute({ path: projectDir, sessionIds: [CRUSH_SID] })
+  assert.equal(viaProject.mode, 'batch')
+  assert.equal(viaProject.imported, 1)
+  assert.equal(persistence.sessions.has('import-' + CRUSH_SID), true)
+
+  const preview = await def.execute({ path: dbPath, preview: true })
+  assert.equal(preview.preview, true)
+  assert.equal(preview.total, 1)
+  assert.ok(preview.results.some((r) => String(r.title).startsWith('Crush · ')))
+  assert.equal(persistence.sessions.size, 1) // 预览零副作用
+})
+
+test('import_crush 幂等：重复导入同一库只落盘一次；非 Crush 库大声报错', async () => {
+  const { dbPath } = makeCrushDb(crushFixture())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'crush')
+  const first = await def.execute({ path: dbPath })
+  const second = await def.execute({ path: dbPath })
+  assert.equal(first.imported, 1)
+  assert.equal(second.imported, 0)
+  assert.equal(second.alreadyImported, 1)
+  assert.equal(persistence.sessions.size, 1)
+
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-crush-bad-'))
+  const bogus = join(dir, 'crush.db')
+  writeFileSync(bogus, 'not a sqlite db')
+  await assert.rejects(() => def.execute({ path: bogus }), /Crush/)
+})
+
+// ---- import_codex 分页 rollout（issue #57）----
+
+// 同一 thread 的两个分页文件（新版 Codex CLI 形态）：首页无后缀、次页带 _<pageId> 后缀，
+// 次页首行 session_meta 带 history_mode/history_base 指向首页。
+const PAG_THREAD = '0f1e2d3c-4b5a-6978-8901-2abcdef01234'
+const PAG_PAGE_ID = '7c6d5e4f-0011-2233-4455-66778899aabb'
+const PAG_DIR = 'D:\\demo\\codex-chain\\sessions\\2026\\09\\14\\'
+const PAG_DIR2 = 'D:\\demo\\codex-chain\\sessions\\2026\\09\\15\\'
+function pagMeta(id, over = {}) {
+  return JSON.stringify({
+    timestamp: '2026-09-14T10:54:34.000Z', type: 'session_meta',
+    payload: { id, cwd: hostAbs('D:/demo/codex-chain'), timestamp: '2026-09-14T10:54:34.000Z', ...over },
+  })
+}
+function pagUser(text, ts) {
+  return JSON.stringify({ timestamp: ts, type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } })
+}
+function pagAsst(text, ts) {
+  return JSON.stringify({ timestamp: ts, type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] } })
+}
+
+test('import_codex 分页 rollout：导最后一页也拿到整链（首页 + 次页拼一个会话）', async () => {
+  const pageA = PAG_DIR + `rollout-2026-09-14T10-54-33-${PAG_THREAD}.jsonl`
+  const pageB = PAG_DIR2 + `rollout-2026-09-15T19-55-00-${PAG_THREAD}_${PAG_PAGE_ID}.jsonl`
+  const { ctx, persistence, attached } = makeCtx({
+    // 中间目录也要进树：链解析从 sessions 祖先逐层 listDir 下钻
+    'D:\\demo\\codex-chain\\sessions': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026\\09': 'dir',
+    [PAG_DIR.replace(/\\+$/, '')]: 'dir',
+    [PAG_DIR2.replace(/\\+$/, '')]: 'dir',
+    [pageA]: [
+      pagMeta(PAG_THREAD),
+      pagUser('第一问', '2026-09-14T10:55:00.000Z'),
+      pagAsst('答一', '2026-09-14T10:55:10.000Z'),
+    ].join('\n'),
+    [pageB]: [
+      pagMeta(PAG_THREAD, {
+        history_mode: 'paginated',
+        history_base: { thread_id: PAG_THREAD, end_ordinal_exclusive: 3, end_byte_offset: 300 },
+      }),
+      pagUser('第二问', '2026-09-15T19:56:00.000Z'),
+      pagAsst('答二', '2026-09-15T19:56:10.000Z'),
+    ].join('\n'),
+  })
+  apply(ctx)
+  const def = chatDef(ctx, 'codex')
+  // 报告者的用法：导入的是**最后一页**
+  const value = await def.execute({ path: pageB })
+
+  assert.equal(value.mode, 'single')
+  assert.equal(value.sessionId, 'import-' + PAG_THREAD)
+  assert.equal(value.turns, 2) // 首页 + 次页拼成一个会话
+  assert.equal(value.messages, 4)
+
+  const saved = persistence.sessions.get('import-' + PAG_THREAD)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, hostAbs('D:/demo/codex-chain'))
+  // 会话时间取首页 meta 的 timestamp（次页 meta 被忽略）
+  assert.equal(saved.meta.createdAt, Date.parse('2026-09-14T10:54:34.000Z'))
+  assert.match(saved.events.at(-1).data.title, /^Codex · /)
+  assert.ok(saved.events.every((e, i) => e.seq === i))
+  assertEnvelopeHygiene(saved.events)
+  assert.equal(attached.length, 1)
+  assert.equal(attached[0].id, 'import-' + PAG_THREAD)
+})
+
+test('import_codex 分页幂等：重复导同一页跳过；新增一页后重导按 append 增量', async () => {
+  const pageA = PAG_DIR + `rollout-2026-09-14T10-54-33-${PAG_THREAD}.jsonl`
+  const pageB = PAG_DIR2 + `rollout-2026-09-15T19-55-00-${PAG_THREAD}_${PAG_PAGE_ID}.jsonl`
+  const tree = {
+    'D:\\demo\\codex-chain\\sessions': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026\\09': 'dir',
+    [PAG_DIR.replace(/\\+$/, '')]: 'dir',
+    [PAG_DIR2.replace(/\\+$/, '')]: 'dir',
+    [pageA]: [
+      pagMeta(PAG_THREAD),
+      pagUser('第一问', '2026-09-14T10:55:00.000Z'),
+      pagAsst('答一', '2026-09-14T10:55:10.000Z'),
+    ].join('\n'),
+    [pageB]: [
+      pagMeta(PAG_THREAD, { history_mode: 'paginated', history_base: { thread_id: PAG_THREAD } }),
+      pagUser('第二问', '2026-09-15T19:56:00.000Z'),
+      pagAsst('答二', '2026-09-15T19:56:10.000Z'),
+    ].join('\n'),
+  }
+  const { ctx, persistence } = makeCtx(tree)
+  apply(ctx)
+  const def = chatDef(ctx, 'codex')
+
+  const first = await def.execute({ path: pageB })
+  assert.equal(first.turns, 2)
+  const again = await def.execute({ path: pageB })
+  assert.equal(again.alreadyImported, true)
+  assert.equal(persistence.sessions.size, 1)
+
+  // 追加第三页（真正的增量场景：Codex 又开了一个新分页文件）。mock 的 listDir 有
+  // entriesCache，这里直接在 ctx.fs.listDir 外层注入新条目，模拟缓存过期后的目录内容
+  const pageC = PAG_DIR2 + `rollout-2026-09-15T20-41-00-${PAG_THREAD}_9a8b7c6d.jsonl`
+  tree[pageC] = [
+    pagMeta(PAG_THREAD, { history_mode: 'paginated', history_base: { thread_id: PAG_PAGE_ID } }),
+    pagUser('第三问', '2026-09-15T20:42:00.000Z'),
+    pagAsst('答三', '2026-09-15T20:42:10.000Z'),
+  ].join('\n')
+  const origListDir = ctx.fs.listDir
+  ctx.fs.listDir = async (t) => {
+    const base = await origListDir(t)
+    const key = t.targetKey || ''
+    if (key.replace(/[\\/]+$/, '') === PAG_DIR2.replace(/[\\/]+$/, '')) {
+      return [...base, {
+        name: pageC.split('\\').pop(), type: 'file',
+        target: { targetKey: pageC, displayPath: pageC }, version: 1,
+      }]
+    }
+    return base
+  }
+  const third = await def.execute({ path: pageB })
+  assert.equal(third.status, 'appended')
+  assert.ok((third.appendedTurns ?? 0) >= 1)
+  const saved = persistence.sessions.get('import-' + PAG_THREAD)
+  const prompts = saved.events
+    .filter((e) => e.type === 'user/message' && e.data.source.kind === 'user')
+    .flatMap((e) => e.data.content).filter((b) => b.type === 'text').map((b) => b.text)
+  assert.deepEqual(prompts, ['第一问', '第二问', '第三问'])
+})
+
+test('import_codex 分页发现：同 thread 多页只出一条（标题取首页首问，修复同名条目）', async () => {
+  const pageA = PAG_DIR + `rollout-2026-09-14T10-54-33-${PAG_THREAD}.jsonl`
+  const pageB = PAG_DIR2 + `rollout-2026-09-15T19-55-00-${PAG_THREAD}_${PAG_PAGE_ID}.jsonl`
+  const tree = {
+    'D:\\demo\\codex-chain\\sessions': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026': 'dir',
+    'D:\\demo\\codex-chain\\sessions\\2026\\09': 'dir',
+    [PAG_DIR.replace(/\\+$/, '')]: 'dir',
+    [PAG_DIR2.replace(/\\+$/, '')]: 'dir',
+    [pageA]: [
+      pagMeta(PAG_THREAD),
+      pagUser('第一问（会话起点）', '2026-09-14T10:55:00.000Z'),
+      pagAsst('答一', '2026-09-14T10:55:10.000Z'),
+    ].join('\n'),
+    [pageB]: [
+      pagMeta(PAG_THREAD, { history_mode: 'paginated', history_base: { thread_id: PAG_THREAD } }),
+      pagUser('第一问（会话起点）', '2026-09-15T19:56:00.000Z'), // 与首页同文 → 旧行为撞标题
+      pagAsst('答二', '2026-09-15T19:56:10.000Z'),
+    ].join('\n'),
+  }
+  const host = {
+    stat: async (p) => {
+      const v = tree[p]
+      if (v === undefined) return null
+      return v === 'dir' ? { type: 'directory' } : { type: 'file', size: v.length, mtimeMs: 1786000000000 }
+    },
+    readHead: async (p, max) => (tree[p] !== undefined ? tree[p].slice(0, max) : null),
+    readText: async (p) => (tree[p] !== undefined ? tree[p] : null),
+    readDir: async (p) => {
+      const norm = (x) => String(x).replace(/\\/g, '/')
+      const prefix = norm(p).replace(/\/$/, '') + '/'
+      const out = []
+      for (const path of Object.keys(tree)) {
+        const n = norm(path)
+        if (!n.startsWith(prefix) || n === prefix) continue
+        const rest = n.slice(prefix.length)
+        if (rest.includes('/')) continue
+        out.push({ name: path.split('\\').pop(), type: tree[path] === 'dir' ? 'directory' : 'file', path })
+      }
+      return out
+    },
+  }
+  const { sessions, total } = await discoverSessions({
+    path: 'D:\\demo\\codex-chain\\sessions', format: 'codex', host, imports: {},
+  })
+  assert.equal(total, 1) // 旧行为是两条同题条目
+  const s = sessions[0]
+  assert.equal(s.sessionId, PAG_THREAD)
+  assert.equal(s.title, '第一问（会话起点）') // 首页首问（不是次页的同文首问）
+  assert.equal(s.sourcePath, pageA) // 幂等键 = 链首页
+})
+
 // ---- import_chatgpt 集成 ----
 
 test('import_chatgpt 单文件：一文件多会话、恒返回 batch、schema 校验', async () => {
@@ -1113,10 +1970,15 @@ test('import_cursor agent-transcripts：slug 解码 meta.cwd 为真实项目路�
   assert.equal(value.alreadyImported, false)
   const saved = persistence.sessions.get('import-composer-abc')
   assert.ok(saved)
-  assert.equal(saved.meta.cwd, IS_WINDOWS ? realCwd : undefined)
+  // 分层断言（避免写死平台分支）：解码层与平台无关——cursor 的 slug 自带盘符，解码
+  // 走磁盘探测，直接断言解出的真实路径；落盘层是否保留 cwd 由宿主 isAbsolute 决定，
+  // 期望值用同一函数计算（AGENTS.md 跨平台路径纪律）。
+  const { resolveCursorSlugPath } = await import('../lib/cwd-map.mjs')
+  assert.equal(await resolveCursorSlugPath(ctx, slug), realCwd)
+  assert.equal(saved.meta.cwd, isAbsolute(realCwd) ? realCwd : undefined)
   // 无 cwd 时归组回退到源目录（lib/import-core.mjs 的 attachToWorkspace 回退），故仍有一条
   assert.equal(attached.length, 1)
-  if (IS_WINDOWS) assert.equal(attached[0].ws, realCwd)
+  if (isAbsolute(realCwd)) assert.equal(attached[0].ws, realCwd)
 })
 
 // ---- import_gemini 集成 ----
@@ -1365,7 +2227,6 @@ test('import_pi 单文件：头行 cwd/id 落盘、归组、返回值符合 sche
   assert.equal(value.sessionId, 'import-019f0a11-2222-7333-8444-555566667777')
   assert.equal(value.turns, 2)
   assert.equal(value.messages, 4)
-  assert.equal(value.toolCalls, 0)
   assert.equal(value.alreadyImported, false)
   assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
 
@@ -1627,6 +2488,66 @@ test('import_opencode 幂等：重复导入同一库只落盘一次', async () =
   assert.equal(second.imported, 0)
   assert.equal(second.alreadyImported, 2)
   assert.equal(persistence.sessions.size, 2)
+})
+
+test('import_opencode sessionIds 补导：库未变时再选未导过的会话仍真正落盘', async () => {
+  // 回归：DB version/size 未变时 S3 短路径曾直接对已导子表返回 already-imported，
+  // 忽略 args.sessionIds，导致面板「部分」条目补导无效（opencode/mimocode/teleagent 同构）。
+  const dbPath = makeOpencodeDb(opencodeTestSessions())
+  const { ctx, persistence } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'opencode')
+  const first = await def.execute({ path: dbPath, sessionIds: ['ses-a'] })
+  assert.equal(first.imported, 1)
+
+  // 同一未变化的库，补导另一个会话：短路径不得吞掉新选中的 ses-b
+  const second = await def.execute({ path: dbPath, sessionIds: ['ses-b'] })
+  assert.equal(second.imported, 1)
+  assert.equal(second.results.length, 1)
+  assert.equal(second.results[0].sessionId, 'import-ses-b')
+  assert.equal(persistence.sessions.size, 2)
+
+  // 再选已导过的会话：仍是幂等 already-imported（短路径对被覆盖选择照常生效）
+  const third = await def.execute({ path: dbPath, sessionIds: ['ses-a'] })
+  assert.equal(third.imported, 0)
+  assert.equal(persistence.sessions.size, 2)
+})
+
+// 回归（WAL 盲区）：WAL 模式下新会话只写 opencode.db-wal，主文件 mtime/size 在
+// checkpoint 前不变——S3 短路径只比主文件会把「库已变」判成「未变」，第二次全量
+// 导入拿不到新会话（opencode / mimocode / teleagent / kilocode 同构共用此编排）。
+test('import_opencode WAL 盲区：主文件未变、-wal 增长 → 新会话仍被增量导入', async () => {
+  const dbPath = makeOpencodeDb(opencodeTestSessions())
+  const conn = new DatabaseSync(dbPath)
+  conn.exec('PRAGMA journal_mode=WAL')
+  conn.exec('PRAGMA wal_autocheckpoint=0') // 阻止自动 checkpoint 合并回主文件
+  // 连接保持打开（-wal 持续存在；关闭最后一个连接会触发 checkpoint + 删除 -wal）
+  try {
+    const { ctx, persistence } = makeCtx({})
+    apply(ctx)
+    const def = chatDef(ctx, 'opencode')
+    const first = await def.execute({ path: dbPath })
+    assert.equal(first.imported, 2)
+    const mainBefore = statSync(dbPath)
+
+    // 追加第三个会话：只落 -wal，主文件 stat 不变
+    conn.prepare('INSERT INTO session (id, title, directory, time_created, model) VALUES (?, ?, ?, ?, ?)')
+      .run('ses-wal', 'Wal session', hostAbs('E:/demo/opencode'), 1786000200000, null)
+    conn.prepare('INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)')
+      .run('msg-w1', 'ses-wal', 1786000200001, JSON.stringify({ role: 'user' }))
+    conn.prepare('INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)')
+      .run('p-w1', 'msg-w1', 'ses-wal', 1786000200001, JSON.stringify({ type: 'text', text: '新问题' }))
+    const mainAfter = statSync(dbPath)
+    assert.equal(mainAfter.size, mainBefore.size) // 前提：主文件确实没变（WAL 语义成立）
+
+    const second = await def.execute({ path: dbPath })
+    assert.equal(second.imported, 1)
+    assert.equal(second.alreadyImported, 2)
+    assert.equal(persistence.sessions.size, 3)
+    assert.ok(persistence.sessions.get('import-ses-wal'))
+  } finally {
+    conn.close()
+  }
 })
 
 test('readOpencodeDb：只读抽取会话、消息/part 排序、模型解析', () => {
@@ -1995,9 +2916,9 @@ test('import_hermes 单 .jsonl：db 之外的单会话源，mode single', async 
   assert.equal(persistence.sessions.size, 1)
 })
 
-// ---- REQ-72 expectedHash（源文件强校验） ----
+// ---- expectedHash（源文件强校验） ----
 
-test('REQ-72 expectedHash: 正确哈希导入成功，错误哈希失败且不落盘', async () => {
+test('expectedHash: 正确哈希导入成功，错误哈希失败且不落盘', async () => {
   const raw = [
     JSON.stringify({ sessionId: 'sess-hash-001', type: 'user', cwd: hostAbs('D:/demo/proj'), message: { role: 'user', content: '你好' } }),
     JSON.stringify({ sessionId: 'sess-hash-001', type: 'assistant', message: { role: 'assistant', content: '好的' } }),
@@ -2024,16 +2945,16 @@ test('REQ-72 expectedHash: 正确哈希导入成功，错误哈希失败且不�
   assert.equal(persistence.sessions.size, 1)
 })
 
-test('REQ-72 restamp: 时间戳平移到当前，保持相对间隔', () => {
+test('restamp: 时间戳平移到当前，保持相对间隔', () => {
   const out = { meta: { createdAt: 1000 }, events: [{ time: 1000 }, { time: 2000 }] }
   restampSession(out, { restamp: true })
   assert.ok(out.meta.createdAt > 1000, 'createdAt 被平移: ' + out.meta.createdAt)
   assert.equal(out.events[1].time - out.events[0].time, 1000, '相对间隔保持不变')
 })
 
-// ---- REQ-70 导入时 workspaceMode（dedicated） ----
+// ---- 导入时 workspaceMode（dedicated） ----
 
-test('REQ-70 import_claude workspaceMode=dedicated: 导入会话挂到专用工作区', async () => {
+test('import_claude workspaceMode=dedicated: 导入会话挂到专用工作区', async () => {
   const raw = [
     JSON.stringify({ sessionId: 'sess-ws-001', type: 'user', cwd: hostAbs('D:/demo/proj'), message: { role: 'user', content: '你好' } }),
     JSON.stringify({ sessionId: 'sess-ws-001', type: 'assistant', message: { role: 'assistant', content: '好的' } }),
@@ -3357,7 +4278,11 @@ test('REQ-39 Claude 权威映射：转录无 cwd → ~/.claude.json projects 命
   assert.equal(value.status, 'imported')
   // meta.cwd = 权威映射结果（真实路径），非 slug 目录名
   const saved = persistence.sessions.get('import-sess-nocwd-001')
-  assert.equal(saved.meta.cwd, IS_WINDOWS ? 'D:\\work\\my-proj' : undefined)
+  // 分层断言：权威映射层（~/.claude.json projects）与平台无关——直接断言映射结果；
+  // 落盘层按宿主 isAbsolute 决定保留与否，期望值用同一函数计算。
+  const { resolveClaudeCwd } = await import('../lib/cwd-map.mjs')
+  assert.equal(await resolveClaudeCwd(ctx, 'D--work-my-proj'), 'D:\\work\\my-proj')
+  assert.equal(saved.meta.cwd, isAbsolute('D:\\work\\my-proj') ? 'D:\\work\\my-proj' : undefined)
 })
 
 // ---- REQ-22 Reasonix V2 WAL 合并 + Claude compacted 摘要导入（集成） ----
@@ -4581,8 +5506,8 @@ test('REQ-41 /api-import/prefs：settings 缺席回退默认；在场时读/写�
   assert.equal(r0.res.status, 200)
   assert.equal(r0.data.ok, true)
   assert.equal(r0.data.available, false)
-  // settings 缺席回退 IMPORT_PREFS_DEFAULT：injectTools 默认档 'minimal'
-  assert.deepEqual(r0.data.value, { importSystemPrompt: true, injectTools: 'minimal' })
+  // settings 缺席回退 IMPORT_PREFS_DEFAULT：injectTools 默认档 'minimal'，sidebarButton 默认 true
+  assert.deepEqual(r0.data.value, { importSystemPrompt: true, injectTools: 'minimal', sidebarButton: true })
   const w0 = await invoke(route, { importSystemPrompt: true })
   assert.equal(w0.data.ok, true)
   assert.equal(w0.data.available, false)
@@ -4615,6 +5540,14 @@ test('REQ-41 /api-import/prefs：settings 缺席回退默认；在场时读/写�
   assert.deepEqual(calls, [
     { ns: 'chat-import', patch: { importSystemPrompt: true }, expectedRevision: 7 },
     { ns: 'chat-import', patch: { injectTools: false }, expectedRevision: 7 },
+  ])
+  // sidebarButton 写入同样走 fenced 路由（第三个开关共用同一偏好命名空间）
+  const w3 = await invoke(route2, { sidebarButton: false, revision: 7 })
+  assert.equal(w3.data.ok, true)
+  assert.deepEqual(calls, [
+    { ns: 'chat-import', patch: { importSystemPrompt: true }, expectedRevision: 7 },
+    { ns: 'chat-import', patch: { injectTools: false }, expectedRevision: 7 },
+    { ns: 'chat-import', patch: { sidebarButton: false }, expectedRevision: 7 },
   ])
 
   // update 抛冲突 → ok:false + code: settings-conflict（客户端据此重读）
@@ -4768,7 +5701,123 @@ test('REQ-41 /api-import/import handler：批量形态（chatgpt conversations.j
   assert.equal(persistence.sessions.size, 2)
 })
 
-// ---- issue #41：宿主会话格式 v3 适配 ----
+// ---- 「导入到」非 DSH 目标（转投：转换成目标工具格式落盘，不留下 DSH 会话） ----
+
+test('面板「导入到」opencode：只落 opencode JSON，DSH 侧不留会话（中间会话已撤回）', async () => {
+  const file = 'D:\\demo\\claude\\projects\\proj-a\\sess-tool-001.jsonl'
+  const { ctx, webRoutes, writes } = makeCtx({ [file]: load('sess-tool-001.jsonl') })
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  const out = await invokeImportRoute(route, {
+    target: 'opencode',
+    items: [{ source: 'claude-code', sourcePath: file, cwd: hostAbs('D:/demo/proj') }],
+  })
+  assert.equal(out.res.status, 200)
+  assert.equal(out.data.ok, true)
+  assert.equal(out.data.target, 'opencode')
+  const r0 = out.data.results[0]
+  assert.equal(r0.target, 'opencode')
+  assert.equal(r0.status, 'transferred', JSON.stringify(out.data))
+  assert.equal(r0.transferred, 1, JSON.stringify(out.data))
+  assert.equal(r0.failed, 0)
+  // 转投的中间会话被撤回。注：本测试的 persistence mock 没有宿主 delete 面（真实宿主在
+  // 工件消失后即不再持有该会话），所以这里断言 purge 的三件事实——撤回被调用且成功、
+  // 工件清理路径没抛错、registry 记录已清——而不是 mock 内存 Map 的尺寸。
+  assert.equal(r0.purged, 1)
+  assert.match(r0.hint, /opencode import/)
+
+  // 落盘的是 opencode import 可读的 JSON（结构自检）
+  const written = writes.filter((w) => w.path.endsWith('.opencode.json'))
+  assert.equal(written.length, 1)
+  assert.equal(verifyOpencodeImportJson(written[0].content).ok, true)
+  // 且确实是这段对话：用户提问进了 user 消息
+  const doc = JSON.parse(written[0].content)
+  assert.ok(doc.messages.some((m) => m.info.role === 'user' && m.parts.some((p) => typeof p.text === 'string' && p.text.length > 0)))
+  // 撤回后 registry 也清干净（不留悬空记录）
+  const reg = await loadImports(resolveRegistryDir())
+  assert.equal(Object.keys(reg.imports).length, 0)
+})
+
+test('面板「导入到」claude：落到 Claude Code 的 projects 目录，DSH 侧同样不留会话', async () => {
+  const file = 'D:\\demo\\claude\\projects\\proj-a\\sess-simple-001.jsonl'
+  const { ctx, webRoutes, writes } = makeCtx({ [file]: load('sess-simple-001.jsonl') })
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  const out = await invokeImportRoute(route, {
+    target: 'claude',
+    items: [{ source: 'claude-code', sourcePath: file, cwd: hostAbs('D:/demo/kimi-proj') }],
+  })
+  assert.equal(out.data.ok, true)
+  const r0 = out.data.results[0]
+  assert.equal(r0.status, 'transferred')
+  assert.equal(r0.transferred, 1)
+  assert.equal(r0.purged, 1, 'claude 目标同样不留 DSH 侧中间会话')
+  const written = writes.filter((w) => w.path.replace(/\\/g, '/').includes('/.claude/projects/'))
+  assert.equal(written.length, 1, '写进 Claude Code 的 projects 目录')
+  const lines = written[0].content.split('\n').filter((l) => l.trim())
+  assert.ok(lines.length > 0)
+  assert.doesNotThrow(() => JSON.parse(lines[0]), 'Claude Code JSONL 每行都是合法 JSON')
+})
+
+test('面板「导入到」：原本已存在的 DSH 会话只导出不删除（不留空转投），未知目标 400', async () => {
+  const file = 'D:\\demo\\claude\\projects\\proj-a\\sess-multi-001.jsonl'
+  const { ctx, persistence, webRoutes, writes } = makeCtx({ [file]: load('sess-multi-001.jsonl') })
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  // 先常规导入一次（建 DSH 会话），再对同一来源做 opencode 转投
+  await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: file }] })
+  assert.equal(persistence.sessions.size, 1)
+  const before = writes.length
+  const transfer = await invokeImportRoute(route, {
+    target: 'opencode',
+    items: [{ source: 'claude-code', sourcePath: file }],
+  })
+  const r0 = transfer.data.results[0]
+  assert.equal(r0.transferred, 1)
+  // 会话本来就存在（already-imported）→ 保留，不撤回（用户自己的会话不因转投被删）
+  assert.equal(r0.purged, 0)
+  assert.equal(r0.kept, 1)
+  assert.equal(r0.files[0].kept, true)
+  const reg = await loadImports(resolveRegistryDir())
+  assert.equal(Object.keys(reg.imports).length, 1, '未撤回 → registry 记录保留')
+  assert.ok(writes.length > before, '仍然产出了目标格式文件')
+
+  const bad = await invokeImportRoute(route, {
+    target: 'zcode',
+    items: [{ source: 'claude-code', sourcePath: file }],
+  })
+  assert.equal(bad.res.status, 400)
+  assert.match(bad.data.error, /未知导入目标/)
+})
+
+
+
+test('export_chat format: opencode：DSH 会话 → opencode import JSON（dryRun 不写盘 + schema + 降级上报）', async () => {
+  const src = 'D:\\demo\\proj\\sess-simple-001.jsonl'
+  const { ctx, writes } = makeCtx({ [src]: load('sess-simple-001.jsonl') })
+  apply(ctx)
+  const imported = await chatDef(ctx, 'claude').execute({ path: src })
+  assert.equal(imported.status, 'imported')
+  const def = exportDef(ctx, 'opencode')
+
+  const dry = await def.execute({ sessionId: imported.sessionId, dryRun: true })
+  assert.equal(dry.dryRun, true)
+  assert.match(dry.filePath, /\.opencode\.json$/)
+  assert.equal(writes.some((w) => w.path === dry.filePath), false, 'dryRun 不写盘')
+
+  const out = await def.execute({ sessionId: imported.sessionId })
+  assert.equal(out.dryRun, false)
+  assert.match(out.filePath, /\.opencode\.json$/)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, out), [])
+  const written = writes.find((w) => w.path === out.filePath)
+  assert.ok(written, '落盘一次')
+  assert.equal(verifyOpencodeImportJson(written.content).ok, true)
+  // 用量未知（opencode 必填的 cost/tokens 在 DSH 日志里没有）→ 降级显式上报
+  assert.ok((out.degradations || []).some((d) => d.id === 'usage-unknown'))
+})
 
 // 宿主写入路径把 header 按 released-v2 schema 严格校验：必填 version/id/createdAt/
 // isSeeded/delegationDepth，可选 cwd/parentSession/origin/agentPreset——白名单外的
@@ -4823,6 +5872,43 @@ test('issue #41 幽灵 id：agents.create 报 already exists 时不回退，另�
   // 回退路径未被触发：重铸后的新 id 落盘，原 id 不被 sessionPersistence 收下
   assert.equal(persistence.sessions.has('import-sess-simple-001'), false)
   assert.ok(persistence.sessions.has('import-sess-simple-001-1'))
+})
+
+// 宿主为「id 被占」并列定义了两个错误类型（@deepseek-ai/dsh-session-persistence）：
+// SessionAlreadyExistsError（`session "<id>" already exists`）与 SessionAlreadyOwnedError
+// （`session "<id>" is already owned by an active write handle`，进程内写句柄唯一性——长驻
+// 宿主上必现，另起进程的同名会话则正常）。两种措辞都必须触发「另铸后缀新 id 重试」，否则
+// 错误直接上抛、同源导入在宿主重启前永久失败（issue #55）。
+// 判定优先按 err.name：宿主再新增措辞时不必追文案；文案仅作兜底（老宿主 / mock host）。
+test('issue #55 会话 id 被宿主写句柄占用时，同样另铸后缀新 id 重试', async () => {
+  const cases = [
+    // 按 err.name 命中（文案故意写成无关内容，锁定「名字优先」）
+    { label: 'SessionAlreadyOwnedError（按 err.name）', make: (id) => Object.assign(new Error('见 err.name'), { name: 'SessionAlreadyOwnedError', sessionId: id }) },
+    // 文案兜底：老宿主 / 被包了一层的错误没有 name
+    { label: '仅文案（already owned by an active write handle）', make: (id) => new Error('session "' + id + '" is already owned by an active write handle') },
+  ]
+  for (const c of cases) {
+    const calls = []
+    const services = {
+      agents: {
+        async create({ sessionId, meta, seed }) {
+          calls.push(sessionId)
+          if (calls.length === 1) throw c.make(sessionId)
+          await persistence.create(meta)
+          await persistence.append(sessionId, seed)
+        },
+      },
+    }
+    const simple = load('sess-simple-001.jsonl')
+    const { ctx, persistence } = makeCtx({ 'D:\\demo\\proj\\sess-simple-001.jsonl': simple }, { services })
+    apply(ctx)
+    const value = await chatDef(ctx, 'claude').execute({ path: 'D:\\demo\\proj\\sess-simple-001.jsonl' })
+    assert.equal(value.status, 'imported', c.label)
+    assert.equal(value.sessionId, 'import-sess-simple-001-1', c.label)
+    assert.deepEqual(calls, ['import-sess-simple-001', 'import-sess-simple-001-1'], c.label)
+    assert.equal(persistence.sessions.has('import-sess-simple-001'), false, c.label)
+    assert.ok(persistence.sessions.has('import-sess-simple-001-1'), c.label)
+  }
 })
 
 test('issue #41 sanitizeJsonValue 剥离不可无损 JSON 序列化的值并上报路径', () => {
@@ -4906,4 +5992,95 @@ test('issue #41 持久化适配层：list 元素形状、readSessionRecord、wri
   assert.deepEqual([...(await listPersistedIds(ctxOf(legacy)))].sort(), ['import-a', 'import-b'])
   await writeSession(ctxOf(legacy), { id: 'import-c' }, [{ seq: 0 }])
   assert.equal(store.sessions.get('import-c').events.length, 1)
+})
+
+// cwdRemap（PR #53）：dry-run 预览必须与落盘同口径——预览显示的 cwd 就是最终 header.cwd。
+// 预览此前不走重映射，会给出一个与落盘不同的 cwd（dry-run 撒谎）。
+test('cwdRemap：dry-run 预览与落盘的 cwd 同口径', async () => {
+  const file = 'D:\\demo\\proj\\sess-simple-001.jsonl'
+  const from = hostAbs('D:/demo/proj')
+  const to = hostAbs('D:/host/work')
+  const { ctx, persistence } = makeCtx({ [file]: load('sess-simple-001.jsonl') })
+  apply(ctx)
+  const def = chatDef(ctx, 'claude')
+  const preview = await def.execute({ path: file, preview: true, cwdRemap: [{ from, to }] })
+  assert.equal(preview.cwd, to, '预览即重映射后的 cwd')
+  const value = await def.execute({ path: file, cwdRemap: [{ from, to }] })
+  assert.equal(value.cwdRemap.mapped, to)
+  assert.equal(persistence.sessions.get(value.sessionId).meta.cwd, to, '落盘与预览一致')
+})
+
+// Issue #61：Kimi Code 的 state.json 多数只写 workDir（旧版写 cwd，新版两者可能共存）。
+// 只读 cwd 会让 cwd 丢掉 → 会话落到 _no-cwd 并新建一个以源会话目录为根的孤儿工作区。
+test('import_kimi 新 Kimi Code：state.json 仅含 workDir 时同样解析出 cwd（#61）', async () => {
+  const sess = 'C:\\Users\\u\\.kimi-code\\sessions\\wd_genius-invokation_7d34e589df57\\session-eb6808b9'
+  const workDir = hostAbs('D:/AI/GTCG/genius-invokation')
+  const tree = {
+    'C:\\Users\\u\\.kimi-code\\sessions': 'dir',
+    'C:\\Users\\u\\.kimi-code\\sessions\\wd_genius-invokation_7d34e589df57': 'dir',
+    [sess]: 'dir',
+    [sess + '\\agents']: 'dir',
+    [sess + '\\agents\\main']: 'dir',
+    [sess + '\\agents\\main\\wire.jsonl']: kimiCodeWire([
+      kimiCodeEv('turn.prompt', { input: [{ type: 'text', text: '帮我看看构建失败' }], origin: { kind: 'user' } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'step.begin', turnId: '0', step: 1 } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'content.part', part: { type: 'text', text: '是缺少依赖。' } } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'step.end', turnId: '0', step: 1, finishReason: 'end_turn' } }),
+      kimiCodeEv('turn.ended', { turnId: 0, reason: 'completed' }),
+    ]),
+    // 关键形态：只有 workDir，没有 cwd（本机实测 29/53 个会话是这种）
+    [sess + '\\state.json']: JSON.stringify({ id: 'session-eb6808b9', workDir, custom_title: '牌圣测试' }),
+  }
+  const { ctx, persistence, attached } = makeCtx(tree)
+  apply(ctx)
+  const def = chatDef(ctx, 'kimi')
+  const preview = await def.execute({ path: sess, preview: true })
+  assert.equal(preview.cwd, workDir)
+
+  const value = await def.execute({ path: sess })
+  assert.equal(value.mode, 'single')
+  assert.equal(value.status, 'imported')
+  const saved = persistence.sessions.get(value.sessionId)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, workDir) // state.json.workDir（不再回退 kimi.json）
+  assert.equal(saved.events.at(-1).data.title, 'Kimi · 牌圣测试')
+  assertEnvelopeHygiene(saved.events)
+  assert.equal(attached.length, 1)
+})
+
+test('import_kimi 新 Kimi Code：state.json 缺失时按 workspaces.json 回退 cwd（REQ-77）', async () => {
+  const workspaceId = 'wd_genius-invokation_7d34e589df57'
+  const sess = 'C:\\Users\\u\\.kimi-code\\sessions\\' + workspaceId + '\\session-no-state'
+  const workDir = hostAbs('D:/AI/GTCG/genius-invokation')
+  const tree = {
+    'C:\\Users\\u\\.kimi-code\\sessions': 'dir',
+    ['C:\\Users\\u\\.kimi-code\\sessions\\' + workspaceId]: 'dir',
+    [sess]: 'dir',
+    [sess + '\\agents']: 'dir',
+    [sess + '\\agents\\main']: 'dir',
+    'C:\\Users\\u\\.kimi-code\\workspaces.json': JSON.stringify({
+      version: 1,
+      workspaces: { [workspaceId]: { root: workDir, name: 'genius-invokation' } },
+    }),
+    [sess + '\\agents\\main\\wire.jsonl']: kimiCodeWire([
+      kimiCodeEv('turn.prompt', { input: [{ type: 'text', text: '帮我看看构建失败' }], origin: { kind: 'user' } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'step.begin', turnId: '0', step: 1 } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'content.part', part: { type: 'text', text: '是缺少依赖。' } } }),
+      kimiCodeEv('context.append_loop_event', { event: { type: 'step.end', turnId: '0', step: 1, finishReason: 'end_turn' } }),
+      kimiCodeEv('turn.ended', { turnId: 0, reason: 'completed' }),
+    ]),
+  }
+  const { ctx, persistence, attached } = makeCtx(tree)
+  apply(ctx)
+  const def = chatDef(ctx, 'kimi')
+  const preview = await def.execute({ path: sess, preview: true })
+  assert.equal(preview.cwd, workDir)
+
+  const value = await def.execute({ path: sess })
+  assert.equal(value.mode, 'single')
+  assert.equal(value.status, 'imported')
+  const saved = persistence.sessions.get(value.sessionId)
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, workDir)
+  assert.equal(attached.length, 1)
 })

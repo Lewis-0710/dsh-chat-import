@@ -1,7 +1,7 @@
 {
   "name": "dsh-chat-import",
-  "description": "Import Claude Code / Codex / ChatGPT / Cursor / Gemini / Reasonix / Pi Coding Agent / opencode / ZCode / Grok Build / OpenClaw / Hermes / Kimi CLI / Qoder CLI / WorkBuddy conversation histories as resumable DeepSeek Harness sessions",
-  "version": "0.11.5",
+  "description": "Import conversation history from 25+ AI coding agents into DeepSeek Harness as resumable sessions — tool calls, reasoning and results kept intact, with reverse export and sync. | 把 25+ AI 编程 Agent 的聊天记录导入 DeepSeek Harness 继续对话，保留工具调用、推理与结果，支持反向导出与同步。",
+  "version": "0.18.4",
   "type": "module",
   "main": "./index.mjs",
   "types": "./index.d.ts",
@@ -56,6 +56,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh": ">=0.1.5-rc.1",
     "@deepseek-ai/dsh-client-locale": ">=0.1.0-rc.6",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": ">=3.0.0",
@@ -107,6 +108,7 @@
     "lint": "eslint .",
     "check:linux": "node .github/scripts/check-linux-compat.mjs",
     "check:leaks": "node .github/scripts/check-leaks.mjs",
+    "check:links": "node .github/scripts/check-doc-links.mjs",
     "build": "node .github/scripts/build-check.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm test && git diff --quiet && git diff --cached --quiet && npm pack --dry-run"
@@ -117,5 +119,8 @@
   },
   "dependencies": {
     "fzstd": "^0.1.1"
+  },
+  "overrides": {
+    "js-yaml": "4.3.2"
   }
 }

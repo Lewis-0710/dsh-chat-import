@@ -12,7 +12,7 @@ export {
   verifyClaudeJsonl,
 } from './lib/export/claude.mjs'
 
-// REQ-56/62 interchange bundle（备份/便携格式，纯函数）
+// interchange bundle（备份/便携格式，纯函数）
 export {
   BUNDLE_NAMESPACE,
   BUNDLE_FORMAT,
@@ -22,7 +22,7 @@ export {
   verifyBundle,
 } from './lib/export/bundle.mjs'
 
-// REQ-23 矩阵化互转（DSH → Codex rollout / DSH → Kimi wire，纯函数）
+// 矩阵化互转（DSH → Codex rollout / DSH → Kimi wire，纯函数）
 export {
   serializeCodexRecords,
   serializeCodexJsonl,
@@ -35,3 +35,10 @@ export {
   serializeKimiWire,
   verifyKimiWire,
 } from './lib/export/kimi.mjs'
+
+// 反向导出：DSH 会话 → opencode `import <file>` JSON（纯函数）
+export {
+  buildOpencodeImportDoc,
+  serializeOpencodeJson,
+  verifyOpencodeImportJson,
+} from './lib/export/opencode.mjs'

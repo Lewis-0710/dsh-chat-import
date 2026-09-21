@@ -1,4 +1,4 @@
-// settings.test.mjs — REQ-71 settings.json / config.toml 翻译建议
+// settings.test.mjs — settings.json / config.toml 翻译建议
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'

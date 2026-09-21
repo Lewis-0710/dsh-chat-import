@@ -1,4 +1,4 @@
-// markdown.test.mjs — REQ-67 session.jsonl → Markdown 纯函数
+// markdown.test.mjs — session.jsonl → Markdown 纯函数
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { sessionJsonlToMarkdown, blocksToMarkdown } from '../lib/markdown.mjs'

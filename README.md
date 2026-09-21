@@ -14,7 +14,7 @@
 
 # DSH Chat Import
 
-**A DeepSeek Harness plugin that imports conversation history from 18+ AI coding tools, so you can continue right where you left off.**
+**A session import plugin built on DeepSeek Harness: import conversation history from external agents with one click and continue chatting in DeepSeek Harness.**
 
 > **All sessions, continued in DSH.**
 
@@ -30,79 +30,107 @@
 
 </div>
 
-## Intro
 
-`DSH Chat Import` imports conversation history with full context from other agents, turning it into a seamlessly resumable DeepSeek Harness session.
+## Supported Data Sources
 
-Now covers import from 21 agents: Claude Code, Codex, ChatGPT, Cursor, Gemini, Antigravity CLI, Reasonix, opencode, MiMo Code, ZCode, Grok Build, OpenClaw, Pi Coding Agent, Hermes, Kimi CLI / Kimi Code, Kilo Code, Qoder CLI, WorkBuddy, Qwen Work CN (千问办公) and DSH session logs.
-
-Export back to: Claude Code, Codex, Kimi Code.
-
-## Supported Agents
-
-|  |  |  |  |  |  |
-| --- | --- | --- | --- | --- | --- |
-| [![Claude Code](./assets/agents/claude.svg)<br>**Claude Code**](https://github.com/anthropics/claude-code) | [![Codex](./assets/agents/codex.svg)<br>**Codex**](https://github.com/openai/codex) | [![ChatGPT](./assets/agents/chatgpt.svg)<br>**ChatGPT**](https://chatgpt.com) | [![Cursor](./assets/agents/cursor.svg)<br>**Cursor**](https://cursor.com) | [![Gemini](./assets/agents/gemini.svg)<br>**Gemini CLI**](https://github.com/google-gemini/gemini-cli) | [![Antigravity](./assets/agents/antigravity.svg)<br>**Antigravity CLI**](https://antigravity.google) |
-| [![Reasonix](./assets/agents/reasonix.svg)<br>**Reasonix**](https://github.com/esengine/DeepSeek-Reasonix) | [![OpenCode](./assets/agents/opencode.svg)<br>**OpenCode**](https://github.com/anomalyco/opencode) | [![MiMo Code](./assets/agents/mimocode.svg)<br>**MiMo Code**](https://github.com/XiaomiMiMo/MiMo-Code) | [![Kilo Code](./assets/agents/kilocode.svg)<br>**Kilo Code**](https://github.com/Kilo-Org/kilocode) | [![ZCode](./assets/agents/zcode.svg)<br>**ZCode**](https://z.ai) |  |
-| [![Grok Build](./assets/agents/grokbuild.svg)<br>**Grok Build**](https://github.com/xai-org/grok-build) | [![OpenClaw](./assets/agents/openclaw.svg)<br>**OpenClaw**](https://github.com/openclaw/openclaw) | [![Pi Coding Agent](./assets/agents/pi.svg)<br>**Pi Coding Agent**](https://github.com/badlogic/pi-mono) | [![Hermes](./assets/agents/hermes.svg)<br>**Hermes**](https://github.com/NousResearch/hermes-agent) | [![Kimi CLI](./assets/agents/kimi.svg)<br>**Kimi CLI**](https://github.com/MoonshotAI/kimi-cli) |  |
-| [![Qoder CLI](./assets/agents/qoder.svg)<br>**Qoder CLI**](https://github.com/qoderAI/qoder-cli) | [![WorkBuddy](./assets/agents/workbuddy.svg)<br>**WorkBuddy**](https://github.com/gabotechs/workbuddy) | [![Qwen Work CN](./assets/agents/qwen.svg)<br>**Qwen Work CN**](https://github.com/QwenLM/qwen-code) | [![DSH](./assets/agents/dsh.svg)<br>**DSH**](https://github.com/deepseek-ai/deepseek-harness) |  |  |
+<table>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/anthropics/claude-code"><img src="./assets/agents/claude.svg" width="56" height="56" alt="Claude Code" /><br /><b>Claude Code</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/openai/codex"><img src="./assets/agents/codex.svg" width="56" height="56" alt="Codex" /><br /><b>Codex</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/google-gemini/gemini-cli"><img src="./assets/agents/gemini.svg" width="56" height="56" alt="Gemini CLI" /><br /><b>Gemini CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/aaif-goose/goose"><img src="./assets/agents/goose.svg" width="56" height="56" alt="Goose" /><br /><b>Goose</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/charmbracelet/crush"><img src="./assets/agents/crush.svg" width="56" height="56" alt="Crush" /><br /><b>Crush</b></a></td>
+  </tr>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/qoderAI/qoder-cli"><img src="./assets/agents/qoder.svg" width="56" height="56" alt="Qoder CLI" /><br /><b>Qoder CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/MoonshotAI/kimi-cli"><img src="./assets/agents/kimi.svg" width="56" height="56" alt="Kimi CLI" /><br /><b>Kimi CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/MoonshotAI/kimi-code"><img src="./assets/agents/kimi.svg" width="56" height="56" alt="Kimi Code" /><br /><b>Kimi Code</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/esengine/DeepSeek-Reasonix"><img src="./assets/agents/reasonix.svg" width="56" height="56" alt="Reasonix" /><br /><b>Reasonix</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/anomalyco/opencode"><img src="./assets/agents/opencode.svg" width="56" height="56" alt="OpenCode" /><br /><b>OpenCode</b></a></td>
+  </tr>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/XiaomiMiMo/MiMo-Code"><img src="./assets/agents/mimocode.svg" width="56" height="56" alt="MiMo Code" /><br /><b>MiMo Code</b></a></td>
+    <td align="center" width="20%"><a href="https://z.ai"><img src="./assets/agents/zcode.svg" width="56" height="56" alt="ZCode" /><br /><b>ZCode</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/xai-org/grok-build"><img src="./assets/agents/grokbuild.svg" width="56" height="56" alt="Grok Build" /><br /><b>Grok Build</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/openclaw/openclaw"><img src="./assets/agents/openclaw.svg" width="56" height="56" alt="OpenClaw" /><br /><b>OpenClaw</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/Kilo-Org/kilocode"><img src="./assets/agents/kilocode.svg" width="56" height="56" alt="Kilo Code" /><br /><b>Kilo Code</b></a></td>
+  </tr>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/badlogic/pi-mono"><img src="./assets/agents/pi.svg" width="56" height="56" alt="Pi Coding Agent" /><br /><b>Pi Coding Agent</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/NousResearch/hermes-agent"><img src="./assets/agents/hermes.svg" width="56" height="56" alt="Hermes" /><br /><b>Hermes</b></a></td>
+    <td align="center" width="20%"><a href="https://cursor.com"><img src="./assets/agents/cursor.svg" width="56" height="56" alt="Cursor" /><br /><b>Cursor</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/cline/cline"><img src="./assets/agents/cline.svg" width="56" height="56" alt="Cline" /><br /><b>Cline</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/continuedev/continue"><img src="./assets/agents/continue.svg" width="56" height="56" alt="Continue" /><br /><b>Continue</b></a></td>
+  </tr>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/zed-industries/zed"><img src="./assets/agents/zed.svg" width="56" height="56" alt="Zed" /><br /><b>Zed</b></a></td>
+    <td align="center" width="20%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity CLI" /><br /><b>Antigravity CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://chatgpt.com"><img src="./assets/agents/chatgpt.svg" width="56" height="56" alt="ChatGPT" /><br /><b>ChatGPT</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/gabotechs/workbuddy"><img src="./assets/agents/workbuddy.svg" width="56" height="56" alt="WorkBuddy" /><br /><b>WorkBuddy</b></a></td>
+    <td align="center" width="20%"><a href="https://github.com/QwenLM/qwen-code"><img src="./assets/agents/qwen.svg" width="56" height="56" alt="Qwen" /><br /><b>Qwen</b></a></td>
+  </tr>
+  <tr>
+    <td align="center" width="20%"><a href="https://github.com/deepseek-ai/deepseek-harness"><img src="./assets/agents/dsh.svg" width="56" height="56" alt="DSH" /><br /><b>DSH</b></a></td>
+    <td align="center" width="20%"><a href="https://www.teleai.com.cn/product/super-agent"><img src="./assets/agents/teleagent.svg" width="56" height="56" alt="TeleAgent" /><br /><b>TeleAgent</b></a></td>
+    <td align="center" width="20%"><a href="#usage"><img src="./assets/agents/local-jsonl.svg" width="56" height="56" alt="Local JSONL" /><br /><b>Local JSONL</b></a></td>
+    <td align="center" width="20%"></td>
+    <td align="center" width="20%"></td>
+  </tr>
+</table>
 
 ## Install
 
+> Requires dsh ≥ 0.1.5-rc.1
+
+1. Install via terminal
+
 ```bash
 dsh plugin --profile web add dsh-chat-import                    # npm package
-dsh plugin --profile web add -w link:/path/to/dsh-chat-import   # local checkout (symlink)
 ```
+
+2. Install via [Plugin Marketplace](https://github.com/dsh-market/dsh-market)
 
 ## Usage
 
-1. **Import** — pick the conversations to import from the "Import sessions" panel in the bottom-right of the GUI and import with one click, or have your agent call the context tool:
+1. Import conversations via GUI
+  Open the import window from the "Import sessions" button at the bottom of the left sidebar, select the conversations you want to import, and import with one click.
+2. Import via Agent tool calls
 
 ```
+# Example call formats
 import_chat({ format: "claude", path: "~/.claude/projects" })
 import_chat({ format: "chatgpt", path: "~/Downloads/chatgpt-export/conversations.json" })
 import_chat({ format: "local-jsonl", path: "D:\downloads\session.jsonl" })
 ```
 
-Reasonix directory imports conservatively collapse only recovery ancestors proven by both a strict semantic prefix and an explicit `parent_id` lineage. Ambiguous or divergent files remain separate; use `lineageMode: "physical"` for one session per JSONL.
+## Configuration
 
-2. **Resume** — refresh the session list, open the imported session, and keep chatting from where the source left off.
+For TUI compatibility, plugin-provided tools are injected into context by default. You can configure the import tools in Settings to **not inject into context** or inject partially, which saves a significant amount of tokens.
 
-3. **Sync (optional)** — the panel's "Sync" tab offers bidirectional incremental sync, off by default. Sub-agent conversations are filtered out by default in both directions.
-
-4. **Tool injection (optional)** — the "Session Import" settings section exposes three `injectTools` levels: **Minimal** (default, keeps only the `import_chat` entry tool resident; low-frequency management tools stay out of context), **Full** (all 13 tools), and **Off** (invisible to the agent; the GUI panel still works). Tool descriptions are slimmed down to selection-time essentials; behavioral details ride along in execution results and error text, only when needed.
-
-Full tool / command usage (parameters, examples, edge cases) lives in **[docs/USAGE.md](docs/USAGE.md)**.
-
-## Companion tool: config migration
-
-Only need to migrate **configuration** (skills, hooks, global settings) rather than conversation history? [dsh-movein](https://github.com/sjh9714/dsh-movein) handles config migration and complements this plugin -- DSH Chat Import only handles conversation history, and each tool works standalone. Its first-migration guide ([中文](https://github.com/sjh9714/dsh-movein/blob/main/docs/first-migration.zh.md)) walks through a preview-first, apply-second, verify-each-step flow.
-
-> The combined flow of the two tools has not been jointly validated, and cross-linking is not a mutual endorsement; check sources, targets, duplicate-import and retraction boundaries for each tool separately.
-
-This plugin's `import_agents` is a lightweight asset mover (it persists pi/opencode/Claude/Codex agents, prompts and skills as DSH skills); for full config migration (hooks, permission rules, settings), use dsh-movein.
+For full tool / command usage, see **[docs/USAGE.md](docs/USAGE.md)**.
 
 ## Features
 
-| Capability | Entry points | Description |
+| Capability | Entry Point | Description |
 | --- | --- | --- |
-| Batch import | `import_chat` (20 formats) · `scan_discover` · sidebar panel | Import 19+ sources with one tool; each conversation becomes its own session |
-| Import history & purge | sidebar panel **History** tab | View `imports.json` records; remove plugin-created sessions (with confirmation) |
-| Full-fidelity resume | Imported sessions | Tool calls & results, reasoning, titles, models and timestamps carry over |
-| Export back | `export_chat` (`format: claude` / `codex` / `kimi`) | Serialize DSH sessions back to Claude / Codex / Kimi |
-| Bidirectional sync | panel "Sync" tab | Incremental sync in both directions (external ↔ DSH), off by default |
-
-> One documented exception to full fidelity: **failed ghost retry steps**. When a tool call never received its result and the very next step re-emits the same call id verbatim, the dead step is dropped at import — the result already pairs with the re-emitted call. Duplicate call ids in the imported log would hard-fail DSH's conversation folding (a second `start` for the same id), swallowing the whole trajectory after the first duplicate. See the `droppedRetrySteps` counter on the converter result.
+| Import | Sidebar panel "Import" tab | Import conversations from other agents, preserving reasoning, tool call results, and system prompts (optional) |
+| Retract Import | Sidebar panel "History" tab | View import history and delete sessions created by this plugin with one click |
+| Export | Context tool | Serialize DSH sessions back to external agents |
+| Sync | Sidebar panel "Sync" tab | Bidirectional incremental sync between external agents and DSH, off by default |
 
 ## Docs
 
 | Document | Description |
 | --- | --- |
-| [Usage Reference](docs/USAGE.md) | Full parameters, examples and edge cases for every tool / command |
-| [Interchange protocol](docs/INTERCHANGE.md) | Interchange v1 protocol and bundle format |
+| [Usage Reference](docs/USAGE.md) | Full parameters, examples, and edge cases for every tool / command |
+| [Interchange Protocol](docs/INTERCHANGE.md) | Interchange v1 protocol and bundle format |
 | [Changelog](CHANGELOG.md) | Version history |
 | [Roadmap](ROADMAP.md) | Shipped / planned |
 | [Contributing](CONTRIBUTING.md) | Development setup, commit rules, security & privacy |
+
+## Related Links
+
+> Only need to migrate **configuration** (skills, hooks, global settings, etc.) rather than conversation history? Recommended: [dsh-movein](https://github.com/sjh9714/dsh-movein)
 
 ## Star History
 
