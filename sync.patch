@@ -16,6 +16,9 @@ index 1dfec49..4fb519d 100644
  <div align="center">
  
  <img src="./assets/dci-promo.png" alt="DSH Chat Import" width="100%" />
+diff --git a/bin/dsh-chat-import.mjs b/bin/dsh-chat-import.mjs
+old mode 100644
+new mode 100755
 diff --git a/lib/client.js b/lib/client.js
 index 13153e0..ec550d6 100644
 --- a/lib/client.js
