@@ -27,6 +27,7 @@
     "lib/index.d.ts",
     "lib/convert",
     "lib/export",
+    "lib/sources",
     "bin",
     "cordis.patch.yml",
     "README.md",

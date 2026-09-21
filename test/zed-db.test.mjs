@@ -9,7 +9,7 @@ import { Buffer } from 'node:buffer'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { readZedThreads, readZedDb } from '../lib/zed.mjs'
+import { readZedThreads, readZedDb } from '../lib/sources/zed.mjs'
 
 // 上游 db.rs 的建表 + 3×ALTER（老库可能缺后 4 列）
 const CREATE = `CREATE TABLE IF NOT EXISTS threads (

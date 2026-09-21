@@ -2,7 +2,7 @@
 //
 // convertHermesJson（中间 JSON + JSONL flat/nested 双形态）+ readHermesDb（真实
 // temp state.db：sessions + messages 表）。不依赖 index.mjs（工具注册由另一 agent
-// 接线），直接 import lib/convert/hermes.mjs 与 lib/hermes.mjs；SQLite 优先语义由
+// 接线），直接 import lib/convert/hermes.mjs 与 lib/sources/hermes.mjs；SQLite 优先语义由
 // index 层做，此处只验证 readHermesDb 与 convertHermesJson 各自正确。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { convertHermesJson } from '../lib/convert/hermes.mjs'
 import { SESSION_FORMAT_VERSION } from '../lib/convert/core.mjs'
-import { readHermesDb } from '../lib/hermes.mjs'
+import { readHermesDb } from '../lib/sources/hermes.mjs'
 
 // 平衡会话断言：seq 连续、turn 开合配对、tool call/result 1:1、surface 事件带 surfaceOp。
 function assertBalanced(out) {

@@ -33,7 +33,7 @@ npm run build          # 发布面自检：client bundle 新鲜度 + files 完�
 ## 仓库布局
 
 - `lib/index.mjs` 插件入口（package.json main），只做组装。
-- `lib/` 发布代码，`lib/convert/*` 与 `lib/export/*` 是纯函数层（各自 `index.mjs` 是 re-export shim）。
+- `lib/` 发布代码，`lib/convert/*` 与 `lib/export/*` 是纯函数层（各自 `index.mjs` 是 re-export shim）；`lib/sources/*` 是按来源命名的 host 面适配器（与 `lib/convert/<src>.mjs` 镜像）。
 - `lib/client.js` 浏览器面板 bundle（生成产物，勿手改）；源在 `src/client/`，组装器 `scripts/build-client.mjs`。
 - `bin/dsh-chat-import.mjs` 独立 CLI。
 - `docs/` 面向最终用户的文档（含 ROADMAP、CONTRIBUTING）；`test/` 测试和合成 fixtures。
@@ -54,7 +54,7 @@ npm run build          # 发布面自检：client bundle 新鲜度 + files 完�
 
 1. `lib/convert/<src>.mjs`：纯转换器，文件头写清存储契约；不读磁盘、不 import 宿主服务。
 2. `lib/convert/index.mjs`：re-export 该转换器及发现层需要的纯函数。
-3. 数据库源额外加 `lib/<src>.mjs`（host 面）：`node:sqlite` 只读打开，列用 `PRAGMA table_info` 自适应；读不到返回 `null`。
+3. 数据库源额外加 `lib/sources/<src>.mjs`（host 面）：`node:sqlite` 只读打开，列用 `PRAGMA table_info` 自适应；读不到返回 `null`。
 4. 登记发现层、工具层、面板层、来源标签、资源与文档。
 5. 补测试：转换器单测、发现层单测、工具层集成测试；SQLite 源用真实临时库造夹具。
 6. 门禁全绿：`npm test` / `lint` / `check:linux` / `check:links` / `build`。

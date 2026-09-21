@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { readCrushSessions, readCrushDb, crushProjectPathFor, crushDeriveArgs } from '../lib/crush.mjs'
+import { readCrushSessions, readCrushDb, crushProjectPathFor, crushDeriveArgs } from '../lib/sources/crush.mjs'
 import { crushProjectDbPath } from '../lib/convert/crush.mjs'
 
 // 上游 8 个 goose 迁移合并后的形状（列名逐字）

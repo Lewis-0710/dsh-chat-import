@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { apply } from '../lib/index.mjs'
 import { convertMimocodeJson } from '../lib/convert/index.mjs'
-import { readMimocodeDb, isMimocodeBackgroundSession } from '../lib/mimocode.mjs'
+import { readMimocodeDb, isMimocodeBackgroundSession } from '../lib/sources/mimocode.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { hostAbs } from './_support/host-path.mjs'
 

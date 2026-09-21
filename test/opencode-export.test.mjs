@@ -147,7 +147,7 @@ test('serializeOpencodeJson：无可导出内容 → 抛错（不产出空会话
 test('往返：导出的文档按宿主抽取形状喂回 convertOpencodeJson → 同一段对话', () => {
   const out = serialize()
   const doc = JSON.parse(out.json)
-  // 复刻 lib/opencode.mjs 从三表抽取的中间 JSON（message.data → role/model，part.data → parts）
+  // 复刻 lib/sources/opencode.mjs 从三表抽取的中间 JSON（message.data → role/model，part.data → parts）
   const chat = {
     id: doc.info.id,
     title: doc.info.title,

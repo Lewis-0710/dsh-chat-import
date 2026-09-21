@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { readGooseDb, readGooseSessions, gooseDefaultDbPath } from '../lib/goose.mjs'
+import { readGooseDb, readGooseSessions, gooseDefaultDbPath } from '../lib/sources/goose.mjs'
 
 // 上游 session_manager.rs 的建表要点（CURRENT_SCHEMA_VERSION=16；老库靠 ALTER 逐列补齐）
 const CREATE = `

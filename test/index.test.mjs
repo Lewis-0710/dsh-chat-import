@@ -1072,7 +1072,7 @@ test('import_cline legacy：taskHistory 元数据 + api history 经真实工具�
 
 // ---- import_goose 集成（真实 SQLite 临时库） ----
 
-// 合成 Goose 会话库（sessions/messages 两表，schema 对齐 lib/goose.mjs 头部契约）。
+// 合成 Goose 会话库（sessions/messages 两表，schema 对齐 lib/sources/goose.mjs 头部契约）。
 const GOOSE_CWD = hostAbs('D:/demo/goose-proj')
 const GOOSE_TS = 1745343730 // Unix 秒（goose 的 created_timestamp 是整数）
 function gooseFixtureSessions() {

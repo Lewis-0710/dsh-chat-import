@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { apply } from '../lib/index.mjs'
 import { convertKilocodeJson } from '../lib/convert/index.mjs'
-import { readKilocodeDb } from '../lib/kilocode.mjs'
+import { readKilocodeDb } from '../lib/sources/kilocode.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { hostAbs } from './_support/host-path.mjs'
 

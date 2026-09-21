@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { readClineDb, clineMessagesPath, clineDeriveArgs, collectClineFiles } from '../lib/cline.mjs'
+import { readClineDb, clineMessagesPath, clineDeriveArgs, collectClineFiles } from '../lib/sources/cline.mjs'
 
 // 上游 sqlite-db.ts 的建表 SQL（main @ 6e8bea1）；老库靠 ALTER TABLE 逐列补齐，
 // 故测试另造一个「缺列」的库验证自适应读取。

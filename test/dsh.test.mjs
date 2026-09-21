@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { convertDshJsonl } from '../lib/convert/dsh.mjs'
 import { defaultRoots, discoverSessions } from '../lib/discovery.mjs'
-import { dshSessionLogVersion, isDshSessionFile, readDshText } from '../lib/dsh.mjs'
+import { dshSessionLogVersion, isDshSessionFile, readDshText } from '../lib/sources/dsh.mjs'
 
 const SESSION_LINES = [
   { type: 'session', id: 'session-dsh-test', cwd: '/tmp/proj', createdAt: 1700000000000 },
