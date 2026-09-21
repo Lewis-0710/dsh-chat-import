@@ -8,13 +8,13 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.mjs'
+import { apply } from '../lib/index.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import {
   convertClaudeJsonl, convertCodexJsonl, convertChatgptJson, convertCursorJsonl,
   convertGeminiJson, convertReasonixJsonl, convertOpencodeJson, convertZcodeJson,
   convertGrokbuildJson, convertOpenclawJson, convertHermesJson,
-} from '../convert.mjs'
+} from '../lib/convert/index.mjs'
 import { detectSecretKinds, parseJsonlLines, SKIPPED_LINES_CAP } from '../lib/convert/core.mjs'
 
 // 辅助：import_chat 分发器定义——execute 时注入 format（收敛后单工具的测试形态，

@@ -115,8 +115,8 @@ import_chat({ format: "local-jsonl", path: "D:\downloads\session.jsonl" })
 | [使用详解](docs/USAGE.zh-CN.md) | 每个工具 / 命令的完整参数、示例与边界行为 |
 | [互转协议](docs/INTERCHANGE.md) | Interchange v1 协议与 bundle 格式 |
 | [更新日志](CHANGELOG.md) | 版本历史（英文） |
-| [路线图](ROADMAP.md) | 已实现 / 规划 |
-| [贡献指南](CONTRIBUTING.md) | 开发环境、提交规范、安全与隐私 |
+| [路线图](docs/ROADMAP.md) | 已实现 / 规划 |
+| [贡献指南](docs/CONTRIBUTING.md) | 开发环境、提交规范、安全与隐私 |
 
 ## 友链
 

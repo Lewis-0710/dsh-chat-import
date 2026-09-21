@@ -2,9 +2,9 @@
 
 Thanks for considering a contribution! `dsh-chat-import` imports external agent
 conversation histories into DeepSeek Harness as full-fidelity, resumable
-sessions. The user-facing contract lives in [README.md](README.md) (bilingual),
+sessions. The user-facing contract lives in [README.md](../README.md) (bilingual),
 and the repo's engineering rules — layout, commit discipline, DSH plugin
-constraints, quality conventions — live in [AGENTS.md](AGENTS.md).
+constraints, quality conventions — live in [AGENTS.md](../AGENTS.md).
 
 ## Dev setup
 

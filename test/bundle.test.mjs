@@ -6,8 +6,8 @@ import { createHash } from 'node:crypto'
 import {
   BUNDLE_NAMESPACE, BUNDLE_FORMAT, BUNDLE_VERSION,
   sessionLogToJsonl, serializeBundle, verifyBundle,
-} from '../export.mjs'
-import { convertDshJsonl } from '../convert.mjs'
+} from '../lib/export/index.mjs'
+import { convertDshJsonl } from '../lib/convert/index.mjs'
 
 const T = 1786000000000
 

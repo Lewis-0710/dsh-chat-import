@@ -2,8 +2,8 @@
 // wire 序列化 + 反向 convert 往返（四向矩阵的 DSH→Codex / DSH→Kimi 出边）。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { serializeCodexJsonl, verifyCodexJsonl, serializeKimiWire, verifyKimiWire } from '../export.mjs'
-import { convertCodexJsonl, convertKimiWire, validateSessionEvents } from '../convert.mjs'
+import { serializeCodexJsonl, verifyCodexJsonl, serializeKimiWire, verifyKimiWire } from '../lib/export/index.mjs'
+import { convertCodexJsonl, convertKimiWire, validateSessionEvents } from '../lib/convert/index.mjs'
 
 const T = 1786000000000
 

@@ -16,6 +16,7 @@
 - **决定**：`index.mjs` / `lib/` 即发布产物，源码即产物；根目录只放发布文件，本地工程文件收进 `dev/` 不入库。
 - **代价**：没有类型检查与转译，靠 eslint + node --test + 覆盖率护栏（line >= 75%）兜底。
 - **重审条件**：需要 TypeScript 类型契约对外发布、或需要支持旧 Node 之时。
+- **例外**：浏览器侧 bundle（lib/client.js）不适用本条，见 D7——宿主侧仍严格零构建。
 
 ## D2. 会话日志 append-only 契约
 
@@ -47,7 +48,7 @@
 
 ## D6. 已知体量热点与治理方向（2026-09 定）
 
-- **背景**：AI 辅助开发使代码增长快于人工维护速度；当前热点：`lib/discovery.mjs`（约 2390 行）、`lib/tools.mjs`（约 1660 行）、`lib/import-variants.mjs`（约 900 行）。
+- **背景**：AI 辅助开发使代码增长快于人工维护速度；当前热点：`lib/discovery.mjs`（约 2390 行）、`lib/tools.mjs`（约 1660 行）、`lib/import-variants.mjs`（约 900 行）。（`lib/client.js` 曾以 2131 行触发停止线，已按 D7 拆分为 `src/client/` 分片。）
 - **决定**：治理方向不是「按行数强拆」，而是：
   - `discovery.mjs` 按**来源族**拆（每种来源的发现逻辑内聚，与 D3 的来源流水线对齐）；
   - `tools.mjs` 按**工具分组**拆（import / export / sync / purge 各自的工具定义与 handler 同文件）；
@@ -55,3 +56,11 @@
 - **代价**：拆分期间 import 路径变动，需要全量测试护航（现有覆盖率护栏足够）。
 - **重审条件**：无；这是进行中的方向而非禁令。
 
+---
+
+## D7. 浏览器侧 bundle 例外于零构建：src/client/ 分片 + 组装脚本（2026-09 定）
+
+- **背景**：`lib/client.js`（侧面板 UI）长到 2131 行，触发体量停止线。但 DSH 的客户端模块加载器没有相对 require、也没有资源 URL——浏览器侧产物**必须**是单个自包含文件，「分文件但不构建」在平台上不存在。两条出路：全套 TS 工具链（dsh-better-sidebar 式）或分片+逐字拼接（dsh-claude-style 式）。前者违反 D1 且重审条件不成立（不对外发 TS 类型契约、不需要支持旧 Node），工具链成本对一个陈述式 UI bundle 不成比例。
+- **决定**：源码按职责拆到 `src/client/`（11 片：i18n / prefs / sources / widgets / styles / utils / settings / tabs / discovery / footer / entry），`scripts/build-client.mjs` 逐字拼回 `lib/client.js`（沿用 dsh-claude-style 已验证的同平台路线）。片段契约：禁 import/export（共享 factory 作用域，顺序即声明顺序）、4 空格基准缩进、LF 行尾；构建内置 vm 语法门禁，`npm run build` 含 `--check` 新鲜度校验（产物与源漂移即失败）。同时把根目录发布入口收进子目录：`index.mjs`/`index.d.ts` → `lib/`，`convert.mjs`/`export.mjs` shim → `lib/convert/index.mjs` / `lib/export/index.mjs`（`exports["./export.mjs"]` 子路径契约不变），ROADMAP/CONTRIBUTING → `docs/`。
+- **代价**：双层真相源——改面板必须改 `src/client/` 再组装，直接改 `lib/client.js` 会被 --check 拦下；eslint 对片段关闭 no-undef/no-unused-vars（跨片引用所致），由构建的整体语法门禁兜底。首拆以「产物逐字节一致」为验收，行为零变化。
+- **重审条件**：DSH 客户端加载器支持相对 require / 资源 URL 之时（届时可回到纯 ESM 直发，拆掉的只是组装脚本）。

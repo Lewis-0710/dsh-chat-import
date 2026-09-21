@@ -5,7 +5,7 @@
 ## 原则
 
 - 本仓库只做插件，不修改 DSH 引擎、apiproxy 或官方 UI 包。
-- 零构建，纯 ESM；`index.mjs` / `lib/` 即发布产物。
+- 宿主侧零构建，纯 ESM；`lib/` 即发布产物。唯一例外：浏览器侧 bundle `lib/client.js` 由 `src/client/` 分片经 `scripts/build-client.mjs` 组装（DSH 客户端加载器无相对 require，产物必须单文件；见 `docs/architecture.md` D7）。
 - 根目录只放发布到 GitHub / npm 的文件；本地工程文件收进 `dev/`，不提交。
 - 公开文档（README 双语、docs、CHANGELOG、ROADMAP）不出现 REQ/issue 等内部编号。
 - 结构性改动前先读 `docs/architecture.md`（架构决策与权衡），不违背已记录的决策；确需推翻时先在该文档说明旧决策为何失效。
@@ -13,7 +13,7 @@
 
 ## 体量停止线（机械触发，不靠判断）
 
-- `lib/` 下任一文件超过 1000 行（convert/export 纯函数层放宽到 800 行）：停止往里加新功能，先输出拆分提案等用户确认；提案未批准前该文件只做 bugfix。拆分方向见 `docs/architecture.md` D6。
+- `lib/` 下任一手维护源文件超过 1000 行（convert/export 纯函数层放宽到 800 行）：停止往里加新功能，先输出拆分提案等用户确认；提案未批准前该文件只做 bugfix。拆分方向见 `docs/architecture.md` D6。`lib/client.js` 是生成产物不受此限，同一条线改作用在 `src/client/` 各片段上。
 - 同一来源的解析/发现逻辑出现第 3 处副本时：同样停下来提案，不写第 4 处。
 - 这两条是给执行模型的硬停止线，触发即停，不需要先判断「是否值得」。
 
@@ -26,15 +26,17 @@ npm run coverage       # 覆盖率护栏：line >= 75%
 npm run check:linux    # 跨平台路径纪律静态检查
 npm run check:leaks    # 敏感信息泄漏扫描
 npm run check:links    # 文档相对链接检查
-npm run build          # 发布面自检：files 完整性 + 语法 + lockfile
+npm run build:client   # 由 src/client/ 分片组装 lib/client.js（改面板后必跑）
+npm run build          # 发布面自检：client bundle 新鲜度 + files 完整性 + 语法 + lockfile
 ```
 
 ## 仓库布局
 
-- `index.mjs` 插件入口，只做组装。
-- `lib/` 发布代码，`lib/convert/*` 与 `lib/export/*` 是纯函数层。
+- `lib/index.mjs` 插件入口（package.json main），只做组装。
+- `lib/` 发布代码，`lib/convert/*` 与 `lib/export/*` 是纯函数层（各自 `index.mjs` 是 re-export shim）。
+- `lib/client.js` 浏览器面板 bundle（生成产物，勿手改）；源在 `src/client/`，组装器 `scripts/build-client.mjs`。
 - `bin/dsh-chat-import.mjs` 独立 CLI。
-- `docs/` 面向最终用户的文档；`test/` 测试和合成 fixtures。
+- `docs/` 面向最终用户的文档（含 ROADMAP、CONTRIBUTING）；`test/` 测试和合成 fixtures。
 - `dev/`、`node_modules/`、`.dsh-file-claim/` 不入库。
 
 ## 核心约定
@@ -51,7 +53,7 @@ npm run build          # 发布面自检：files 完整性 + 语法 + lockfile
 ## 新增一个来源
 
 1. `lib/convert/<src>.mjs`：纯转换器，文件头写清存储契约；不读磁盘、不 import 宿主服务。
-2. `convert.mjs`：re-export 该转换器及发现层需要的纯函数。
+2. `lib/convert/index.mjs`：re-export 该转换器及发现层需要的纯函数。
 3. 数据库源额外加 `lib/<src>.mjs`（host 面）：`node:sqlite` 只读打开，列用 `PRAGMA table_info` 自适应；读不到返回 `null`。
 4. 登记发现层、工具层、面板层、来源标签、资源与文档。
 5. 补测试：转换器单测、发现层单测、工具层集成测试；SQLite 源用真实临时库造夹具。

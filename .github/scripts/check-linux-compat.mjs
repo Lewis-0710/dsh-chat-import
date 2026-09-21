@@ -60,10 +60,10 @@ for (const file of files) {
     }
   }
   // 规则 3：cwd / directory 字段与断言不得写死盘符路径（须经 hostAbs 取宿主绝对形态）
-  // 只在**集成面**（import ../index.mjs / import-core 的文件，即真走落盘归一的那条管线）
+  // 只在**集成面**（import 插件入口（lib/index.mjs）/ import-core 的文件，即真走落盘归一的那条管线）
   // 检查：纯转换器/纯函数层的 cwd 是原样透传的，写盘符字面量不会在 Linux 上翻车。
   // 例外面：显式按平台断言的跨平台路径用例（`IS_WINDOWS ? 'D:\…' : undefined`）。
-  const integration = /from '\.\.\/index\.mjs'|import-core/.test(src)
+  const integration = /from '\.\.\/(?:lib\/)?index\.mjs'|import-core/.test(src)
   const cwdDrive = /(\bcwd\s*[:=]\s*|\bcwd\s*,\s*|\bdirectory\s*[:=]\s*|\bdirectory\s*,\s*)'[A-Za-z]:[\\/]/
   for (let i = 0; i < lines.length && integration; i++) {
     if (!cwdDrive.test(lines[i])) continue

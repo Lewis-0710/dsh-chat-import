@@ -3,31 +3,28 @@
   "description": "Import conversation history from 25+ AI coding agents into DeepSeek Harness as resumable sessions — tool calls, reasoning and results kept intact, with reverse export and sync. | 把 25+ AI 编程 Agent 的聊天记录导入 DeepSeek Harness 继续对话，保留工具调用、推理与结果，支持反向导出与同步。",
   "version": "0.18.4",
   "type": "module",
-  "main": "./index.mjs",
-  "types": "./index.d.ts",
+  "main": "./lib/index.mjs",
+  "types": "./lib/index.d.ts",
   "bin": {
     "dsh-chat-import": "./bin/dsh-chat-import.mjs"
   },
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "default": "./index.mjs"
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.mjs"
     },
     "./client": {
       "default": "./lib/client.js"
     },
-    "./export.mjs": "./export.mjs",
+    "./export.mjs": "./lib/export/index.mjs",
     "./CHANGELOG.md": "./CHANGELOG.md",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.mjs",
-    "index.d.ts",
-    "convert.mjs",
-    "export.mjs",
     "lib/*.mjs",
     "lib/*.js",
+    "lib/index.d.ts",
     "lib/convert",
     "lib/export",
     "bin",
@@ -35,8 +32,6 @@
     "README.md",
     "README.zh-CN.md",
     "docs/*.md",
-    "CONTRIBUTING.md",
-    "ROADMAP.md",
     "CHANGELOG.md",
     "assets/import.svg",
     "assets/dci-promo.png",
@@ -109,7 +104,8 @@
     "check:linux": "node .github/scripts/check-linux-compat.mjs",
     "check:leaks": "node .github/scripts/check-leaks.mjs",
     "check:links": "node .github/scripts/check-doc-links.mjs",
-    "build": "node .github/scripts/build-check.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "build": "node scripts/build-client.mjs --check && node .github/scripts/build-check.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm test && git diff --quiet && git diff --cached --quiet && npm pack --dry-run"
   },

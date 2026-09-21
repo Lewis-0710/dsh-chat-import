@@ -7,8 +7,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { serializeOpencodeJson, buildOpencodeImportDoc, verifyOpencodeImportJson } from '../export.mjs'
-import { convertClaudeJsonl, convertOpencodeJson, exportDegradations } from '../convert.mjs'
+import { serializeOpencodeJson, buildOpencodeImportDoc, verifyOpencodeImportJson } from '../lib/export/index.mjs'
+import { convertClaudeJsonl, convertOpencodeJson, exportDegradations } from '../lib/convert/index.mjs'
 import { mapOpencodeToolName, unmapOpencodeToolName } from '../lib/convert/opencode.mjs'
 
 const T = 1785000000000

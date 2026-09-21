@@ -5,7 +5,7 @@ import {
   DEGRADATION_RULES,
   summarizeDegradations,
   exportDegradations,
-} from '../convert.mjs'
+} from '../lib/convert/index.mjs'
 
 test('summarizeDegradations: 只列 count > 0 的降级项，kind/策略映射正确', () => {
   const out = summarizeDegradations({ toolResultFallback: 3, attachmentSkipped: 1, branchCollapsed: 0 })
