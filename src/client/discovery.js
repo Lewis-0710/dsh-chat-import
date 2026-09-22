@@ -132,6 +132,8 @@
       const [selected, setSelected] = useState(new Map()); // key → 会话条目
       const [importing, setImporting] = useState(false);
       const [result, setResult] = useState(null);
+      // 已导入跳过的会话 → Toast（「忽略警告」用 force 再导一次）
+      const [skippedToast, setSkippedToast] = useState(null);
       const [epoch, setEpoch] = useState(0); // 刷新 / 导入后自增 → 服务端新扫描键
       const [queryInput, setQueryInput] = useState(""); // 搜索框输入（未提交）
       const [query, setQuery] = useState(""); // 已提交的搜索词（请求用）
@@ -239,7 +241,7 @@
       useEffect(() => { setSelected(new Map()); }, [source, query, workspaceFilter, timeFilter]);
 
       // 执行导入（单选/多选共用）：POST /api-import/import → 摘要 → 重取列表刷新状态
-      const doImport = async (items, { replace = false } = {}) => {
+      const doImport = async (items, { replace = false, force = false } = {}) => {
         if (!items || items.length === 0 || importing) return;
         setImporting(true);
         setResult(null);
@@ -247,13 +249,20 @@
           const resp = await fetch("/api-import/import", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ items, replace: replace === true, target }),
+            body: JSON.stringify({ items, replace: replace === true, force: force === true, target }),
           });
           const data = await readJson(resp);
           if (data && data.ok === true) {
             setResult(data.target && !String(data.target).startsWith("dsh")
               ? fmtTransferResult(data.results, data.target, t)
               : fmtImportResult(data.results, t));
+            // 兜底不再静默：被幂等跳过（already-imported）的条目单独出 Toast，用户点
+            // 「忽略警告」即用 force 再导一次（另铸新会话）。force 轮本身不再重复提示。
+            const alreadyPaths = new Set((data.results || [])
+              .filter((r) => r && r.status === "already-imported")
+              .map((r) => r.sourcePath));
+            const skipped = force ? [] : items.filter((it) => alreadyPaths.has(it.sourcePath));
+            setSkippedToast(skipped.length > 0 ? { count: skipped.length, items: skipped } : null);
             setSelected(new Map());
             setEpoch((n) => n + 1);
           } else if (data && data.error) {
@@ -664,6 +673,17 @@
             }, n === ALL_PAGE_SIZE ? t("pageSizeAll") : String(n))))),
           // 底部主操作区：导入结果 + 导入所选（列表与分页之外的固定区，滚动时始终可见）
           result && React.createElement("div", { style: style.resultBar }, result),
+          // 兜底不再静默：被幂等跳过的会话出 Toast，点「忽略警告」用 force 再导一次
+          skippedToast && React.createElement("div", { style: style.toast, role: "status" },
+            React.createElement("span", { style: style.toastText }, t("toast.skipped", { n: skippedToast.count })),
+            React.createElement("button", {
+              type: "button", style: style.toastAction, disabled: importing,
+              onClick: () => {
+                const items = skippedToast.items;
+                setSkippedToast(null);
+                doImport(items, { force: true });
+              },
+            }, t("toast.ignore"))),
           React.createElement("div", { style: style.importBar },
             React.createElement("button", {
               style: { ...style.primaryBtn, opacity: selected.size === 0 || importing ? 0.55 : 1 },

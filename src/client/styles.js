@@ -156,6 +156,19 @@
         flex: "1", background: C.accent, color: C.accentForeground, border: "none", borderRadius: "8px",
         padding: "7px 10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
       },
+      // Toast（面板底部浮层）：跳过提示 + 强调色动作（「忽略警告」= force 重导）
+      toast: {
+        position: "absolute", left: "12px", right: "12px", bottom: "12px", zIndex: 40,
+        display: "flex", alignItems: "center", gap: "8px", boxSizing: "border-box",
+        padding: "8px 10px", background: C.bg, border: "1px solid " + C.border, borderRadius: "10px",
+        backdropFilter: C.menuBlur, WebkitBackdropFilter: C.menuBlur, boxShadow: C.elevation,
+        fontSize: "12px", color: C.text,
+      },
+      toastText: { flex: "1", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+      toastAction: {
+        flex: "none", background: "transparent", border: "none", padding: "2px 4px",
+        color: C.accent, fontSize: "12px", fontWeight: 600, cursor: "pointer",
+      },
       result: { padding: "7px 12px", fontSize: "12px", color: C.dim, borderBottom: "1px solid " + C.border, background: C.field },
       // 顶部不留 padding：工作区分组头 sticky 到 top:0 后与列表顶缘齐平，背景
       // 完整盖住背后滚过的行，不再在顶部露出 8px 缝隙泄漏列表背后的内容。
