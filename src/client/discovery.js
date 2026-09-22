@@ -704,12 +704,17 @@
                 background: colors.accentForeground,
                 color: colors.accent,
                 border: "1px solid " + colors.accent,
+                // 两个按钮并排：允许收缩、绝不换行（窄了走省略号），窄面板用短标签
+                flex: "1 1 auto", minWidth: 0, whiteSpace: "nowrap",
+                overflow: "hidden", textOverflow: "ellipsis",
                 opacity: selected.size === 0 || importing ? 0.55 : 1,
               },
               disabled: selected.size === 0 || importing,
               title: t("import.selectedArchive.title"),
               onClick: () => doImport([...selected.values()].map(toItem), { archiveSources: true }),
-            }, importing ? t("importing") : t("import.selectedArchive", { n: selected.size })),
+            }, importing ? t("importing") : (narrow
+              ? t("import.selectedArchive.short", { n: selected.size })
+              : t("import.selectedArchive", { n: selected.size }))),
             React.createElement("button", {
               style: { ...style.primaryBtn, opacity: selected.size === 0 || importing ? 0.55 : 1 },
               disabled: selected.size === 0 || importing,
