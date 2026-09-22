@@ -71,7 +71,7 @@
 
 - **背景**：DSH 会话格式 V4 把工具结果从「`role: 'user'` 里包一个 `tool-result` 块」提升为顶层 `role: 'tool'` 消息。实测两个方向都会被拒：V4 形状写进已装的 V3 宿主，核心 Session 要求存在且仅存在一个与 `source.callId` 匹配的 `tool-result` 包装；V3 形状写进 V4 原生准入，报「requires a tool-role message」；`user/message` 里再带 `tool-result` 包装属 V4 退休语法。两种形状互斥，插件不可能只发一种。
 - **决定**：读侧形状无关——`toolResultOf(ev)` 是唯一的工具结果读取入口（反向导出、校验、Markdown 渲染都走它），不关心事件来自哪个版本；写侧只在一个边界分流——`prepareHostEvents(events, sessionId, version)` 末尾调 `shapeToolResults`，版本由宿主 `sessionPersistence` 能力位（`formatVersion`/`currentVersion`）探测，探不到取已持久化 header 的最大版本，再兜底 3。双向幂等：已是目标形状的事件原样通过。
-- **代价**：两种形状都要测试覆盖（`test/format-version.test.mjs` 锁双向转换、幂等与畸形输入直通）；V4 的其余变更（`source.plugin` → `kind` 改名、header/envelope 白名单、surface 事件强制 `surfaceOp`）暂不跟进，因为已装宿主是 V3，跟进等于无对象地改契约。
+- **代价**：两种形状都要测试覆盖（`test/format-version.test.mjs` 锁双向转换、幂等与畸形输入直通）；V4 的其余变更也必须在写 V4 时跟上——`source.kind='plugin'` 被 V4 退役（迁移器改写为 `plugin:<name>`，读路径直接拒绝 `plugin`），导入自产的上下文注入与 system head 因此由 `shapeMessageSources` 同步改写；header 白名单与 `surfaceOp` 早已对齐（`prepareHostMeta` / surface 事件恒带 `surfaceOp`）。
 - **重审条件**：宿主广告 3/4 之外的版本；或 V4 其余变更成为强制项（届时需要一次面更宽的迁移，而不只是工具结果形状）。
 
 ## D9. 导入会话自带空 system head：surface 首事件必须是 system/message（2026-09 定）

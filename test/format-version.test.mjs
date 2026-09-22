@@ -136,3 +136,41 @@ test('prepareHostEvents：按目标宿主版本分流（默认版本=转换层�
   const def = prepareHostEvents([v3Event()], 's1')
   assert.equal(msgOf(def).role, 'user')
 })
+
+// ---- V4 的 source.kind 形状（宿主 V4 退役了 'plugin'）----
+// 宿主迁移器把 V3 的 {kind:'plugin', plugin:'X'} 改写成生产者自有 kind（kind:'plugin:X'，
+// system-prompt 生产者另有 'system-prompt' 映射），读路径对 V4 日志直接拒绝 'plugin'
+// （"format v4 message requires a producer-owned source kind"）。导入自产的上下文注入与
+// system head 都用 kind='plugin'，写 V4 必须同步改写，否则宿主读不回自己刚写下的日志。
+
+const pluginEnvEvent = () => ({
+  type: 'user/message', seq: 0, time: 1, surfaceOp: 'append',
+  data: { id: 'import:x:env', role: 'user', content: [{ type: 'text', text: 'note' }], source: { kind: 'plugin', plugin: 'chat-import' } },
+})
+const pluginHeadEvent = () => ({
+  type: 'system/message', seq: 1, time: 1, surfaceOp: 'append',
+  data: { turn: 1, step: 1, message: { id: 'import:x:sys', role: 'system', content: [], source: { kind: 'plugin', plugin: 'chat-import' } } },
+})
+
+test('V4 源形状：kind="plugin" 改写为生产者自有 kind；V3 保持原样', () => {
+  const v4 = prepareHostEvents([pluginEnvEvent(), pluginHeadEvent()], 'import-x', 4)
+  assert.deepEqual(v4[0].data.source, { kind: 'plugin:chat-import' })
+  assert.deepEqual(v4[1].data.message.source, { kind: 'plugin:chat-import' })
+  const v3 = prepareHostEvents([pluginEnvEvent(), pluginHeadEvent()], 'import-x', 3)
+  assert.deepEqual(v3[0].data.source, { kind: 'plugin', plugin: 'chat-import' })
+  assert.deepEqual(v3[1].data.message.source, { kind: 'plugin', plugin: 'chat-import' })
+})
+
+test('V4 源形状：宿主 system-prompt 生产者在 system 角色上映射为 "system-prompt"', () => {
+  const ev = pluginHeadEvent()
+  ev.data.message.source = { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }
+  const v4 = prepareHostEvents([ev], 'import-x', 4)
+  assert.deepEqual(v4[0].data.message.source, { kind: 'system-prompt' })
+})
+
+test('V4 源形状：非 plugin 的 kind 原样保留（幂等）', () => {
+  const ev = pluginEnvEvent()
+  ev.data.source = { kind: 'user' }
+  assert.deepEqual(prepareHostEvents([ev], 'import-x', 4)[0].data.source, { kind: 'user' })
+  assert.deepEqual(prepareHostEvents(prepareHostEvents([ev], 'import-x', 4), 'import-x', 4)[0].data.source, { kind: 'user' })
+})
