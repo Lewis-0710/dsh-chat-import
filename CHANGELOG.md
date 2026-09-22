@@ -7,6 +7,9 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 - 导入面板的多选入口从「点行首来源工具标」改为「点整行任意处」：行首 22px 的方图不再是勾选位（只作来源标识与选中态指示），点行内任意处即勾选，键盘聚焦后用 Enter / 空格切换；行内导入 / 同步按钮保持不变，点它只导入、不连带勾选。
 - 会话写入按**宿主会话格式版本分流**：工具结果在 V3 写成 `role: 'user'` 内的 `tool-result` 包装，在 V4 写成顶层 `role: 'tool'` 消息。版本取自宿主 `sessionPersistence` 能力位（`formatVersion`/`currentVersion`），探不到时取已持久化会话 header 的最高版本，再兜底 V3——已装 V3 宿主的行为与产物不变。
 - 读取侧（反向导出、校验、Markdown 渲染）改为**形状无关**：`toolResultOf` 是唯一的工具结果读取入口，V3 与 V4 两种形状的会话都能导出与校验。此前只认 V3 包装，V4 会话的工具结果会被整体跳过。
+- 导入会话的工具结果统一闭合在**调用所在 step 内**：跨 step / 跨轮到达的异步结果提前到其 `tool/call` 旁。DSH 消息投影不重排（事件顺序即 wire 顺序），此前这类日志在调用 step 留下未闭合调用，投影出现「assistant 带 tool_calls 但无后续 tool 消息」的非法序列——续聊被模型 API 拒绝，宿主升 V4 后迁移同样拒载。
+- 无广告调用的**孤儿结果**（转录中途开始）与同一调用的**重复结果**改为丢弃并计数（`orphanToolResults` / `duplicateToolResults`，零值不占键；与 interchange 管线的丢弃策略同口径），单条导入结果与批量明细均透传。此前两者原样写入，宿主升 V4 后迁移 fail-closed 拒载。
+- `verify_session` 新增三类 **V4 迁移风险**检查：`unadvertised-tool-call`（调用无 assistant 消息内容块广告）、`cross-step-result`（结果闭合在调用所在 step 之外）、`duplicate-tool-result`（同一调用多条结果）；`orphan-tool-result` 的修复提示升级为点名迁移拒载风险。append-only 不改写既有日志，修复路径为 force 重导——可在宿主升级 V4 之前完成。
 
 ## [0.19.0] - 2026-09-21
 

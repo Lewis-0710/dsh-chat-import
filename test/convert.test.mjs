@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { convertClaudeJsonl, convertCodexJsonl, convertChatgptJson, convertCursorJsonl, convertGeminiJson, convertReasonixJsonl, convertPiJsonl, convertOpencodeJson, convertQoderJsonl, reasonixStemTime, mintSessionId, parseTime, SESSION_FORMAT_VERSION, tailSessionEvents, codexCustomToolArguments, jsObjectLiteralToJson, estimateTokens, cropContentBlocks, trimTurns, applyBudgetTrim, TEXT_BLOCK_CHAR_LIMIT, TOOL_RESULT_CHAR_LIMIT, validateSessionEvents, isEnvInjectionEvent } from '../lib/convert/index.mjs'
 import { pinSourcedSessionTitle } from '../lib/sourced-title.mjs'
+import { synthesizeSession } from '../lib/convert/core.mjs'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const load = (name) => readFileSync(join(fixtures, name), 'utf8')
@@ -2309,3 +2310,97 @@ test('codex：无 summary 的 reasoning 不产生空块，也不自开步骤', (
   assert.equal(out.messages, 2)
   assert.ok(!JSON.stringify(out).includes('fixture-blob'))
 })
+
+// ---- 工具配对归位（wire 顺序 + V4 迁移合法性，见 synthesizeSession 配对预扫描）----
+
+test('synthesizeSession: 跨 step 到达的异步结果归位到调用的 step', () => {
+  const out = synthesizeSession({
+    meta: { id: 't1', createdAt: 1700000000000 },
+    turns: [{
+      prompt: 'q',
+      steps: [
+        { content: [{ type: 'tool-call', id: 'c1', name: 'Bash', arguments: '{}' }], toolCalls: [{ id: 'c1', name: 'Bash', arguments: '{}' }], toolResults: [] },
+        { content: [{ type: 'text', text: 'running' }], toolCalls: [], toolResults: [] },
+        { content: [{ type: 'text', text: 'later' }], toolCalls: [], toolResults: [{ toolCallId: 'c1', content: [{ type: 'text', text: 'done' }] }] },
+      ],
+    }],
+  })
+  const call = out.events.find((e) => e.type === 'tool/call')
+  const result = out.events.find((e) => e.type === 'tool/result')
+  const firstStepEnd = out.events.find((e) => e.type === 'step/end')
+  assert.ok(result, '异步结果仍被发射')
+  assert.ok(result.seq < firstStepEnd.seq, '结果必须闭合在调用的 step 内（step/end 前配平）')
+  assert.deepEqual(result.data.message.content[0].content, [{ type: 'text', text: 'done' }])
+  assert.deepEqual(result.sourceEventSeqs, [call.seq], 'sourceEventSeqs 仍指向其 tool/call')
+  assert.equal(out.events.filter((e) => e.type === 'tool/result').length, 1, '后续 step 不再重复该结果')
+  assert.equal(out.orphanToolResults, undefined)
+  assert.equal(out.duplicateToolResults, undefined)
+  assertToolPairing(out.events)
+  assertMessageOrderLegal(out.events)
+})
+
+test('synthesizeSession: 跨轮到达的异步结果归位到调用的轮', () => {
+  const out = synthesizeSession({
+    meta: { id: 't2', createdAt: 1700000000000 },
+    turns: [
+      {
+        prompt: 'q1',
+        steps: [{ content: [{ type: 'tool-call', id: 'c1', name: 'Bash', arguments: '{}' }], toolCalls: [{ id: 'c1', name: 'Bash', arguments: '{}' }], toolResults: [] }],
+      },
+      {
+        prompt: 'q2',
+        steps: [{ content: [{ type: 'text', text: 'next' }], toolCalls: [], toolResults: [{ toolCallId: 'c1', content: [{ type: 'text', text: 'late' }] }] }],
+      },
+    ],
+  })
+  const result = out.events.find((e) => e.type === 'tool/result')
+  const firstTurnEnd = out.events.find((e) => e.type === 'turn/end')
+  assert.ok(result && result.seq < firstTurnEnd.seq, '结果归位到调用所在轮的 step 内')
+  assert.deepEqual(result.data.message.content[0].content, [{ type: 'text', text: 'late' }])
+  assertToolPairing(out.events)
+  assertMessageOrderLegal(out.events)
+})
+
+test('synthesizeSession: 无广告调用的孤儿结果丢弃并计数', () => {
+  const out = synthesizeSession({
+    meta: { id: 't3', createdAt: 1700000000000 },
+    turns: [{
+      prompt: 'q',
+      steps: [{ content: [{ type: 'text', text: 'hi' }], toolCalls: [], toolResults: [{ toolCallId: 'ghost', content: [{ type: 'text', text: 'orphan-body' }] }] }],
+    }],
+  })
+  assert.equal(out.events.filter((e) => e.type === 'tool/result').length, 0)
+  assert.equal(out.orphanToolResults, 1)
+  assert.equal(out.duplicateToolResults, undefined)
+  assert.ok(!JSON.stringify(out.events).includes('orphan-body'), '孤儿结果正文不进入日志')
+  assertToolPairing(out.events)
+})
+
+test('synthesizeSession: 同一调用的重复结果保留首条并计数', () => {
+  const out = synthesizeSession({
+    meta: { id: 't4', createdAt: 1700000000000 },
+    turns: [{
+      prompt: 'q',
+      steps: [{
+        content: [{ type: 'tool-call', id: 'c1', name: 'Bash', arguments: '{}' }],
+        toolCalls: [{ id: 'c1', name: 'Bash', arguments: '{}' }],
+        toolResults: [
+          { toolCallId: 'c1', content: [{ type: 'text', text: 'first' }] },
+          { toolCallId: 'c1', content: [{ type: 'text', text: 'second' }], isError: true },
+        ],
+      }],
+    }],
+  })
+  const results = out.events.filter((e) => e.type === 'tool/result')
+  assert.equal(results.length, 1)
+  assert.deepEqual(results[0].data.message.content[0].content, [{ type: 'text', text: 'first' }])
+  assert.equal(results[0].data.message.content[0].isError, undefined, '首条无 isError 时不虚构')
+  assert.equal(out.duplicateToolResults, 1)
+  assert.equal(out.orphanToolResults, undefined)
+  assertToolPairing(out.events)
+  assertMessageOrderLegal(out.events)
+})
+
+// attachConversionDetails 的计数透传断言在 verify-migration.test.mjs：本文件不引
+// 宿主编排模块（check:linux 对引用它的测试文件启用 cwd 盘符纪律），本文件的盘符
+// 字面量是纯转换层的原样透传夹具，属该规则的例外面。
