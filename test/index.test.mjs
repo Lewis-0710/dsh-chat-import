@@ -5650,6 +5650,24 @@ test('REQ-41 /api-import/import handler：单选导入（claude 夹具）→ imp
   assert.equal(persistence.sessions.size, 1)
 })
 
+test('REQ-41 /api-import/sessions handler：source dsh4 是已知来源（来源列表拆代次后不能漏）', async () => {
+  // 面板的 SOURCE_FORMAT 与 discovery 的 FORMATS 必须同步：漏掉 dsh4 时面板会回
+  // 「未知来源: dsh4」→ 列表空、默认「导入到」也拿不到 dshVersion。
+  const { ctx, webRoutes } = makeCtx({})
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/sessions')
+  assert.ok(route)
+  const { res, data } = await invokeImportRoute(route, { source: 'dsh4', after: 0 })
+  assert.equal(res.status, 200, JSON.stringify(data))
+  assert.equal(data.ok, true)
+  assert.equal(typeof data.dshVersion, 'number')
+  const dsh = await invokeImportRoute(route, { source: 'dsh', after: 0 })
+  assert.equal(dsh.res.status, 200, JSON.stringify(dsh.data))
+  // 未知来源仍 400
+  const bad = await invokeImportRoute(route, { source: 'dsh9', after: 0 })
+  assert.equal(bad.res.status, 400)
+})
+
 test('REQ-41 /api-import/import handler：target dsh3 / dsh4 显式指定会话日志代次（header.version）', async () => {
   // 宿主按 header.version 落盘（sessionPersistence.create(header) 认它），所以面板的
   // 「导入到 → DSH（V3/V4 会话格式）」要能把 header 与事件形状一起按该代次产出。
