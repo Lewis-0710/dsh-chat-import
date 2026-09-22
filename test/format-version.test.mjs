@@ -174,3 +174,19 @@ test('V4 源形状：非 plugin 的 kind 原样保留（幂等）', () => {
   assert.deepEqual(prepareHostEvents([ev], 'import-x', 4)[0].data.source, { kind: 'user' })
   assert.deepEqual(prepareHostEvents(prepareHostEvents([ev], 'import-x', 4), 'import-x', 4)[0].data.source, { kind: 'user' })
 })
+
+test('未知的更高版本（V5）不静默：按已知最高版本产出并大声告警一次', () => {
+  const warnings = []
+  const original = console.error
+  console.error = (...args) => warnings.push(args.join(' '))
+  try {
+    const out = prepareHostEvents([pluginEnvEvent(), pluginHeadEvent()], 'import-x', 5)
+    // 形状仍按已知最高版本（V4）：plugin → plugin:<name>
+    assert.deepEqual(out[0].data.source, { kind: 'plugin:chat-import' })
+    assert.equal(warnings.filter((w) => w.includes('会话格式版本 5 未知')).length, 1, '应恰好告警一次')
+    prepareHostEvents([pluginEnvEvent()], 'import-x', 5)
+    assert.equal(warnings.filter((w) => w.includes('会话格式版本 5 未知')).length, 1, '同一版本不重复告警')
+  } finally {
+    console.error = original
+  }
+})

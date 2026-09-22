@@ -30,6 +30,7 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 ### 其他变更
 
+- 宿主广告**未知的更高会话格式版本（V5+）**时，写盘前大声告警一次（仍按已知最高版本产出）：插件的形状分支是「一版一支」，不假设 `>= 4` 都同形——宿主换版时让用户先看到「插件还没跟进 N」，而不是只看到一次导入失败。
 - **撤回 / 删除后重导不再自动发生**：`retract_import` 与清理（purge）现在写入永久墓碑，重导同一源返回 `ignored`；需要恢复时用 `/unignore`。
 - 归档会话不再被视为「可重导」：归档即写 `archived` 墓碑（取消归档解除），取代此前「另铸后缀新 id 重导」的行为。
 
@@ -57,6 +58,7 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 ### Chores
 
+- When the host advertises an **unknown, newer session format version (V5+)**, the write path warns loudly once and emits the highest known shape: the plugin's shape branches are one-per-version and it does not assume everything from 4 on is the same, so a host bump surfaces as "the plugin has not caught up with N" rather than a bare import failure.
 - **Re-import after retract/delete no longer happens automatically**: `retract_import` and purge now write permanent tombstones and re-importing the same source reports `ignored`; use `/unignore` to lift.
 - Archived sessions are no longer treated as re-importable: archiving writes an `archived` tombstone (unarchiving clears it), replacing the previous "mint a suffixed copy" behavior.
 
