@@ -246,15 +246,18 @@ test('decodeZstdText：非法载荷大声抛错（不静默返回空文本）', 
   await assert.rejects(() => decodeZstdText(Buffer.from('not a zstd frame')), /./)
 })
 
-test('discoverSessions format=dsh：导入产物目录（import-<id>）不当源扫出', async () => {
+test('discoverSessions format=dsh：导入产物目录（import-<id>）也列出（代次迁移要用）', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-imported-test-'))
   try {
-    // 产物目录里的会话头 id 也是 import- 前缀（与目录名同构），两者都不得入列表
+    // 已导入的会话（目录名与头部 id 都是 import- 前缀）要能被列出来：把一条已导入的会话
+    // 迁移到另一代次（V3 ↔ V4）正是这个来源的用途；重导不会覆盖原会话（新 id 变成
+    // import-import-…），幂等判定与 Toast「忽略警告」照常兜底。
     const dir = join(root, 'sessions', 'encoded', 'import-session-dsh-test')
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'session.jsonl'), RAW + '\n')
     const found = await discoverSessions({ format: 'dsh', path: join(root, 'sessions'), host: makeDshHost(), imports: {} })
-    assert.equal(found.total, 0)
+    assert.equal(found.total, 1)
+    assert.equal(found.sessions[0].sessionId, 'session-dsh-test')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
