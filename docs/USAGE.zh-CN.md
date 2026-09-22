@@ -185,7 +185,8 @@ dsh web 的左侧栏底部有唯一一个「导入会话」入口：**导入会�
 
 | 选择 | 行为 |
 | --- | --- |
-| **DSH 会话环境**（默认） | 照常导入为可继续的 DSH 会话（既有行为不变）。 |
+| **DSH（V3 会话格式）** | 建一条可继续的 DSH 会话，会话日志按 **V3 代次**落盘（`session.v3.jsonl.zstd`）；header 的 `version` 与事件形状一起按 V3 产出，所以 V4 宿主上也能真写出 V3 日志。 |
+| **DSH（V4 会话格式）** | 同上，按 **V4 代次**落盘。**默认项跟随探测到的宿主版本**（V4 宿主默认选它）。 |
 | Claude Code | 转换后写进 `~/.claude/projects/<slug>/<uuid>.jsonl`；Claude Code 直接读该目录（`claude --resume` 打开）。 |
 | Codex / Kimi Code | 分别写成 Codex rollout JSONL / Kimi `wire.jsonl` 落到 `~/.dsh/exports/`，由你放进对应工具的 sessions 目录。 |
 | opencode | 写成 opencode JSON 落到 `~/.dsh/exports/`，随后用 `opencode import <文件>` 导入。 |

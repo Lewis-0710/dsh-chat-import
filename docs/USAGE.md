@@ -183,7 +183,8 @@ The top row reads **From <source> Import to <target>**: the left dropdown picks 
 
 | Choice | What happens |
 | --- | --- |
-| **DSH 会话环境** (default) | Normal import — a resumable DSH session (unchanged behaviour). |
+| **DSH (V3 session format)** | Creates a resumable DSH session whose log is written as a **V3 generation** (`session.v3.jsonl.zstd`): the header's `version` and the event shape are produced together, so a V4 host genuinely writes a V3 log. |
+| **DSH (V4 session format)** | Same, written as a **V4 generation**. The **default follows the detected host version** (a V4 host selects this one). |
 | Claude Code | The transcript is converted and written into `~/.claude/projects/<slug>/<uuid>.jsonl`; Claude Code reads that directory directly (`claude --resume`). |
 | Codex / Kimi Code | Written as a Codex rollout JSONL / Kimi `wire.jsonl` under `~/.dsh/exports/` for you to move into that tool's sessions directory. |
 | opencode | Written as opencode JSON under `~/.dsh/exports/`, to be imported with `opencode import <file>`. |
