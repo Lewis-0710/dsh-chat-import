@@ -2,29 +2,78 @@
 
 All notable changes to `dsh-chat-import` are documented here, newest first.
 
-## [Unreleased]
+## [0.19.0] - 2026-09-21
 
-- 面板不再展示消息条数后，发现层同步去掉为统计它而做的整读：SQLite 源（opencode 系 / zcode / hermes）改走**会话摘要读取器**——只查 session 表加每会话一条「最近消息时间」聚合，不再逐会话读出 message/part 正文并逐 cell JSON.parse（本机 zcode 实测同步块 185ms → 1ms）；goose 发现路径不再逐会话做 userVisible 计数。dsh 的 `.zstd` 会话改走 **node:zlib 原生异步 zstd 解码**（libuv 线程池，Node < 22.15 自动回退 fzstd），本机 60 个会话实测同步阻塞 3.8s → 异步 0.2s 且不再顶住事件循环。`scan_discover` 输出条目与 schema 同步去掉 `messageCount`。
-- 发现层尾部读取（claude / kimi 的 context token）改为 chunks 数组滚动窗口：原实现每块 `(tail+chunk).slice(-n)` 会对整条尾串全量复制，大 transcript 的尾部读取主要开销就在这块 memcpy 上。
+[中文](#cn-0.19.0) | [English](#en-0.19.0)
 
-- 底栏再收：总数不足 500（换档没有意义）时连「每页」选择器一起隐藏，条高由 8px 内边距收到 4px。
+Release notes for this version follow the dsh release-note layout: a language switch line, an
+`<h3 id="cn-…">` heading per language, then feature / improvement / fix / chore groups.
 
-- 工具栏两个筛选改成「标签即按钮」：按钮文字就是「筛选：路径」/「筛选：时间」，选中后补「· 值」后缀（只是标签旁边再放一颗芯片，两段冗余）。
+<h3 id="cn-0.19.0">新增功能</h3>
 
-- 构建脚本改为**原子写** `lib/client.js`（同目录临时文件 + rename）：宿主的客户端 HMR 会按 stat 轮询该文件、一变就重新读取内容并按内容哈希发版（带一年 immutable 缓存），直接覆写会留出「读到半截 bundle」的窗口——那一版会被当成合法版本发给浏览器并长期缓存，表现就是「构建一次有概率崩掉面板界面」。另加 `--out=<path>` 供测量/实验构建写到 `lib/` 之外，避免把实验配置带进宿主正在加载的产物。
+- 会话发现支持「全部来源」流式加载：扫描结果按发现顺序逐条推入列表，首屏不再等全量扫描结束；扫描完成后一次性重排为最近活跃倒序。
+- 导入面板新增**筛选：路径**（原工作区筛选，标签化）与**筛选：时间**（24 小时 / 7 天 / 30 天 / 不筛选，按最后活跃或创建时间过滤）。
+- 分页档位改为 **500 / 2000 / 全部**（默认 500）：「全部」即不分页，10 万行实测 DOM 恒为 19 行 / 351 节点、悬停与勾选 0.6ms。
+- 页码改成「第 x / y 页」控件，点开在底栏上方弹出**页码网格**（点数字直接跳页，页多时网格自滚动并停在当前页附近）。
 
-- 翻页去掉按钮框，只留左右图标；页码变成「第 x / y 页」控件，点开在底栏上方弹出**页码网格**（像选集，点数字跳页，页多时网格自滚动并停在当前页附近）；只有一页（总数不足一档）时整组不显示。
-- 工具栏末位变成两个筛选控件：**筛选：路径**（原工作区筛选，标签化）与新的 **筛选：时间**（24 小时 / 7 天 / 30 天 / 不筛选，按最后活跃或创建时间过滤，四项短菜单不带检索框）；窄面板下工具栏自动换行。
-- 列表窗口化的上下余量从「±10 行」提高到「±一屏」：快滚时不再露白，观感上不再是「停下来才渲染」（滚动仍按帧触发，每帧重算窗口）。
+### 体验优化
 
-- 列表改为**窗口化渲染**：行高 28px + 行距 1px 与组头 34px 都是固定值，可见区间纯算术得出，只挂载可视区上下各留 10 行的部分，其余用等高占位块撑住（滚动高度与 sticky 组头行为不变；滚到中段实测 top=28945 / 高度=58348 对得上）。
-- 会话行抽成 memo 组件、回调走 ref 转存、派生数据（过滤 / 分页切片 / 分组 / 工作区选项）全部 `useMemo`：悬停或勾选一次只重建受影响的那一行。
-- 大档位下的两处「每次渲染 O(n)」开销收敛：`allSelected`（`every()` 扫整页）改为 `useMemo`，组头点亮判定从「每组 `some()` 扫行」改为随悬停行一起记组名（O(1)）——10 万行时一次悬停从 8ms 降到 0.6ms。
-- 分页档位定为 **500 / 2000 / 全部（默认 500）**：「全部」即不分页——10 万行实测 DOM 恒为 19 行 / 351 节点、悬停与勾选 0.6ms、滚动正常（290 万 px 列表），代价是滚动条很长且常驻内存 ≈1KB/会话。
-- 扫描状态与分页条合并成列表下方的一条：扫描中显示「扫描中 · 已发现 N 个」，完成后显示页码与总数；列表上方那条独立状态行随之去掉（列表可用高度增加），「全部」档显示「全部 N 个」。
+- 会话列表改为**窗口化渲染**：行高 28px + 行距 1px 与组头 34px 都是固定值，可见区间纯算术得出，只挂载可视区上下各一屏，其余用等高占位块撑住（滚动高度与 sticky 组头行为不变）。
+- 会话行抽成 memo 组件、回调走 ref 转存、派生数据全部 `useMemo`：悬停或勾选一次只重建受影响的那一行；大档位下两处「每次渲染 O(n)」开销收敛，10 万行时一次悬停从 8ms 降到 0.6ms。
+- 会话列表改成一行式，与皮肤的工作区列表同一套口径（行高 / 圆角 / 标题字号与配色一致）：行首来源工具标既是来源标识也是多选勾选位，右侧相对时间；上下文 / 分支 / 导入状态收进悬停提示，单条导入按钮悬停时才出现在时间位置。
+- 扫描状态与分页条合并成列表下方一条：扫描中显示「已发现 N 个」，完成后显示页码与总数；总数不足一档时连「每页」选择器一起隐藏。
+- 工具栏动作按钮的折叠判据改为「动作按钮组实测可用宽度」而不是面板宽度：用隐藏探针量出文字形态所需宽度再比对，文字形态不再折行（挤不下走省略号兜底）。
+- 列表窗口化的上下余量从「±10 行」提高到「±一屏」，快滚不再露白。
+- **发现层不再为消息条数整读**（面板已不展示该字段）：SQLite 源（opencode 系 / zcode / hermes）改走会话摘要读取器，只查 session 表加每会话一条「最近消息时间」聚合，不再逐会话读出 message/part 正文并逐 cell 解析——本机 zcode 单次同步阻塞 185ms → 1ms，正是面板卡顿的来源之一。
+- DSH 会话的 `.zstd` 正文改走 **node:zlib 原生异步 zstd 解码**（libuv 线程池，Node < 22.15 自动回退 fzstd）：本机 60 个会话实测同步阻塞 3.8s → 异步 0.2s，事件循环不再被顶住。
+- 发现层尾部读取（claude / kimi 的 context token）改为 chunks 数组滚动窗口：原实现每块都对整条尾串全量复制，大 transcript 的尾部读取开销主要在这块 memcpy。
+- 本机实测（含 26 种来源、约 1.35 GB 数据）：冷扫描 5002ms → 1438ms，事件循环最大漂移 104ms → 0ms，书签命中重扫 375ms → 150ms。
 
-- 工具栏动作按钮的折叠判据改为「动作按钮组实测可用宽度」而不是面板宽度：工作区筛选芯片会按工作区名吃掉宽度，只看面板宽度会让按钮在中间那一段宽度里被压扁、文字折行；现在用隐藏探针量出文字形态所需宽度，与实测可用宽度比较（字体大小随主题偏好变化，所以不写死阈值），文字形态也不再折行（挤不下走省略号兜底）。
-- 会话列表改成一行式，与皮肤的工作区列表同一套口径：行 28px 高 / `0 6px` 内边距 / 6px 圆角 / 行距 1px；标题 13px、默认 `label-secondary`，悬停或选中才变 `label-primary`（带 `.12s` 过渡）。行首是来源工具标（22px，点它就是多选勾选位），右侧相对时间 11px；消息条数 / 上下文 / 分支 / 导入状态收进悬停提示。工作区分组头同口径：字重 500、默认灰，悬停（或组内任意行悬停）时文字变亮并露出折叠箭头（收起时箭头转 -90°），不加悬停背景。单条导入 / 同步按钮默认隐藏，悬停（或键盘聚焦）该行时出现在时间的位置——按钮始终在 DOM 里，键盘可达性不丢。
+### 问题修复
+
+- 修复窄面板下工具栏按钮被压扁、文字折行的问题（折叠判据改用实测宽度，见上）。
+- 修复快滚列表时偶发露白：窗口化余量由固定 10 行改为按视口高度计算。
+
+### 其他变更
+
+- 客户端 bundle 构建脚本改为**原子写** `lib/client.js`（同目录临时文件 + rename）：宿主按 stat 轮询该文件、一变就重新加载并按内容哈希发版（带一年 immutable 缓存），直接覆写会留出「读到半截 bundle」的窗口。另加 `--out=<path>` 供测量/实验构建写到 `lib/` 之外。
+- `scan_discover` 输出条目与 schema 去掉 `messageCount`（面板已不展示；SQLite 摘要读取器同步不再产出该字段）。
+- README 增补通过 GUI 导入的界面预览（亮 / 暗各一张），并新增 `screenshots.json` 商店截图清单。
+- `package.json` 的 `files` 增补 `docs/*.png`，让 npm 页面上的 README 也能显示预览图。
+
+<h3 id="en-0.19.0">New Features</h3>
+
+- Streaming discovery for "All sources": scan results are appended in discovery order so the first screen no longer waits for the full scan; once the scan finishes the list is re-sorted by most-recent activity.
+- Add **Filter: path** (the former workspace filter, now label-style) and **Filter: time** (24 hours / 7 days / 30 days / any time, by last activity or creation) to the import panel.
+- Page sizes are now **500 / 2000 / All** (500 by default): "All" drops pagination — with 100k rows the DOM stays at 19 rows / 351 nodes, with 0.6ms hover and selection.
+- The page number becomes a "Page x / y" control that opens a **page grid** above the status bar for one-click jumps; the grid scrolls on its own when there are many pages.
+
+### Improvements
+
+- The session list is now **windowed**: fixed row (28px + 1px gap) and group-header (34px) heights make the visible range pure arithmetic, so only the rows within one screen above and below the viewport are mounted and the rest are held by equal-height spacers (scroll height and sticky group headers unchanged).
+- Session rows became memo components with ref-stashed callbacks and fully memoised derived data: a hover or a checkbox toggle rebuilds only the affected row; the two per-render O(n) costs on large tiers were removed, cutting a hover from 8ms to 0.6ms at 100k rows.
+- Session rows became single-line and now follow the same metrics as the skin's workspace list (matching height, radius, title size and colours): the leading source mark is both the source label and the multi-select checkbox, the relative time sits on the right, and context / branch / import status moved into the hover tooltip, with the per-row import button appearing in the timestamp's place on hover.
+- Scan progress and pagination merged into one status line under the list: it reports "N found" while scanning and page / total once done; below one full page the per-page selector is hidden too.
+- Toolbar action buttons now collapse based on the **measured width available to the button group** instead of the panel width: a hidden probe measures the width the text form needs, so labels no longer wrap (they fall back to an ellipsis when truly out of room).
+- The windowing overscan grew from "±10 rows" to "±one screen", so fast scrolling no longer flashes blank rows.
+- **Discovery no longer reads whole SQLite transcripts just to count messages** (the panel no longer shows that field): opencode-family / zcode / hermes sources now use per-session summary readers that only query the session table plus one "latest message time" aggregate, instead of loading every message and part and parsing each cell — on this machine zcode's single blocking read dropped from 185ms to 1ms, one of the causes of panel jank.
+- DSH `.zstd` session bodies now decode through **node:zlib's native async zstd** (libuv thread pool, with an automatic fzstd fallback on Node < 22.15): measured on this machine, 60 sessions went from 3.8s of synchronous blocking to 0.2s of async work, so the event loop is no longer stalled.
+- Tail reads in discovery (claude / kimi context tokens) now use a chunk-array rolling window: the previous implementation copied the entire accumulated tail on every chunk, and that memcpy was the bulk of the cost on large transcripts.
+- Measured on this machine (26 sources, ~1.35 GB of data): cold scan 5002ms → 1438ms, worst event-loop drift 104ms → 0ms, bookmark-hit rescan 375ms → 150ms.
+
+### Bug Fixes
+
+- Fix toolbar buttons being squeezed and their labels wrapping on a narrow panel (the collapse rule now uses a measured width, see above).
+- Fix occasional blank rows while fast-scrolling: the windowing overscan is now computed from the viewport height instead of a fixed 10 rows.
+
+### Chores
+
+- The client bundle build script now writes `lib/client.js` **atomically** (same-directory temp file + rename): the host polls that file by stat, reloads whenever it changes and publishes by content hash with a one-year immutable cache, so a plain overwrite leaves a window where a half-written bundle is read. Added `--out=<path>` so measurement / experiment builds land outside `lib/`.
+- `scan_discover` entries and schema no longer carry `messageCount` (the panel does not show it, and the SQLite summary readers stop producing it).
+- README now includes GUI-import previews (one light, one dark) plus a `screenshots.json` store manifest.
+- `package.json` `files` now includes `docs/*.png` so the previews also render on the npm page.
+
+**Full Changelog**: [v0.18.5...v0.19.0](https://github.com/Nwflower/dsh-chat-import/compare/v0.18.5...v0.19.0)
 
 ## [0.18.5] - 2026-09-21
 
