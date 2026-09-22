@@ -233,3 +233,47 @@ test('Config：schemastery 缺 volatile（0.1.5）时不构造、模块照常加
   // 若运行环境带新 schemastery 则是带 ~standard 的 schema。两种都合法。
   assert.ok(Config === undefined || (Config && typeof Config['~standard'] === 'object'))
 })
+
+test('resolvePrefsBinding：条目未进名单（apply 期 state=1）不缓存 none，state 2 后再解析为 forms', () => {
+  // 真实宿主回归：apply 期 fiber 是 state 1，settings.describe() 跳过本条目 → 解析成
+  // none。若把 none 也缓存，重启后面板会一直 available:false（probe 却已 configured）。
+  let listed = false
+  const settings = {
+    describe: () => (listed ? [{ ns: 'import-claude', value: { injectTools: 'full' }, revision: 1 }] : []),
+    update() {}, configure() {},
+  }
+  const ctx = { fiber: { entry: { id: 'insert:import-claude' } }, get: (s) => (s === 'settings' ? settings : undefined) }
+  assert.equal(resolvePrefsBinding(ctx).mode, 'none')
+  listed = true
+  const later = resolvePrefsBinding(ctx)
+  assert.equal(later.mode, 'forms')
+  assert.equal(later.ns, 'import-claude')
+})
+
+test('0.1.7 forms：apply 期 describe 未列出条目时，injectTools 初值仍从插件 config 读（真实宿主回归）', () => {
+  const events = []
+  // 模拟真实宿主 apply 期：fiber state=1，describe() 跳过本条目（空名单）
+  const settings = { describe: () => [], update() {}, configure() { return () => {} } }
+  const config = { injectTools: { get: () => true } } // 历史 boolean true → 'full'
+  const fiber = { entry: { id: 'insert:import-claude' } }
+  let updatedListener
+  const ctx = {
+    fiber,
+    get: (s) => (s === 'settings' ? settings : undefined),
+    on() { return () => {} },
+    inject(serviceList, cb) {
+      cb({
+        settings,
+        on(event, listener) { if (event === 'settings/document-updated') updatedListener = listener; return () => {} },
+        effect(fn) { return fn() },
+      })
+    },
+  }
+  registerImportPrefs(ctx, (mode) => events.push(mode), config)
+  // 初值来自 config 的 volatile 引用，而不是被跳过的 describe
+  assert.deepEqual(events, ['full'])
+  // config 引用被 loader 原地更新 → 事件触发重读
+  config.injectTools = { get: () => 'minimal' }
+  updatedListener('import-claude', 2)
+  assert.deepEqual(events, ['full', 'minimal'])
+})

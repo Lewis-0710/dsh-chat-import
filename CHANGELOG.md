@@ -2,6 +2,18 @@
 
 All notable changes to `dsh-chat-import` are documented here, newest first.
 
+## [Unreleased]
+
+[中文](#cn-unreleased) | [English](#en-unreleased)
+
+<h3 id="cn-unreleased">问题修复</h3>
+
+- 修复 **0.1.7 上设置绑定被过早缓存为 `none`、面板读不到值**（0.19.2 的真机回归）：cordis 在 `apply` 期把 fiber 置为 state 1，`settings.describe()` 会跳过本条目，于是绑定解析成 `none` 并被缓存——apply 结束后即便条目已进名单，所有读取仍停在 `none`（实测面板 `available:false`，而同一响应里的 `probe.namespaceState` 已是 `configured:import-claude`）。现在 `none` 不再缓存（后续读取重新解析），且 `injectTools` 初值改从插件自己的 `config`（volatile 实时引用）读，变更通知同时订阅 `loader/volatile-update`（本 fiber 精确）与 `settings/document-updated`。
+
+<h3 id="en-unreleased">Bug Fixes</h3>
+
+- Fix **the settings binding being cached as `none` too early on 0.1.7, leaving the panel unable to read values** (a real-host regression in 0.19.2): cordis puts the fiber in state 1 during `apply`, so `settings.describe()` skips the entry and the binding resolves to `none` — which was then cached, so every later read stayed `none` even after the entry appeared (measured: the panel returned `available:false` while the same response's `probe.namespaceState` was already `configured:import-claude`). `none` is no longer cached (later reads re-resolve), the initial `injectTools` value now comes from the plugin's own `config` (a live volatile ref), and change notifications subscribe to both `loader/volatile-update` (exact for this fiber) and `settings/document-updated`.
+
 ## [0.19.2] - 2026-09-22
 
 [中文](#cn-0.19.2) | [English](#en-0.19.2)
