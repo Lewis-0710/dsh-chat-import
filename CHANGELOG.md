@@ -5,6 +5,8 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 ## [Unreleased]
 
 - 导入面板的多选入口从「点行首来源工具标」改为「点整行任意处」：行首 22px 的方图不再是勾选位（只作来源标识与选中态指示），点行内任意处即勾选，键盘聚焦后用 Enter / 空格切换；行内导入 / 同步按钮保持不变，点它只导入、不连带勾选。
+- 会话写入按**宿主会话格式版本分流**：工具结果在 V3 写成 `role: 'user'` 内的 `tool-result` 包装，在 V4 写成顶层 `role: 'tool'` 消息。版本取自宿主 `sessionPersistence` 能力位（`formatVersion`/`currentVersion`），探不到时取已持久化会话 header 的最高版本，再兜底 V3——已装 V3 宿主的行为与产物不变。
+- 读取侧（反向导出、校验、Markdown 渲染）改为**形状无关**：`toolResultOf` 是唯一的工具结果读取入口，V3 与 V4 两种形状的会话都能导出与校验。此前只认 V3 包装，V4 会话的工具结果会被整体跳过。
 
 ## [0.19.0] - 2026-09-21
 

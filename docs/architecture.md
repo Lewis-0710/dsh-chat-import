@@ -64,3 +64,12 @@
 - **决定**：源码按职责拆到 `src/client/`（11 片：i18n / prefs / sources / widgets / styles / utils / settings / tabs / discovery / footer / entry），`scripts/build-client.mjs` 逐字拼回 `lib/client.js`（沿用 dsh-claude-style 已验证的同平台路线）。片段契约：禁 import/export（共享 factory 作用域，顺序即声明顺序）、4 空格基准缩进、LF 行尾；构建内置 vm 语法门禁，`npm run build` 含 `--check` 新鲜度校验（产物与源漂移即失败）。同时把根目录发布入口收进子目录：`index.mjs`/`index.d.ts` → `lib/`，`convert.mjs`/`export.mjs` shim → `lib/convert/index.mjs` / `lib/export/index.mjs`（`exports["./export.mjs"]` 子路径契约不变），ROADMAP/CONTRIBUTING → `docs/`。
 - **代价**：双层真相源——改面板必须改 `src/client/` 再组装，直接改 `lib/client.js` 会被 --check 拦下；eslint 对片段关闭 no-undef/no-unused-vars（跨片引用所致），由构建的整体语法门禁兜底。首拆以「产物逐字节一致」为验收，行为零变化。
 - **重审条件**：DSH 客户端加载器支持相对 require / 资源 URL 之时（届时可回到纯 ESM 直发，拆掉的只是组装脚本）。
+
+---
+
+## D8. 会话格式 V3/V4 双形状：读侧形状无关，写侧按宿主版本分流（2026-09 定）
+
+- **背景**：DSH 会话格式 V4 把工具结果从「`role: 'user'` 里包一个 `tool-result` 块」提升为顶层 `role: 'tool'` 消息。实测两个方向都会被拒：V4 形状写进已装的 V3 宿主，核心 Session 要求存在且仅存在一个与 `source.callId` 匹配的 `tool-result` 包装；V3 形状写进 V4 原生准入，报「requires a tool-role message」；`user/message` 里再带 `tool-result` 包装属 V4 退休语法。两种形状互斥，插件不可能只发一种。
+- **决定**：读侧形状无关——`toolResultOf(ev)` 是唯一的工具结果读取入口（反向导出、校验、Markdown 渲染都走它），不关心事件来自哪个版本；写侧只在一个边界分流——`prepareHostEvents(events, sessionId, version)` 末尾调 `shapeToolResults`，版本由宿主 `sessionPersistence` 能力位（`formatVersion`/`currentVersion`）探测，探不到取已持久化 header 的最大版本，再兜底 3。双向幂等：已是目标形状的事件原样通过。
+- **代价**：两种形状都要测试覆盖（`test/format-version.test.mjs` 锁双向转换、幂等与畸形输入直通）；V4 的其余变更（`source.plugin` → `kind` 改名、header/envelope 白名单、surface 事件强制 `surfaceOp`）暂不跟进，因为已装宿主是 V3，跟进等于无对象地改契约。
+- **重审条件**：宿主广告 3/4 之外的版本；或 V4 其余变更成为强制项（届时需要一次面更宽的迁移，而不只是工具结果形状）。
