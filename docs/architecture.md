@@ -80,3 +80,13 @@
 - **决定**：`synthesizeSession` 在首个 `step/start` 之后、任何其它 surface 事件之前写一条 `system/message`（`surfaceOp: 'append'`、`content: []`、`source.plugin = 'chat-import'`）——位置与内容都对齐宿主自己的 v2→v3 迁移器（它同样在第一个 step/start 处插一条空 head）。空内容只占住 surface 第 0 个节点，真正的系统提示词由宿主在下一步替换或归一化，导入不虚构提示词。
 - **代价**：导入会话多一条事件（`writeback.lastWrittenSeq` +1）；首轮没有 step 时补一个只装 head 的空 step；`SESSION_EVENT_TYPES` / surface 集合加入 `system/message`、`developer/message`，`verify_session` 新增 `system-head-missing` 点名存量旧形状（head 必须是 surface 首事件，旧日志只能 force 重导，无法原地补写）。
 - **重审条件**：宿主迁移器改为「缺 head 时自行插入」（v2→v3 就是这种语义）——那时本插桩可退化为可选。
+
+
+---
+
+## D10. 设置页双版兼容：0.1.7 按条目 id / 0.1.5 自持命名空间（2026-09 定）
+
+- **背景**：DSH 0.1.7 删除了 `settings.register()`——命名空间改为 profile 条目 id、schema 改为插件导出的 `Config`；0.1.5 及更早则是插件按名字注册。插件以软链 / 本地 link 装进 profile 时，`@deepseek-ai/schemastery` 也未必从其自身 require 锚点解析得到；0.1.7 的 loader 还把条目 id 报成 `<kind>:<id>`，而设置服务按裸 id 建索引（带前缀写会 409 `settings-conflict`）。
+- **决定**：`lib/import-prefs.mjs` 按宿主能力探测绑定，一套代码跑两版：`describe()` 名单含本插件**裸条目 id** → `forms`（0.1.7，按条目 id 走 describe / update，并 `settings.configure({ auto: false })` 声明自带面板）；只有 `register` / `get` → `legacy`（0.1.5，自持命名空间 `chat-import`）；两者皆无 → `none`（读默认、写不持久化）。`entryIdOf()` 剥离 `<kind>:` 前缀并回退 patch 声明的 `import-claude`；schemastery 解析锚点指向**运行中的 harness bin**，并对 `.volatile()` 做能力探测；插件入口导出 `Config`。
+- **代价**：两套设置模型都要测试覆盖；`.volatile()` 探测与软链锚点是宿主实现细节，宿主换版需重审（完整踩坑与自检见 [SETTINGS-MIGRATION.zh-CN.md](SETTINGS-MIGRATION.zh-CN.md)）。
+- **重审条件**：宿主 0.1.7+ 成为唯一支持面时，删掉 legacy 路径与探测，只留 `Config` + 条目 id。

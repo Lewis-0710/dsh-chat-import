@@ -125,6 +125,7 @@ For full tool / command usage, see **[docs/USAGE.md](docs/USAGE.md)**.
 | --- | --- |
 | [Usage Reference](docs/USAGE.md) | Full parameters, examples, and edge cases for every tool / command |
 | [Interchange Protocol](docs/INTERCHANGE.md) | Interchange v1 protocol and bundle format |
+| [Settings Migration](docs/SETTINGS-MIGRATION.md) | DSH 0.1.5 → 0.1.7 plugin settings-page migration (measured errors, compatibility recipe) |
 | [Changelog](CHANGELOG.md) | Version history |
 | [Roadmap](docs/ROADMAP.md) | Shipped / planned |
 | [Contributing](docs/CONTRIBUTING.md) | Development setup, commit rules, security & privacy |
