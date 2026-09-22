@@ -4,14 +4,59 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 ## [Unreleased]
 
-- 修复深色主题下导入面板的**弹层透出背后列表**：宿主的菜单面 `--dsw-specific-menu` 在深色下是半透明的（`#30313680`），宿主的 Menu 靠 `--dsw-menu-backdrop-filter` 的背景模糊把它做成玻璃卡片——插件此前只用了颜色没上模糊，于是深色下能直接读到后面的会话标题（浅色被皮肤定成不透明白，所以只有深色露馅）。下拉弹层与页码网格补上模糊 + 宿主投影；sticky 分组头与历史确认框改用不透明的 `--dsw-alias-bg-layer-3`（sticky 头必须挡住滚过来的行）。
-- 导入面板的来源下拉与会话行改用**官方品牌标**（商标归各自权利人）：18 个取自 @lobehub/icons（MIT），Reasonix / Continue / Zed 取自各自 GitHub 仓库的官方标，ChatGPT 用 OpenAI 标、MimoCode 用 XiaomiMiMo 标。mark 按实测 ink 包围盒归一化后放进 16px 槽位、字标字面高统一——整列图标一样大、文字都从同一列（24px）起；会话行的白卡标换成同一份官方标，此前手绘的 26 份来源标只剩 3 份。字标拼的不是我们展示的名字的（Hermes / ZCode / DSH 展示工具名而非厂商名）仍退回「品牌标 + 标签文本」；WorkBuddy（原仓库已不可达）、TeleAgent（产品页无矢量标）、Crush（仓库里只有演示 GIF / PNG）保留手绘缩写卡。
-- 导入面板的多选入口从「点行首来源工具标」改为「点整行任意处」：行首 22px 的方图不再是勾选位（只作来源标识与选中态指示），点行内任意处即勾选，键盘聚焦后用 Enter / 空格切换；行内导入 / 同步按钮保持不变，点它只导入、不连带勾选。
+[中文](#cn-unreleased) | [English](#en-unreleased)
+
+<h3 id="cn-unreleased">新增功能</h3>
+
 - 会话写入按**宿主会话格式版本分流**：工具结果在 V3 写成 `role: 'user'` 内的 `tool-result` 包装，在 V4 写成顶层 `role: 'tool'` 消息。版本取自宿主 `sessionPersistence` 能力位（`formatVersion`/`currentVersion`），探不到时取已持久化会话 header 的最高版本，再兜底 V3——已装 V3 宿主的行为与产物不变。
 - 读取侧（反向导出、校验、Markdown 渲染）改为**形状无关**：`toolResultOf` 是唯一的工具结果读取入口，V3 与 V4 两种形状的会话都能导出与校验。此前只认 V3 包装，V4 会话的工具结果会被整体跳过。
+- `verify_session` 新增三类 **V4 迁移风险**检查：`unadvertised-tool-call`（调用无 assistant 消息内容块广告）、`cross-step-result`（结果闭合在调用所在 step 之外）、`duplicate-tool-result`（同一调用多条结果）；`orphan-tool-result` 的修复提示升级为点名迁移拒载风险。append-only 不改写既有日志，修复路径为 force 重导——可在宿主升级 V4 之前完成。
+- 新增**忽略（墓碑）表**：归档会话、撤回 / 删除导入、删除工作区都会自动登记对应源为忽略，重扫、`/import-all` 与自动同步不再把它带回来。取消归档自动解除；删除工作区忽略的是**删除时**其名下已导入的会话，该工作区出现新会话或其中会话取消归档时自动恢复工作区（更早的墓碑保留）。
+- 新增命令 **`/ignores`**（查看）、**`/ignore <sessionId|sourcePath>`**（手动忽略）、**`/unignore <sessionId|sourcePath|all>`**（解除）。`force: true` 仍可显式越权导入一次（不解除墓碑）。
+- 忽略表落盘 `$DSH_HOME/dsh-chat-import/ignores.json`；文件损坏按空表降级，不阻塞导入主流程。
+
+### 体验优化
+
+- 导入面板的来源下拉与会话行改用**官方品牌标**（商标归各自权利人）：18 个取自 @lobehub/icons（MIT），Reasonix / Continue / Zed 取自各自 GitHub 仓库的官方标，ChatGPT 用 OpenAI 标、MimoCode 用 XiaomiMiMo 标。mark 按实测 ink 包围盒归一化后放进 16px 槽位、字标字面高统一——整列图标一样大、文字都从同一列（24px）起；会话行的白卡标换成同一份官方标，此前手绘的 26 份来源标只剩 3 份。字标拼的不是我们展示的名字的（Hermes / ZCode / DSH 展示工具名而非厂商名）仍退回「品牌标 + 标签文本」；WorkBuddy（原仓库已不可达）、TeleAgent（产品页无矢量标）、Crush（仓库里只有演示 GIF / PNG）保留手绘缩写卡。
+- 导入面板的多选入口从「点行首来源工具标」改为「点整行任意处」：行首 22px 的方图不再是勾选位（只作来源标识与选中态指示），点行内任意处即勾选，键盘聚焦后用 Enter / 空格切换；行内导入 / 同步按钮保持不变，点它只导入、不连带勾选。
+
+### 问题修复
+
 - 导入会话的工具结果统一闭合在**调用所在 step 内**：跨 step / 跨轮到达的异步结果提前到其 `tool/call` 旁。DSH 消息投影不重排（事件顺序即 wire 顺序），此前这类日志在调用 step 留下未闭合调用，投影出现「assistant 带 tool_calls 但无后续 tool 消息」的非法序列——续聊被模型 API 拒绝，宿主升 V4 后迁移同样拒载。
 - 无广告调用的**孤儿结果**（转录中途开始）与同一调用的**重复结果**改为丢弃并计数（`orphanToolResults` / `duplicateToolResults`，零值不占键；与 interchange 管线的丢弃策略同口径），单条导入结果与批量明细均透传。此前两者原样写入，宿主升 V4 后迁移 fail-closed 拒载。
-- `verify_session` 新增三类 **V4 迁移风险**检查：`unadvertised-tool-call`（调用无 assistant 消息内容块广告）、`cross-step-result`（结果闭合在调用所在 step 之外）、`duplicate-tool-result`（同一调用多条结果）；`orphan-tool-result` 的修复提示升级为点名迁移拒载风险。append-only 不改写既有日志，修复路径为 force 重导——可在宿主升级 V4 之前完成。
+- 修复深色主题下导入面板的**弹层透出背后列表**：宿主的菜单面 `--dsw-specific-menu` 在深色下是半透明的（`#30313680`），宿主的 Menu 靠 `--dsw-menu-backdrop-filter` 的背景模糊把它做成玻璃卡片——插件此前只用了颜色没上模糊，于是深色下能直接读到后面的会话标题（浅色被皮肤定成不透明白，所以只有深色露馅）。下拉弹层与页码网格补上模糊 + 宿主投影；sticky 分组头与历史确认框改用不透明的 `--dsw-alias-bg-layer-3`（sticky 头必须挡住滚过来的行）。
+
+### 其他变更
+
+- **撤回 / 删除后重导不再自动发生**：`retract_import` 与清理（purge）现在写入永久墓碑，重导同一源返回 `ignored`；需要恢复时用 `/unignore`。
+- 归档会话不再被视为「可重导」：归档即写 `archived` 墓碑（取消归档解除），取代此前「另铸后缀新 id 重导」的行为。
+
+<h3 id="en-unreleased">New Features</h3>
+
+- Session writes are split by the **host session format version**: tool results are written as a `tool-result` wrapper inside a `role: 'user'` message on V3 and as a top-level `role: 'tool'` message on V4. The version comes from the host's `sessionPersistence` capability (`formatVersion`/`currentVersion`), falls back to the highest version seen in persisted session headers and then to V3 — an installed V3 host keeps producing exactly what it did before.
+- The read side (reverse export, verification, Markdown rendering) is now **shape-agnostic**: `toolResultOf` is the single entry point for reading tool results, so V3 and V4 sessions both export and verify. Previously only the V3 wrapper was understood and a V4 session's tool results were skipped entirely.
+- `verify_session` gained three **V4 migration risk** checks — `unadvertised-tool-call` (a call with no advertising assistant content block), `cross-step-result` (a result closed outside its call's step) and `duplicate-tool-result` (more than one result for the same call); the `orphan-tool-result` hint now names the migration refusal risk. Logs stay append-only: the fix is a `force` re-import, which can be done before upgrading the host.
+- **Ignore (tombstone) table**: archiving a session, retracting/purging an import, or removing a workspace now auto-registers the affected sources as ignored, so rescans, `/import-all`, and the automatic sync skip them. Unarchiving clears the archive tombstone; removing a workspace ignores the sessions it held **at that moment** and restores the workspace when a new session appears or one of its sessions is unarchived (earlier tombstones stay).
+- New commands **`/ignores`**, **`/ignore <sessionId|sourcePath>`**, **`/unignore <sessionId|sourcePath|all>`**. `force: true` still imports once despite a tombstone without clearing it.
+- The ignore table lives at `$DSH_HOME/dsh-chat-import/ignores.json`; a damaged file degrades to an empty table without blocking the import pipeline.
+
+### Improvements
+
+- Source brand marks are now the **official** ones (trademarks belong to their owners): 18 come from the @lobehub/icons static SVG package (MIT), Reasonix / Continue / Zed from their own GitHub repositories, ChatGPT from lobehub's OpenAI mark and MimoCode from its XiaomiMiMo mark. Each mark's ink box is normalised into a 16px slot and every wordmark shares one cap height, so the column is one size and all text starts at the same x (24px); session rows use the same official art on their white cards, and only three hand-drawn marks remain (WorkBuddy's repository is gone, TeleAgent's product page has no vector logo, Crush ships only demo GIFs).
+- Multi-select moved from the leading source mark to **the whole row**: the 22px square is no longer the checkbox (it only names the source and shows selection state) — clicking anywhere on the row toggles selection, and Enter / Space does the same once the row has focus. The per-row import / sync button is unchanged: it imports without toggling.
+
+### Bug Fixes
+
+- Tool results are now closed **inside the step of their call**: async results arriving across steps or turns are emitted next to their `tool/call`. DSH's message projection does not reorder (event order is wire order), so such logs previously left an unresolved call in the call's step and the projection contained an illegal "assistant with tool_calls but no following tool message" sequence — the model API refused the conversation, and the host's V4 migration refused it too.
+- **Orphan results** (a transcript that starts mid-conversation) and **duplicate results** for the same call are now dropped and counted (`orphanToolResults` / `duplicateToolResults`; zero values take no key, the same policy as the interchange pipeline), and both counts are reported on single and batch imports. Previously they were written as-is and the host's V4 migration refused the session.
+- Fix the dropdown **leaking the list behind it** in dark theme: the host menu surface `--dsw-specific-menu` is translucent in dark (`#30313680`) and the host's own Menu pairs it with `--dsw-menu-backdrop-filter`; the plugin only used the colour, so the session titles behind stayed readable (the light theme is opaque white in the skin, which is why only dark showed it). The dropdown and page grid now carry the host's blur + elevation; the sticky group header and the history confirm dialog use the opaque `--dsw-alias-bg-layer-3` (a sticky header must cover the rows scrolling under it).
+
+### Chores
+
+- **Re-import after retract/delete no longer happens automatically**: `retract_import` and purge now write permanent tombstones and re-importing the same source reports `ignored`; use `/unignore` to lift.
+- Archived sessions are no longer treated as re-importable: archiving writes an `archived` tombstone (unarchiving clears it), replacing the previous "mint a suffixed copy" behavior.
+
+
 
 ## [0.19.0] - 2026-09-21
 
