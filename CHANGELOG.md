@@ -2,6 +2,32 @@
 
 All notable changes to `dsh-chat-import` are documented here, newest first.
 
+## [Unreleased]
+
+[中文](#cn-unreleased) | [English](#en-unreleased)
+
+<h3 id="cn-unreleased">新增功能</h3>
+
+- 新增**忽略（墓碑）表**：归档会话、撤回 / 删除导入、删除工作区都会自动登记对应源为忽略，重扫、`/import-all` 与自动同步不再把它带回来。取消归档自动解除；删除工作区忽略的是**删除时**其名下已导入的会话，该工作区出现新会话或其中会话取消归档时自动恢复工作区（更早的墓碑保留）。
+- 新增命令 **`/ignores`**（查看）、**`/ignore <sessionId|sourcePath>`**（手动忽略）、**`/unignore <sessionId|sourcePath|all>`**（解除）。`force: true` 仍可显式越权导入一次（不解除墓碑）。
+- 忽略表落盘 `$DSH_HOME/dsh-chat-import/ignores.json`；文件损坏按空表降级，不阻塞导入主流程。
+
+<h3 id="cn-unreleased-changed">行为变更</h3>
+
+- **撤回 / 删除后重导不再自动发生**：`retract_import` 与清理（purge）现在写入永久墓碑，重导同一源返回 `ignored`；需要恢复时用 `/unignore`。
+- 归档会话不再被视为「可重导」：归档即写 `archived` 墓碑（取消归档解除），取代此前「另铸后缀新 id 重导」的行为。
+
+<h3 id="en-unreleased">Added</h3>
+
+- **Ignore (tombstone) table**: archiving a session, retracting/purging an import, or removing a workspace now auto-registers the affected sources as ignored, so rescans, `/import-all`, and the automatic sync skip them. Unarchiving clears the archive tombstone; removing a workspace ignores the sessions it held **at that moment** and restores the workspace when a new session appears or one of its sessions is unarchived (earlier tombstones stay).
+- New commands **`/ignores`**, **`/ignore <sessionId|sourcePath>`**, **`/unignore <sessionId|sourcePath|all>`**. `force: true` still imports once despite a tombstone without clearing it.
+- The ignore table lives at `$DSH_HOME/dsh-chat-import/ignores.json`; a damaged file degrades to an empty table without blocking the import pipeline.
+
+<h3 id="en-unreleased-changed">Changed</h3>
+
+- **Re-import after retract/delete no longer happens automatically**: `retract_import` and purge now write permanent tombstones and re-importing the same source reports `ignored`; use `/unignore` to lift.
+- Archived sessions are no longer treated as re-importable: archiving writes an `archived` tombstone (unarchiving clears it), replacing the previous "mint a suffixed copy" behavior.
+
 ## [0.19.0] - 2026-09-21
 
 [中文](#cn-0.19.0) | [English](#en-0.19.0)

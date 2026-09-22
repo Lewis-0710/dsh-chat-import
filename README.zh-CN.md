@@ -117,6 +117,7 @@ import_chat({ format: "local-jsonl", path: "D:\downloads\session.jsonl" })
 | 撤回导入 | 侧边栏面板「历史」页 | 展示导入记录，一键删除本插件创建的会话。 |
 | 导出 | 上下文工具 | DSH 会话序列化回外部Agents |
 | 同步 | 面板「同步」页 | 外部Agents ↔ DSH 双向增量同步，默认关闭 |
+| 忽略 | 自动 + `/ignores` 命令 | 归档 / 删除 / 删工作区自动登记源，重扫与同步跳过；`/ignore`、`/unignore` 管理忽略表 |
 
 ## 文档
 
