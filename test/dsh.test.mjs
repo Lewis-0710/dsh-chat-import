@@ -366,3 +366,25 @@ test('discoverSessions format=dsh 发现当前代次 session.v3.jsonl.zstd', asy
     await rm(root, { recursive: true, force: true })
   }
 })
+
+// 兼容我们自己的历史产物：导入会话的日志里有插件注入的「环境变更声明」（V3 形状
+// source.kind='plugin'，V4 形状 kind='plugin:chat-import'）与 system head。重导这些会话时
+// 注入声明不是用户提问——否则标题与每轮 prompt 都会变成那段声明。
+test('convertDshJsonl：跳过本插件注入的环境变更声明（V3 / V4 两种 source 形状）', async () => {
+  const { convertDshJsonl } = await import('../lib/convert/index.mjs')
+  const lines = [
+    { type: 'session', version: 3, id: 'session-own-1', cwd: '/demo/proj', createdAt: 1700000000000 },
+    { type: 'turn/start', seq: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 2, data: { turn: 1, step: 1 } },
+    { type: 'system/message', seq: 3, surfaceOp: 'append', data: { turn: 1, step: 1, message: { id: 'import:session-own-1:sys', role: 'system', content: [], source: { kind: 'plugin', plugin: 'chat-import' } } } },
+    { type: 'user/message', seq: 4, surfaceOp: 'append', data: { id: 'import:session-own-1:env', role: 'user', content: [{ type: 'text', text: '环境变更声明：本会话由 dsh-chat-import 从 claude 导入' }], source: { kind: 'plugin', plugin: 'chat-import' } } },
+    { type: 'user/message', seq: 5, surfaceOp: 'append', data: { id: 'u1', role: 'user', content: [{ type: 'text', text: '真实提问' }], source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 6, surfaceOp: 'append', data: { turn: 1, step: 1, stream: [], message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: '好' }], source: { kind: 'model', provider: 'p', model: 'm' } } } },
+    { type: 'step/end', seq: 7, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 8, data: { turn: 1, reason: { kind: 'completed' } } },
+  ]
+  const out = convertDshJsonl(lines.map((l) => JSON.stringify(l)).join('\n'), { sourcePath: '/demo/proj/session-own-1/session.v3.jsonl' })
+  assert.equal(out.turns.length, 1)
+  assert.equal(out.turns[0].prompt, '真实提问', '注入声明不能顶掉真实提问')
+  assert.equal(out.title, '真实提问', '标题回退同样跳过注入声明')
+})
