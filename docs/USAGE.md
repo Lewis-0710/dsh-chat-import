@@ -9,7 +9,7 @@
 > ② **Import** - drop `preview` and import for real; verify the per-session `status` by source / workspace (duplicate-import behavior under "Incremental re-import" below).
 > ③ **Health check & retract** - `doctor()` read-only check; `retract_import` to remove the registry record, or the panel History tab to delete plugin-created sessions (with confirmation).
 
-> **Note:** imports persist to disk immediately, but the DSH session list does not auto-refresh — refresh the page (or the session list) after importing to see the new sessions.
+> **Note:** imports persist to disk immediately. When the target generation equals the host's native generation (the panel's default), the new sessions appear in the session list immediately with no refresh; only an explicitly chosen non-native generation (e.g. producing a V3 log on a V4 host) is not the host's current in-memory shape and appears after a page refresh.
 
 **Import — a single file or a directory.** Every `import_*` tool takes a `path`; directories are scanned recursively and each file / conversation becomes its own session:
 
