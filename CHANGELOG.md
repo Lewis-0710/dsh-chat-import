@@ -2,11 +2,11 @@
 
 All notable changes to `dsh-chat-import` are documented here, newest first.
 
-## [Unreleased]
+## [0.19.2] - 2026-09-22
 
-[中文](#cn-unreleased) | [English](#en-unreleased)
+[中文](#cn-0.19.2) | [English](#en-0.19.2)
 
-<h3 id="cn-unreleased">新增功能</h3>
+<h3 id="cn-0.19.2">新增功能</h3>
 
 - 导入面板的设置偏好响应（`/api-import/prefs`）新增只读 **`probe` 自检块**：宿主设置服务的关键事实（`hasSettings` / `hasDescribe` / `hasRegister`、命名空间名单、`namespaceState`）一次看全，供 0.1.5 / 0.1.7 设置模型差异排障。
 - 新增 [docs/SETTINGS-MIGRATION.md](docs/SETTINGS-MIGRATION.md)（[中文](docs/SETTINGS-MIGRATION.zh-CN.md)）：DSH 0.1.5 → 0.1.7 设置页迁移说明，含实测报错原文，可直接转发给其他插件作者。
@@ -18,7 +18,7 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 - 修复**插件以软链 / 本地 link 安装时 `@deepseek-ai/schemastery` 解析不到**：解析锚点改为运行中的 harness bin，再退回普通解析；并对 `.volatile()` 做能力探测——旧宿主（无 volatile）不再在模块加载期抛错报废整个插件。
 - 插件入口导出 `Config`（三个字段标 `volatile`）并声明 `settings.configure({ auto: false })`（本插件自带面板，不生成宿主自动页）；`package.json` 增补 `icon`（相对路径、包内、约 1 KB、带彩度，适配宿主 `<img>` 渲染拿不到 `currentColor`）。
 
-<h3 id="en-unreleased">New Features</h3>
+<h3 id="en-0.19.2">New Features</h3>
 
 - The import panel's settings response (`/api-import/prefs`) gained a read-only **`probe` self-check block**: the host settings service's key facts (`hasSettings` / `hasDescribe` / `hasRegister`, the namespace list, `namespaceState`) in one response, for diagnosing the 0.1.5 / 0.1.7 settings-model difference.
 - New [docs/SETTINGS-MIGRATION.md](docs/SETTINGS-MIGRATION.md) ([中文](docs/SETTINGS-MIGRATION.zh-CN.md)): a DSH 0.1.5 → 0.1.7 settings-page migration guide with the verbatim measured errors, ready to forward to other plugin authors.
@@ -29,6 +29,8 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 - Fix **every save returning 409 `settings-conflict` because the namespace carried a kind prefix**: the 0.1.7 loader reports `ctx.fiber.entry.id` as `<kind>:<id>`, while the settings service indexes by the bare id; the prefix is now stripped (falling back to the patch-declared `import-claude`).
 - Fix **`@deepseek-ai/schemastery` not resolving when the plugin is installed as a symlink / local link**: the resolution anchor is now the running harness bin, with ordinary resolution as a fallback; `.volatile()` is capability-probed, so an older host (no volatile) no longer throws at module load and takes the whole plugin down.
 - The plugin entry now exports `Config` (all three fields marked `volatile`) and declares `settings.configure({ auto: false })` (this plugin ships its own panel, so no host auto page is generated); `package.json` gained `icon` (relative path, inside the package, ~1 KB, coloured, since the host renders it as `<img>` and never provides `currentColor`).
+
+**Full Changelog**: [v0.19.1...v0.19.2](https://github.com/Nwflower/dsh-chat-import/compare/v0.19.1...v0.19.2)
 
 ## [0.19.1] - 2026-09-22
 
