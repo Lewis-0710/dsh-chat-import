@@ -205,7 +205,7 @@
               // 流式期间纯追加（发现顺序，行不跳动、页面稳定）；扫描完成时一次性
               // 重排回时间倒序（单次排序事件，之后恒定）——不做每块全量重排
               // 刷新场景：首批整批替换（旧列表在新数据到达前一直可见）；其余照旧追加
-              setItems((prev) => (firstBatch ? batch : done ? prev.concat(batch).sort(byTimeDesc) : prev.concat(batch)));
+              setItems((prev) => mergeItems(firstBatch ? [] : prev, batch, done));
               firstBatch = false;
             }
             // 只在状态变化时更新流元信息（首帧 / done 翻转 / total 更新）——
