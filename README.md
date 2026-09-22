@@ -2,9 +2,10 @@
 > **Fork 维护版本** | 本仓库是 [Nwflower/dsh-chat-import](https://github.com/Nwflower/dsh-chat-import) 的维护分支。
 > 
 > **与上游差异**：
-> 1. 扩展 lib/client.js 导入面板，支持单个及批量删除源文件与已导入记录
-> 2. 优化侧边栏 Tab 集成，增强在 DSH Desktop 环境下的兼容性
-> 3. 新增 /api-import/delete-source 路由与清理工具
+> 1. **导入面板删除增强**：扩展 `lib/client.js` 导入面板，支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
+> 2. **源文件清理接口**：新增 `POST /api-import/delete-source` 路由与 `deleteSourceFile` 清理方法（`lib/purge.mjs`、`lib/panel.mjs`），支持物理删除源文件并自动清理 registry 记录及扫描缓存。
+> 3. **跨平台单测修复**：修复 `test/goose.test.mjs` 在 macOS（`darwin`）平台下的 Goose 数据目录路径解析断言。
+> 4. **上游同步保障**：内置 `sync.sh`（Patch-First, Smart-Merge 同步脚本）与 `sync.patch` 补丁文件，便于持续跟踪上游更新。
 > 
 > 详见 [sync.patch](./sync.patch)。
 
