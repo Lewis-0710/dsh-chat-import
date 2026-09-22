@@ -139,6 +139,9 @@
         "importTo.title": "选择落点：DSH 会话环境可继续对话；选其他工具则转换成它的格式落盘，不在 DSH 留副本",
         "combobox.search.target": "搜索目标…",
         "target.dsh": "DSH 会话环境",
+        // 显式代次目标：宿主按 header.version 落盘，所以能真写出一条 V3 / V4 generation
+        "target.dsh3": "DSH（V3 会话格式）",
+        "target.dsh4": "DSH（V4 会话格式）",
         "target.claude": "Claude Code",
         "target.codex": "Codex",
         "target.kimi": "Kimi Code",
@@ -283,6 +286,8 @@
         "importTo.title": "Where the imported conversation lands: DSH sessions stay resumable; other targets are converted into that tool's own format (no DSH copy left behind)",
         "combobox.search.target": "Search targets…",
         "target.dsh": "DSH session",
+        "target.dsh3": "DSH (V3 session format)",
+        "target.dsh4": "DSH (V4 session format)",
         "target.claude": "Claude Code",
         "target.codex": "Codex",
         "target.kimi": "Kimi Code",

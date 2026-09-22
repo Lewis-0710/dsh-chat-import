@@ -120,8 +120,10 @@
       const [rootRef, panelWidth] = useContainerWidth();
       const narrow = panelWidth !== 0 && panelWidth < NARROW_MAX_WIDTH;
       const [source, setSource] = useState(SOURCES[0]);
-      // 「导入到」：默认 DSH 会话环境（既有行为不变）；非 dsh → 转投到目标工具格式
-      const [target, setTarget] = useState(IMPORT_TARGETS[0]);
+      // 「导入到」：dsh3 / dsh4 = 建指定代次的 DSH 会话（默认按探测到的宿主版本）；
+      // claude / codex / kimi / opencode → 转投到目标工具格式
+        // "" = 未定：首个扫描响应带回 dshVersion 后按宿主版本定项（见扫描循环）
+    const [target, setTarget] = useState("");
       const [workspaceFilter, setWorkspaceFilter] = useState("");
       const [timeFilter, setTimeFilter] = useState(TIME_FILTERS[0]); // '' = 不筛选
       const [items, setItems] = useState([]); // 流式累计缓冲（scan 逐条按发现顺序插入）
@@ -183,6 +185,11 @@
             }
             after = typeof data.cursor === "number" ? data.cursor : after;
             done = data.done === true;
+            // 「导入到」的默认目标跟随探测到的宿主会话格式版本：用户没选过（state 为空）时
+            // 首次扫描响应到达即定项——V4 宿主默认 DSH（V4 会话格式），V3 宿主默认 V3。
+            if (typeof data.dshVersion === "number") {
+              setTarget((cur) => (cur ? cur : (data.dshVersion >= 4 ? "dsh4" : "dsh3")));
+            }
             const batch = Array.isArray(data.sessions) ? data.sessions : [];
             if (batch.length > 0) {
               // 流式期间纯追加（发现顺序，行不跳动、页面稳定）；扫描完成时一次性
@@ -244,7 +251,7 @@
           });
           const data = await readJson(resp);
           if (data && data.ok === true) {
-            setResult(data.target && data.target !== "dsh"
+            setResult(data.target && !String(data.target).startsWith("dsh")
               ? fmtTransferResult(data.results, data.target, t)
               : fmtImportResult(data.results, t));
             setSelected(new Map());
@@ -539,10 +546,12 @@
               disabled: importing,
               searchPlaceholder: t("combobox.search.target"),
               noMatchLabel: t("combobox.noMatch"),
-              options: IMPORT_TARGETS.map((v) => ({ value: v, label: t("target." + v), mark: v })),
+              // dsh3 / dsh4 共用 DSH 品牌标（mark 键仍是 dsh）
+              options: IMPORT_TARGETS.map((v) => ({ value: v, label: t("target." + v), mark: String(v).startsWith("dsh") ? "dsh" : v })),
               onChange: (v) => setTarget(v),
             })),
-          target === "dsh"
+          // DSH 目标（含未定）不显示落点提示；只有转投目标才有
+          target === "" || String(target).startsWith("dsh")
             ? null
             : React.createElement("div", { style: style.targetHint }, t("target.hint." + target)),
           // 筛选层：搜索词（搜索按钮 / Enter 提交）

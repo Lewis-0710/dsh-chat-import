@@ -6,7 +6,9 @@
     ];
     // 「导入到」下拉：'dsh' = 照常建可继续的 DSH 会话（默认）；其余 = 转投到该工具自己的
     // 格式（服务端 lib/transfer.mjs，与 export_chat 的目标保持一致）。值顺序 = 展示顺序。
-    const IMPORT_TARGETS = ["dsh", "claude", "codex", "kimi", "opencode"];
+    // 「导入到」下拉：dsh3 / dsh4 = 建指定代次的 DSH 会话日志（宿主按 header.version 落盘），
+    // 默认项由探测到的宿主版本决定（面板在首个扫描响应里带回 dshVersion）。其余值 = 转投。
+    const IMPORT_TARGETS = ["dsh3", "dsh4", "claude", "codex", "kimi", "opencode"];
     // discovery format 短名 → 客户端来源 id（构建 /api-import/import 的 items）。
     const FORMAT_SOURCE = {
       claude: "claude-code", codex: "codex", chatgpt: "chatgpt", cursor: "cursor",

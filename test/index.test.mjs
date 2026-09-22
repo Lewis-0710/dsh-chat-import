@@ -5650,6 +5650,41 @@ test('REQ-41 /api-import/import handler：单选导入（claude 夹具）→ imp
   assert.equal(persistence.sessions.size, 1)
 })
 
+test('REQ-41 /api-import/import handler：target dsh3 / dsh4 显式指定会话日志代次（header.version）', async () => {
+  // 宿主按 header.version 落盘（sessionPersistence.create(header) 认它），所以面板的
+  // 「导入到 → DSH（V3/V4 会话格式）」要能把 header 与事件形状一起按该代次产出。
+  const root = 'D:\\demo\\claude\\projects'
+  const mk = (name) => [
+    '{"sessionId":"' + name + '","type":"user","cwd":"/demo/claude-proj","message":{"role":"user","content":"代次目标"}}',
+    '{"sessionId":"' + name + '","type":"assistant","message":{"role":"assistant","content":"好"}}',
+  ].join('\n')
+  const src3 = root + '\\proj-v3\\sess-v3.jsonl'
+  const src4 = root + '\\proj-v4\\sess-v4.jsonl'
+  const tree = { [root]: 'dir', [root + '\\proj-v3']: 'dir', [root + '\\proj-v4']: 'dir', [src3]: mk('sess-v3'), [src4]: mk('sess-v4') }
+  const { ctx, persistence, webRoutes } = makeCtx(tree)
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  const v3 = await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: src3 }], target: 'dsh3' })
+  assert.equal(v3.data.ok, true, JSON.stringify(v3.data))
+  assert.equal(v3.data.target, 'dsh3')
+  // 会话 id 由转换层按源 id 派生；这里只认「落盘了且 header.version = 3」
+  const idsV3 = [...persistence.sessions.keys()]
+  assert.equal(idsV3.length, 1, JSON.stringify(v3.data.results))
+  assert.equal(persistence.sessions.get(idsV3[0]).meta.version, 3)
+  assert.equal(persistence.sessions.get(idsV3[0]).events[0].type, 'turn/start')
+
+  const v4 = await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: src4 }], target: 'dsh4' })
+  assert.equal(v4.data.ok, true, JSON.stringify(v4.data))
+  const idsV4 = [...persistence.sessions.keys()].filter((id) => !idsV3.includes(id))
+  assert.equal(idsV4.length, 1, JSON.stringify([...persistence.sessions.keys()]))
+  assert.equal(persistence.sessions.get(idsV4[0]).meta.version, 4)
+
+  // 未知目标仍 400（dsh3 / dsh4 是 DSH 目标，不是转投目标）
+  const bad = await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: src3 }], target: 'dsh9' })
+  assert.equal(bad.res.status, 400)
+})
+
 test('REQ-41 /api-import/import handler：多选同源去重（同 sourcePath 只导一次）+ 空 items 400 + 未知来源 400', async () => {
   const root = 'D:\\demo\\claude\\projects'
   const src = root + '\\proj-a\\sess-aaa.jsonl'
