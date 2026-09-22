@@ -523,7 +523,8 @@
               noMatchLabel: t("combobox.noMatch"),
               // lockup: true —— 来源行画品牌锁标（mark + 字标），只有这个下拉开：导入目标
               // 与工作区行仍然只画「品牌标 + 文本」（目标的 DSH 不是品牌名，工作区没有品牌）
-              options: SOURCES.map((s) => ({ value: s, label: s ? (SOURCE_LABELS[s] || s) : t("allSources"), mark: s || null, lockup: true })),
+              // DSH 两代的展示名带「会话格式」字样，走 i18n；其余是产品名（不翻译）
+              options: SOURCES.map((s) => ({ value: s, label: s ? (s === "dsh" || s === "dsh4" ? t("source." + s) : (SOURCE_LABELS[s] || s)) : t("allSources"), mark: s || null, lockup: true })),
               onChange: (v) => {
                 setSource(v);
                 setWorkspaceFilter("");

@@ -17,6 +17,7 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 ### 体验优化
 
+- 导入面板的来源列表把 **DSH 拆成两项**：「DSH V3 会话格式」（会话日志 v0–v3）与「DSH V4 会话格式」（v4+）。两者共用同一份 `$DSH_HOME/sessions`，按日志文件名里的代次分流——来源过滤能分别只看某一代，目录导入按所选来源只收该代次的日志（面板 API 的 `format` 也因此多了一个 `dsh4`）。
 - 导入面板的来源下拉与会话行改用**官方品牌标**（商标归各自权利人）：18 个取自 @lobehub/icons（MIT），Reasonix / Continue / Zed 取自各自 GitHub 仓库的官方标，ChatGPT 用 OpenAI 标、MimoCode 用 XiaomiMiMo 标。mark 按实测 ink 包围盒归一化后放进 16px 槽位、字标字面高统一——整列图标一样大、文字都从同一列（24px）起；会话行的白卡标换成同一份官方标，此前手绘的 26 份来源标只剩 3 份。字标拼的不是我们展示的名字的（Hermes / ZCode / DSH 展示工具名而非厂商名）仍退回「品牌标 + 标签文本」；WorkBuddy（原仓库已不可达）、TeleAgent（产品页无矢量标）、Crush（仓库里只有演示 GIF / PNG）保留手绘缩写卡。
 - 导入面板的多选入口从「点行首来源工具标」改为「点整行任意处」：行首 22px 的方图不再是勾选位（只作来源标识与选中态指示），点行内任意处即勾选，键盘聚焦后用 Enter / 空格切换；行内导入 / 同步按钮保持不变，点它只导入、不连带勾选。
 
@@ -45,6 +46,7 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 ### Improvements
 
+- The source list splits **DSH into two entries**: "DSH V3 session format" (session logs v0–v3) and "DSH V4 session format" (v4+). They share one `$DSH_HOME/sessions` root and are separated by the generation in the log filename, so the source filter can show one generation at a time and a directory import only collects the chosen generation (the panel API's `format` therefore gained `dsh4`).
 - Source brand marks are now the **official** ones (trademarks belong to their owners): 18 come from the @lobehub/icons static SVG package (MIT), Reasonix / Continue / Zed from their own GitHub repositories, ChatGPT from lobehub's OpenAI mark and MimoCode from its XiaomiMiMo mark. Each mark's ink box is normalised into a 16px slot and every wordmark shares one cap height, so the column is one size and all text starts at the same x (24px); session rows use the same official art on their white cards, and only three hand-drawn marks remain (WorkBuddy's repository is gone, TeleAgent's product page has no vector logo, Crush ships only demo GIFs).
 - Multi-select moved from the leading source mark to **the whole row**: the 22px square is no longer the checkbox (it only names the source and shows selection state) — clicking anywhere on the row toggles selection, and Enter / Space does the same once the row has focus. The per-row import / sync button is unchanged: it imports without toggling.
 

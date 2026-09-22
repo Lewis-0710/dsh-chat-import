@@ -1448,9 +1448,10 @@ test('cursor：slug 解码为真实工作区名分组，<timestamp> 解析时间
   assert.equal(numeric.cwd, null)
 })
 
-test('FORMATS 与工具 schema enum 一致（26 种）', () => {
-  assert.equal(FORMATS.length, 26)
-  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'crush', 'cursor', 'dsh', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'teleagent', 'workbuddy', 'zcode', 'zed'])
+test('FORMATS 与工具 schema enum 一致（27 种）', () => {
+  assert.equal(FORMATS.length, 27)
+  // dsh / dsh4 是同一份会话目录的两个日志代次桶（V0–V3 / V4+），来源列表因此能分别只看
+  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'crush', 'cursor', 'dsh', 'dsh4', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'teleagent', 'workbuddy', 'zcode', 'zed'])
 })
 
 // ── git 状态（REQ-58）──────────────────────────────────────────────────────
@@ -1649,6 +1650,27 @@ test('dsh：单文件路径自动探测（不给 format）—— 代次工件名
 
 // 项目目录名的 ~XXXX 是宿主 projectKey() 的 code-unit 转义（四位大写十六进制）。
 // 此前按 decodeURIComponent('%XXXX') 解，得到控制字符加字面量余数。
+// dsh 来源按会话日志代次拆两项：v0–v3 归 dsh（V3 会话格式），v4+ 归 dsh4（V4 会话格式）。
+// 同一份 sessions 目录、同一个扫描器，靠文件名里的代次给格式（目录扫描由 scanFormat 的
+// 请求 format 过滤，见 scanDsh 的 onlyFormat）。
+test('dsh / dsh4：按日志代次给格式（v3 → dsh，v4 → dsh4）', async () => {
+  const body = (id) => [
+    j({ type: 'session', id, cwd: '/demo/proj', createdAt: 1700000000000 }),
+    j({ type: 'user/message', seq: 1, data: { content: [{ type: 'text', text: '代次分流' }] } }),
+  ].join('\n')
+  const cases = [
+    ['D:\\demo\\dsh-home\\sessions\\--D-Build--\\session-a\\session.v3.jsonl', 'session-a', 'dsh'],
+    ['D:\\demo\\dsh-home\\sessions\\--D-Build--\\session-b\\session.v4.jsonl', 'session-b', 'dsh4'],
+  ]
+  for (const [file, id, fmt] of cases) {
+    const host = mockHost(new Map([[file, { type: 'file', mtimeMs: 1786000002000, text: body(id) }]]))
+    const { sessions, total } = await discoverSessions({ path: file, host, imports: {} })
+    assert.equal(total, 1, file)
+    assert.equal(sessions[0].sessionId, id)
+    assert.equal(sessions[0].format, fmt, file + ' 应按日志代次归到 ' + fmt)
+  }
+})
+
 test('layoutProject(dsh)：~XXXX 转义按 code unit 还原，不再解成控制字符', () => {
   assert.equal(
     layoutProject('/h/sessions/--Users-u-Documents-Github-DSH~0020Repo--/sid/session.jsonl', 'dsh'),

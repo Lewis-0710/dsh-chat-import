@@ -100,5 +100,8 @@ test('描述长度护栏：每个工具 description ≤ 500 字符，全量档�
     assert.ok(desc <= 500, `工具 ${def.name} description ${desc} 字符超过 500 上限（本次瘦身基线）`)
   }
   assert.equal(defs.length, 13)
-  assert.ok(total <= 15000, `全量档 payload ${total} 字符超过 15000 上限（本次瘦身基线 ≈ 13.8k）`)
+  // 上限随来源数量走：加一个来源（如 dsh4）本来就要多一行枚举说明。加入 dsh4 前
+  // payload 已是 14,995（离 15k 只差 5 字符），所以这次按新增来源的实际成本上调到 15.3k，
+  // 而不是把新来源的描述压成看不出来源差异的缩写。
+  assert.ok(total <= 15300, `全量档 payload ${total} 字符超过 15300 上限（加入 dsh4 前基线 ≈ 15.0k）`)
 })

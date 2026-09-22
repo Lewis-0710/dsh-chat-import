@@ -41,6 +41,9 @@
         "sidebar.guide.description": "从 Claude Code / Codex / ChatGPT 等 25+ 工具导入会话并续聊",
         "source": "来源",
         "allSources": "全部来源",
+        // DSH 两代的完整展示名（来源下拉用；会话行提示用 SOURCE_LABELS 的中性短名）
+        "source.dsh": "DSH V3 会话格式",
+        "source.dsh4": "DSH V4 会话格式",
         "source.title": "按外部工具过滤；切换来源会重新扫描",
         "workspace": "工作区",
         "filter.path": "筛选：路径",
@@ -185,6 +188,8 @@
         "sidebar.guide.description": "Import and resume sessions from Claude Code, Codex, ChatGPT and 25+ tools",
         "source": "Source",
         "allSources": "All sources",
+        "source.dsh": "DSH V3 session format",
+        "source.dsh4": "DSH V4 session format",
         "source.title": "Filter by external tool; changing source rescans",
         "workspace": "Workspace",
         "filter.path": "Filter: path",
