@@ -676,6 +676,21 @@ test('import_zcode sessionIds 补导：库未变时再选未导过的会话仍�
   assert.equal(persistence.sessions.size, 2)
 })
 
+test('import_zcode sessionIds 补导：父 registry 保留之前已导入的会话', async () => {
+  // 选择性导入只处理本次勾选的会话；写回父记录时不能丢掉之前已登记的子会话，
+  // 否则 imports.json 会失去它们的归属，历史/撤回/增量同步无法再定位。
+  const dbPath = makeZcodeDb(zcodeTestSessions())
+  const { ctx } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'zcode')
+  await def.execute({ path: dbPath, sessionIds: ['zcs-a'] })
+  await def.execute({ path: dbPath, sessionIds: ['zcs-b'] })
+
+  const registry = await loadImports(resolveRegistryDir())
+  const record = registry.imports[dbPath]
+  assert.deepEqual(Object.keys(record.sessions).sort(), ['zcs-a', 'zcs-b'])
+})
+
 test('import_zcode db 缺失回退 transcript.jsonl：不报错、0 skipped', async () => {
   const { txPath } = writeZcodeTranscript()
   const { ctx, persistence } = makeCtx({})
