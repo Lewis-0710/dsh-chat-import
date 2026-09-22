@@ -290,7 +290,7 @@ test('convertZcodeJson: 简单问答、元数据、平衡回合', () => {
   assertEnvelopeHygiene(out.events)
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
+    'turn/start', 'step/start', 'system/message', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
   ])
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   for (const e of out.events.filter((e) => e.type === 'user/message' || e.type === 'assistant/message' || e.type === 'tool/result')) {

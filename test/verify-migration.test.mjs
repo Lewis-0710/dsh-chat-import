@@ -126,3 +126,38 @@ test('attachConversionDetails: 工具结果丢弃计数非零才附加', async (
   assert.equal('orphanToolResults' in withoutCounts, false)
   assert.equal('duplicateToolResults' in withoutCounts, false)
 })
+
+// ---- system head（宿主 v3→v4 迁移的另一条硬不变量）----
+// surface 的第一个事件必须是 system/message（protected head）；否则宿主续聊写自己的
+// system/message 时迁移器拒载整份日志，由它 seed 出来的续聊会话同样打不开。
+
+const headEvent = (seq, turn = 1, step = 1) => ({
+  type: 'system/message', seq, time: MS, surfaceOp: 'append',
+  data: { turn, step, message: { id: 'sys' + seq, role: 'system', content: [], source: { kind: 'plugin', plugin: 'chat-import' } } },
+})
+const userEvent = (seq) => ({
+  type: 'user/message', seq, time: MS, surfaceOp: 'append',
+  data: { id: 'u' + seq, role: 'user', content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' } },
+})
+
+test('verify: surface 先于 system/message 且无 protected head → system-head-missing', async () => {
+  const events = [
+    { type: 'turn/start', seq: 0, time: MS, data: { turn: 1 } },
+    { type: 'step/start', seq: 1, time: MS, data: { turn: 1, step: 1 } },
+    userEvent(2),
+    headEvent(3),
+  ]
+  const out = await verifySession(ctxFor(events), { sessionId: 's' })
+  assert.equal(kindsOf(out).has('system-head-missing'), true)
+})
+
+test('verify: head 在最前（导入会话的新形状）不报 system-head-missing', async () => {
+  const events = [
+    { type: 'turn/start', seq: 0, time: MS, data: { turn: 1 } },
+    { type: 'step/start', seq: 1, time: MS, data: { turn: 1, step: 1 } },
+    headEvent(2),
+    userEvent(3),
+  ]
+  const out = await verifySession(ctxFor(events), { sessionId: 's' })
+  assert.equal(kindsOf(out).has('system-head-missing'), false)
+})

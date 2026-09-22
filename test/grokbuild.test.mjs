@@ -107,7 +107,7 @@ test('convertGrokbuildJson: 简单问答、元数据、显式标题、平衡回�
   // 显式标题 → 钉 session/title 事件（最后，不破坏回合平衡）
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
+    'turn/start', 'step/start', 'system/message', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
   ])
   assert.equal(out.events.at(-1).data.title, 'Grok 会话标题')
   out.events.forEach((e, i) => assert.equal(e.seq, i))

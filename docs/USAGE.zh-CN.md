@@ -122,6 +122,8 @@ verify_session({ sessionId: "import-019f5f27-…" })
 ```
 
 > 环境变更提示注入在首个 `step/start` 之后（`turn/start → step/start → 提示 → 该轮提问`）。它仍是模型看到的第一条消息，但日志里没有任何 surface 事件早于第一个 step——旧格式（v0–v2）日志若把提示写在首个 step 之前，宿主做 v2→v3 格式迁移时会 fail-closed 拒载（`surface before first step cannot acquire a system head`），会话打不开、导出/同步/校验也读不到。`verify_session` 会以 `surface-before-first-step` 点名这类存量会话，用 `force: true` 重导（或面板「刷新已导入」）即可按新注入位重写。
+>
+> 导入会话的日志以一条**空 `system/message` head** 开头（第一个 `step/start` 之后、任何其它 surface 事件之前）。宿主的 v3→v4 迁移要求 surface 的第一个事件是 `system/message`（protected head），否则宿主续聊写自己的系统提示词时整份日志被拒载（`system/message requires a protected first surface head`），由它 seed 出来的续聊会话同样打不开。`verify_session` 会以 `system-head-missing` 点名这类存量会话（0.20.0 之前导入的），用 `force: true` 重导即可拿到带 head 的新会话——head 必须是 surface 首事件，旧日志无法原地补写。
 
 ### doctor — 只读迁移健康检查
 

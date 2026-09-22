@@ -121,6 +121,8 @@ restore_bundle({ path: "D:\backup\bundle-dir", preview: true })      // dry-run
 verify_session({ sessionId: "import-019f5f27-…" })
 ```
 
+> An imported log starts with an **empty `system/message` head** — right after the first `step/start`, before any other surface event. The host's v3→v4 migration requires the first surface event to be a `system/message` (the *protected head*); without it, the host's own system message on the next turn makes the migrator refuse the whole log (`system/message requires a protected first surface head`), and sessions seeded from it fail the same way. The environment-change note is injected after the first `step/start` (`turn/start → step/start → head → note → the turn's prompt`); a legacy log that puts a surface event before the first step is refused by the host's v2→v3 migration (`surface before first step cannot acquire a system head`). `verify_session` names both shapes — `system-head-missing` and `surface-before-first-step` — and a `force: true` re-import rewrites them; the head must be the first surface event, so an existing log cannot be repaired in place.
+
 ### doctor — read-only migration health check
 
 `doctor()` runs a read-only health check after migration: imports registry readability, whether every imported session still exists in `sessionPersistence`, whether `import_agents` skills were persisted, whether `workspaceRegistry` is available, and whether the sessions tree holds stray `import-*` directories the host can no longer read back (they still occupy a session id, so re-import can only create a suffixed copy). It never writes, imports, syncs, or deletes anything:

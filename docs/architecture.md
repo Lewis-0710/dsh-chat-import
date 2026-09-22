@@ -73,3 +73,10 @@
 - **决定**：读侧形状无关——`toolResultOf(ev)` 是唯一的工具结果读取入口（反向导出、校验、Markdown 渲染都走它），不关心事件来自哪个版本；写侧只在一个边界分流——`prepareHostEvents(events, sessionId, version)` 末尾调 `shapeToolResults`，版本由宿主 `sessionPersistence` 能力位（`formatVersion`/`currentVersion`）探测，探不到取已持久化 header 的最大版本，再兜底 3。双向幂等：已是目标形状的事件原样通过。
 - **代价**：两种形状都要测试覆盖（`test/format-version.test.mjs` 锁双向转换、幂等与畸形输入直通）；V4 的其余变更（`source.plugin` → `kind` 改名、header/envelope 白名单、surface 事件强制 `surfaceOp`）暂不跟进，因为已装宿主是 V3，跟进等于无对象地改契约。
 - **重审条件**：宿主广告 3/4 之外的版本；或 V4 其余变更成为强制项（届时需要一次面更宽的迁移，而不只是工具结果形状）。
+
+## D9. 导入会话自带空 system head：surface 首事件必须是 system/message（2026-09 定）
+
+- **背景**：宿主 v3→v4 迁移器把 surface 的第一个 `system/message` 记为 protected head，之后每一步宿主的系统提示词都以它为替换锚点；若 surface 里已有别的 surface 事件而 head 尚未建立，迁移 fail-closed 拒载整份日志（`system/message requires a protected first surface head`）——导入会话此前从 `user/message` 起，宿主续聊写自己的系统提示词时就中招，由它 seed 出来的续聊会话同样打不开（原生会话因为创建时就写了 head 不受影响）。
+- **决定**：`synthesizeSession` 在首个 `step/start` 之后、任何其它 surface 事件之前写一条 `system/message`（`surfaceOp: 'append'`、`content: []`、`source.plugin = 'chat-import'`）——位置与内容都对齐宿主自己的 v2→v3 迁移器（它同样在第一个 step/start 处插一条空 head）。空内容只占住 surface 第 0 个节点，真正的系统提示词由宿主在下一步替换或归一化，导入不虚构提示词。
+- **代价**：导入会话多一条事件（`writeback.lastWrittenSeq` +1）；首轮没有 step 时补一个只装 head 的空 step；`SESSION_EVENT_TYPES` / surface 集合加入 `system/message`、`developer/message`，`verify_session` 新增 `system-head-missing` 点名存量旧形状（head 必须是 surface 首事件，旧日志只能 force 重导，无法原地补写）。
+- **重审条件**：宿主迁移器改为「缺 head 时自行插入」（v2→v3 就是这种语义）——那时本插桩可退化为可选。
