@@ -6,9 +6,6 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 [中文](#cn-0.19.0) | [English](#en-0.19.0)
 
-Release notes for this version follow the dsh release-note layout: a language switch line, an
-`<h3 id="cn-…">` heading per language, then feature / improvement / fix / chore groups.
-
 <h3 id="cn-0.19.0">新增功能</h3>
 
 - 会话发现支持「全部来源」流式加载：扫描结果按发现顺序逐条推入列表，首屏不再等全量扫描结束；扫描完成后一次性重排为最近活跃倒序。
