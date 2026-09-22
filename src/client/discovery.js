@@ -155,10 +155,18 @@
 
       // 流式加载：后台扫描 + after 游标轮询——会话按发现顺序逐条 append 到缓冲，
       // 首屏不被全量扫描阻塞；每次请求只取 cursor 之后的增量（服务端 seq 去重）。
+      // 同来源 + 同搜索词的再次扫描（导入后 epoch 自增触发的刷新）不清空旧列表：旧数据留在
+      // 屏幕上，新扫描的首批到达时整批替换——避免「清空 → 重填」那一下闪烁。换来源 / 换
+      // 搜索词才是真的换了数据集，照旧清空。
+      const scanKeyRef = useRef(null);
       useEffect(() => {
         let cancelled = false;
+        const scanKey = source + "\u0000" + query;
+        const isRefresh = scanKeyRef.current === scanKey;
+        scanKeyRef.current = scanKey;
         (async () => {
-          setItems([]);
+          if (!isRefresh) setItems([]);
+          let firstBatch = isRefresh;
           setStream({ done: false, cursor: 0, total: 0, started: false });
           setError(null);
           setResult(null);
@@ -196,7 +204,9 @@
             if (batch.length > 0) {
               // 流式期间纯追加（发现顺序，行不跳动、页面稳定）；扫描完成时一次性
               // 重排回时间倒序（单次排序事件，之后恒定）——不做每块全量重排
-              setItems((prev) => (done ? prev.concat(batch).sort(byTimeDesc) : prev.concat(batch)));
+              // 刷新场景：首批整批替换（旧列表在新数据到达前一直可见）；其余照旧追加
+              setItems((prev) => (firstBatch ? batch : done ? prev.concat(batch).sort(byTimeDesc) : prev.concat(batch)));
+              firstBatch = false;
             }
             // 只在状态变化时更新流元信息（首帧 / done 翻转 / total 更新）——
             // 扫描中每 250ms 的空轮询不触发重渲染，面板保持稳定
@@ -277,7 +287,18 @@
             const skipped = force ? [] : items.filter((it) => alreadyPaths.has(it.sourcePath));
             setSkippedToast(skipped.length > 0 ? { count: skipped.length, items: skipped } : null);
             setSelected(new Map());
-            setEpoch((n) => n + 1);
+            // 单条导入（非 force / 非转投 / 非多会话）本地把该行标成已导入即可，不重扫：
+            // 重扫只为刷新状态，而这条路径的状态变化是可确定的（multi 源的 partial 语义、
+            // force 另铸 id 都不在这里）。其余情况仍走 epoch 重扫，但不清空旧列表。
+            const only = (data.results || []).length === 1 ? data.results[0] : null;
+            const donePath = only && typeof only.sourcePath === "string" ? only.sourcePath : "";
+            const localPatch = only && only.status === "imported" && only.mode === "single"
+              && !force && !archiveSources && donePath !== "";
+            if (localPatch) {
+              setItems((prev) => prev.map((s) => (s.sourcePath === donePath ? { ...s, importStatus: "imported" } : s)));
+            } else {
+              setEpoch((n) => n + 1);
+            }
           } else if (data && data.error) {
             setResult(data.error);
           } else {
@@ -648,8 +669,10 @@
           !stream.started && !error && React.createElement("div", { style: style.status }, t("scan.hint.start")),
           error && React.createElement("div", { style: style.error }, error),
           stream.done && !error && filteredItems.length === 0 && React.createElement("div", { style: style.status }, query || workspaceFilter ? t("noMatch") : t("noSessions")),
-          !error && items.length > 0
-            && React.createElement("div", { ref: setListEl, style: style.list }, laid.map(renderGroup)),
+          // 列表容器**恒渲染**（flex:1 撑满剩余高度）：此前 items 为空时整个容器不存在，
+          // 底部操作区（结果摘要 + 导入按钮）就会被内容顶到上面去；空列表时它只是没有行。
+          !error && React.createElement("div", { ref: setListEl, style: style.list },
+            items.length > 0 ? laid.map(renderGroup) : null),
           items.length > 0 && React.createElement("div", { style: style.pageBar },
             // 翻页只留图标、不套框；页码由页控件承担（点开是网格）。只有一页时整组不显示
             totalPages > 1 && React.createElement("button", {
