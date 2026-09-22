@@ -1686,7 +1686,7 @@ test('layoutProject(dsh)：~XXXX 转义按 code unit 还原，不再解成控制
   assert.equal(layoutProject('/h/sessions/--x--/sid/other.jsonl', 'dsh'), null)
 })
 
-test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH 自身会话不自扫）', async () => {
+test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH 自身来源例外）', async () => {
   const root = join(HOME, 'dsh-home', 'sessions')
   const proj = join(root, '--proj--')
   const sessNative = join(proj, 'session-native')
@@ -1716,7 +1716,8 @@ test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH
   }
   const persistedIds = new Set(['session-native', 'session-imported'])
 
-  // 1. 全量扫描：原生会话被过滤，已导入和外部未加载会话保留
+  // 1. DSH 来源例外：宿主自己的会话日志也要列出——「从 DSH V3 导入到 DSH V4」这类代次
+  //    迁移的对象正是宿主原生会话，按「已加载」隐藏就等于这个来源永远为空
   const res = await discoverSessions({
     path: root,
     format: 'dsh',
@@ -1724,8 +1725,8 @@ test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH
     imports,
     persistedIds,
   })
-  assert.equal(res.total, 2, '原生会话应被过滤，总数仅保留 2 条')
-  assert.ok(!res.sessions.some((s) => s.sessionId === 'session-native'), '宿主原生会话必须过滤')
+  assert.equal(res.total, 3, 'DSH 来源列出全部会话日志（含宿主原生会话）')
+  assert.ok(res.sessions.some((s) => s.sessionId === 'session-native'), 'DSH 来源必须能列出宿主原生会话')
   assert.ok(res.sessions.some((s) => s.sessionId === 'session-imported'), '已导入会话保留供同步')
   assert.ok(res.sessions.some((s) => s.sessionId === 'session-external'), '未持久化外部会话保留供导入')
 
@@ -1739,8 +1740,8 @@ test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH
     persistedIds,
     onEntry: (e) => streamed.push(e),
   })
-  assert.equal(streamed.length, 2, '流式条目应仅包含 2 条')
-  assert.ok(!streamed.some((s) => s.sessionId === 'session-native'), '流式推送中原生会话不应出现')
+  assert.equal(streamed.length, 3, '流式条目应含 3 条（DSH 来源不过滤原生会话）')
+  assert.ok(streamed.some((s) => s.sessionId === 'session-native'), '流式推送同样要含宿主原生会话（DSH 来源例外）')
 
   // 3. 缺省 persistedIds：不执行过滤（向后兼容）
   const fallback = await discoverSessions({
