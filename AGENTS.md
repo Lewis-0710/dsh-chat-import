@@ -65,3 +65,15 @@ npm run build          # 发布面自检：client bundle 新鲜度 + files 完�
 - 提交前必过：`npm test` / `npm run check:linux` / `npm run lint`，工作树无杂物。
 - 发布流程：更新 CHANGELOG → `npm version patch|minor` 并同步 lockfile → 打 tag → `npm publish` → GitHub Release。
 - 发布说明取自 CHANGELOG 对应版本节。
+- CHANGELOG 版式（与 dsh 上游发布说明同规范，0.19.0 起）：
+  - 版本节：`## [x.y.z] - YYYY-MM-DD`（最新在最上）；跨版本合并只用于无法逐版追溯的旧区间。
+  - 每节双语同页：先 `[中文](#cn-x.y.z) | [English](#en-x.y.z)` 语言切换行，再
+    `<h3 id="cn-x.y.z">新增功能</h3>`（中文）与 `<h3 id="en-x.y.z">New Features</h3>`（英文）
+    两个锚点——锚点 id 必须带版本号，避免同页多节同名冲突。
+  - 分组固定四类，顺序不变；中文 `### 体验优化` / `### 问题修复` / `### 其他变更`，
+    英文 `### Improvements` / `### Bug Fixes` / `### Chores`；没有内容的分组整组省略。
+  - 节尾：`**Full Changelog**: [v上次...v本次](compare 链接)`。
+  - 内容口径：一条一个**可验证的行为或契约**，不写实现流水账；对外契约变化（工具名、
+    输出 schema、来源支持与否）必须显式点名；性能/规模类改动带本机实测数字；面向用户的
+    行为变更与 README/docs 同步。
+  - 不写内部编号、不写「AI 化」套话与自述性说明文字（版式说明写在规范里，不写在版本节里）。
