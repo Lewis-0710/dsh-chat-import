@@ -4,6 +4,7 @@ All notable changes to `dsh-chat-import` are documented here, newest first.
 
 ## [Unreleased]
 
+- 修复深色主题下导入面板的**弹层透出背后列表**：宿主的菜单面 `--dsw-specific-menu` 在深色下是半透明的（`#30313680`），宿主的 Menu 靠 `--dsw-menu-backdrop-filter` 的背景模糊把它做成玻璃卡片——插件此前只用了颜色没上模糊，于是深色下能直接读到后面的会话标题（浅色被皮肤定成不透明白，所以只有深色露馅）。下拉弹层与页码网格补上模糊 + 宿主投影；sticky 分组头与历史确认框改用不透明的 `--dsw-alias-bg-layer-3`（sticky 头必须挡住滚过来的行）。
 - 导入面板的来源下拉与会话行改用**官方品牌标**（商标归各自权利人）：18 个取自 @lobehub/icons（MIT），Reasonix / Continue / Zed 取自各自 GitHub 仓库的官方标，ChatGPT 用 OpenAI 标、MimoCode 用 XiaomiMiMo 标。mark 按实测 ink 包围盒归一化后放进 16px 槽位、字标字面高统一——整列图标一样大、文字都从同一列（24px）起；会话行的白卡标换成同一份官方标，此前手绘的 26 份来源标只剩 3 份。字标拼的不是我们展示的名字的（Hermes / ZCode / DSH 展示工具名而非厂商名）仍退回「品牌标 + 标签文本」；WorkBuddy（原仓库已不可达）、TeleAgent（产品页无矢量标）、Crush（仓库里只有演示 GIF / PNG）保留手绘缩写卡。
 - 导入面板的多选入口从「点行首来源工具标」改为「点整行任意处」：行首 22px 的方图不再是勾选位（只作来源标识与选中态指示），点行内任意处即勾选，键盘聚焦后用 Enter / 空格切换；行内导入 / 同步按钮保持不变，点它只导入、不连带勾选。
 - 会话写入按**宿主会话格式版本分流**：工具结果在 V3 写成 `role: 'user'` 内的 `tool-result` 包装，在 V4 写成顶层 `role: 'tool'` 消息。版本取自宿主 `sessionPersistence` 能力位（`formatVersion`/`currentVersion`），探不到时取已持久化会话 header 的最高版本，再兜底 V3——已装 V3 宿主的行为与产物不变。

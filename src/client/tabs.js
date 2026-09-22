@@ -96,7 +96,7 @@
       },
         React.createElement("div", {
           style: {
-            background: colors.bg, border: "1px solid " + colors.border, borderRadius: "12px",
+            background: colors.surface, border: "1px solid " + colors.border, borderRadius: "12px",
             padding: "16px", maxWidth: "360px", width: "100%",
           },
         },
