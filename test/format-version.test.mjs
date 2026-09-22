@@ -190,3 +190,10 @@ test('未知的更高版本（V5）不静默：按已知最高版本产出并大
     console.error = original
   }
 })
+
+test('V4 源形状：system head 的宿主生产者映射为 kind="system-prompt"', () => {
+  const ev = pluginHeadEvent()
+  ev.data.message.source = { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }
+  const v4 = prepareHostEvents([ev], 'import-x', 4)
+  assert.deepEqual(v4[0].data.message.source, { kind: 'system-prompt' })
+})

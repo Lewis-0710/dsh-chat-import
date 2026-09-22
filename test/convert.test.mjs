@@ -2414,6 +2414,9 @@ test('synthesizeSession: 首个 surface 事件是首个 step 内的 system head�
   assert.equal(surface[0].surfaceOp, 'append')
   assert.equal(surface[0].data.message.role, 'system')
   assert.deepEqual(surface[0].data.message.content, [], 'head 内容留空：真正的提示词由宿主在下一步替换')
+  // 宿主 agents.create 的 seed 校验：system/message 必须来自 system-prompt 生产者
+  //（"seed system/message at index 2 message must have system-prompt source"）
+  assert.deepEqual(surface[0].data.message.source, { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' })
   // 必须落在已打开的 step 内，且是第一个 step/start 之后的第一条（宿主锚点同位置）
   const stepIdx = out.events.findIndex((e) => e.type === 'step/start')
   assert.equal(out.events[stepIdx + 1].type, 'system/message')
