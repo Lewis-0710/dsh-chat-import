@@ -109,3 +109,42 @@ test('底部主操作区自带上边框，与列表/分页分区；导入结果�
   const body = panelBody()
   assert.ok(at(body, 'style.resultBar') < at(body, 'style.importBar'), '导入结果应紧贴主按钮之上')
 })
+
+// 勾选入口是**整行**，不在行首工具标上：点 22px 的方图当勾选位不直观。
+// 契约：行容器挂 role=checkbox / aria-checked / aria-label 与键盘切换；工具标只作指示器
+//（不接 onClick、不占 tab 位）；行内导入 / 同步按钮必须 stopPropagation，否则点按钮会连带勾选。
+test('会话行：多选入口是整行（role=checkbox + 键盘切换），工具标只作指示，导入按钮不冒泡', () => {
+  const rowAt = source.indexOf('const SessionRow = React.memo(function SessionRow')
+  assert.notEqual(rowAt, -1, 'lib/client.js 缺少 SessionRow')
+  const row = source.slice(rowAt, source.indexOf('function DiscoveryPanel()', rowAt))
+
+  // 整行：勾选语义 + 键盘可达（挂在行容器上，而不是消息体内部的某个子节点）
+  const rowOpenAt = row.indexOf('return React.createElement("div", {')
+  assert.notEqual(rowOpenAt, -1, 'SessionRow 应渲染行容器')
+  const rowOpen = row.slice(rowOpenAt, row.indexOf('React.createElement(SourceBadge'))
+  assert.match(rowOpen, /role: "checkbox"/, '行容器应带 checkbox 角色')
+  assert.match(rowOpen, /"aria-checked": checked/, '行容器应暴露 aria-checked')
+  assert.match(rowOpen, /"aria-label": (s.title || props.noTitle)/, '行容器应带可读的 aria-label')
+  assert.ok(rowOpen.includes('onClick: importing ? undefined : () => onToggle(key)'), '点整行即切换勾选')
+  assert.ok(rowOpen.includes('e.key === "Enter" || e.key === " "'), '行应支持 Enter / 空格切换')
+  assert.ok(rowOpen.includes('tabIndex: importing ? -1 : 0'), '行应是键盘停靠点')
+  // 手型写在 rowStyle 里（cursor 依赖 importing，所以不在 createElement 的属性内联）
+  assert.ok(row.includes('cursor: importing ? "default" : "pointer"'), '行应显示可点手型')
+  // 消息体不再自行承载勾选语义（避免双份控件 / 双 tab 位）
+  const mainAt = row.indexOf('style.itemMain')
+  assert.ok(!row.slice(mainAt, mainAt + 80).includes('toggleProps'), '消息体不应再挂 toggleProps')
+
+  // 工具标：只作指示器
+  const badgeAt = row.indexOf('React.createElement(SourceBadge, {')
+  assert.notEqual(badgeAt, -1, '行内应仍渲染来源工具标')
+  const badge = row.slice(badgeAt, row.indexOf('}),', badgeAt))
+  assert.ok(!/onClick/.test(badge), '工具标不应再接收点击（勾选入口已移到消息体）')
+  assert.ok(badge.includes('checked,'), '工具标仍应显示选中态')
+
+  // 行内按钮在可勾选容器内部 → 必须拦住冒泡，否则「点导入」会顺带勾上这一行
+  const slotAt = row.indexOf('style.rowSlot')
+  assert.ok(mainAt < slotAt, '导入按钮槽位应排在消息体之后')
+  const slot = row.slice(slotAt)
+  assert.ok(slot.includes('e.stopPropagation(); onImport(s)'), '导入按钮应先 stopPropagation 再执行导入')
+  assert.ok(slot.includes('onClick: (e) =>'), '导入按钮的点击应拿到事件对象（用于拦冒泡）')
+})

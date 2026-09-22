@@ -167,8 +167,12 @@
       item: {
         display: "flex", alignItems: "center", height: "28px", minHeight: "28px",
         padding: "0 6px", borderRadius: "6px", marginTop: "1px",
+        // 整行即勾选控件（点击 / Enter / 空格）：聚焦环向内收，避免与行的圆角/相邻行粘连
+        outlineOffset: "-2px",
       },
-      itemMain: { flex: "1", minWidth: "0" },
+      // itemMain 只是标题的布局槽：勾选入口是整行（见 discovery.js 的 SessionRow），
+      // 手型 / 聚焦环挂在 item 上。
+      itemMain: { flex: "1", minWidth: "0", display: "flex", alignItems: "center" },
       // 标题默认 label-secondary，悬停 / 选中才变 label-primary（皮肤里就是这条规则）
       itemTitle: {
         fontSize: "13px", lineHeight: "18px", margin: "0 4px", color: C.dim,

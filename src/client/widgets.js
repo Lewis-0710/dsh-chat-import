@@ -86,14 +86,14 @@
       }, badge.text);
     }
 
-    // 多选徽标（替换原生 checkbox）：白色圆角卡 + 品牌标/缩写。未选中只显徽标；选中时
-    // 叠一层半透明固定黑/白遮罩（按强调色明度选择）+ 带环 tick（环/勾用强调色）。path
-    // 条目套同一白卡渲染为单色 brand 标（simple-icons）。role=checkbox + aria-checked +
-    // 键盘切换保留可访问性。
-    function SourceBadge({ format, checked, size = 26, onClick, title, ariaLabel, disabled, palette }) {
+    // 来源徽标：白色圆角卡 + 品牌标/缩写。它是**纯指示器**——身份是「来源标识 + 选中态
+    // 指示」（选中时叠半透明黑/白遮罩 + 带环 tick，环/勾用强调色），勾选入口在消息体上
+    // （见 discovery.js 的 SessionRow）。故这里不挂 checkbox 角色、不接收点击：多一个点不
+    // 动的键盘停靠点只会让人以为它才是勾选位。path 条目套同一白卡渲染为单色 brand 标。
+    function SourceBadge({ format, checked, size = 26, title, disabled, palette }) {
       const card = {
         width: size, height: size, borderRadius: "6px", background: "#ffffff", flex: "none", alignSelf: "center",
-        cursor: disabled ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "default", display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative", overflow: "hidden",
         padding: 0, opacity: disabled ? 0.5 : 1,
       };
@@ -109,10 +109,7 @@
         }, React.createElement("circle", { cx: 12, cy: 12, r: 10 }), React.createElement("path", { d: "M7.5 12.5l3 3 6-7" }))
         : null;
       return React.createElement("div", {
-        style: card, title, "aria-label": ariaLabel, role: "checkbox", "aria-checked": checked,
-        tabIndex: disabled ? -1 : 0,
-        onClick: disabled ? undefined : onClick,
-        onKeyDown: disabled ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } },
+        style: card, title, "aria-hidden": true, // 只作视觉指示；勾选控件在消息体上（有 aria-label / aria-checked）
       }, logo, overlay, check);
     }
 

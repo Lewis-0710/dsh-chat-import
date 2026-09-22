@@ -57,17 +57,36 @@
       const { s, style, colors, badgeOverlay, label, time, tip, checked, hot, importing, onToggle, onImport, groupName } = props;
       const imported = s.importStatus === "imported";
       const lit = hot || checked;
+      const key = itemKey(s);
+      // 勾选入口 = **整行**（点行内任意处，含来源标 / 时间 / 空白），不再要求瞄准 22px 的
+      // 方图或某一段文字。因此行的外层容器即勾选控件（role=checkbox + 键盘切换）；行内
+      // 的导入 / 同步按钮是唯一例外——它必须 stopPropagation，否则点按钮会连带切换勾选。
+      // 徽标仍作选中态的视觉指示（遮罩 + 勾），不再承担点击。
+      const rowStyle = {
+        ...style.item,
+        background: hot ? colors.hover : "transparent",
+        cursor: importing ? "default" : "pointer",
+      };
       return React.createElement("div", {
-        style: { ...style.item, background: hot ? colors.hover : "transparent" },
+        style: rowStyle,
         title: tip,
-        onMouseEnter: () => props.onHot(itemKey(s), null, groupName),
-        onMouseLeave: () => props.onHot(null, itemKey(s), groupName),
+        role: "checkbox",
+        "aria-checked": checked,
+        "aria-label": (s.title || props.noTitle) + " · " + props.multiSelectTitle,
+        "aria-disabled": importing || undefined,
+        tabIndex: importing ? -1 : 0,
+        onClick: importing ? undefined : () => onToggle(key),
+        onKeyDown: importing ? undefined : (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(key); }
+        },
+        onFocus: () => props.onHot(key, null, groupName),
+        onBlur: () => props.onHot(null, key, groupName),
+        onMouseEnter: () => props.onHot(key, null, groupName),
+        onMouseLeave: () => props.onHot(null, key, groupName),
       },
         React.createElement(SourceBadge, {
           format: s.format, checked, disabled: importing, size: 22,
-          onClick: () => onToggle(itemKey(s)),
           title: label,
-          ariaLabel: label + " · " + props.multiSelectTitle,
           palette: { border: colors.border, accent: colors.accent, text: colors.text, overlay: badgeOverlay },
         }),
         React.createElement("div", { style: style.itemMain },
@@ -79,9 +98,10 @@
           React.createElement("button", {
             style: hot ? (imported ? style.syncBtn : style.importBtn) : style.rowBtnIdle,
             disabled: importing,
-            onClick: () => onImport(s),
-            onFocus: () => props.onHot(itemKey(s), null, groupName),
-            onBlur: () => props.onHot(null, itemKey(s), groupName),
+            // 行本身可勾选 → 按钮必须拦住冒泡，否则「点导入」会顺带勾上这一行
+            onClick: (e) => { e.stopPropagation(); onImport(s); },
+            onFocus: () => props.onHot(key, null, groupName),
+            onBlur: () => props.onHot(null, key, groupName),
             title: imported ? props.syncTitle : props.importTitle,
           }, imported ? props.syncLabel : props.importLabel)));
     }, (a, b) => a.s === b.s && a.checked === b.checked && a.hot === b.hot && a.importing === b.importing
