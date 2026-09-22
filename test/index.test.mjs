@@ -5703,6 +5703,70 @@ test('REQ-41 /api-import/import handler：target dsh3 / dsh4 显式指定会话�
   assert.equal(bad.res.status, 400)
 })
 
+// DSH 会话日志夹具（真实文件）：宿主落盘是 session.vN.jsonl.zstd，fs.readText 不解压，
+// 只有 spec.readText（readDshText）会走 zstd 解码。withEvents=false 造「只有 session
+// 记录、没有可导入事件」的日志（导入应 skipped）。
+function writeDshLog(dir, fileName, id, { withEvents = true, compress = false } = {}) {
+  const lines = [{ type: 'session', id, cwd: hostAbs('D:/demo/proj'), createdAt: 1700000000000 }]
+  if (withEvents) {
+    lines.push(
+      { type: 'turn/start', seq: 0, time: 1700000000000, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 1700000000000, data: { turn: 1, step: 1 } },
+      { type: 'user/message', seq: 2, time: 1700000000000, surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text: '你好' }] } },
+      { type: 'assistant/message', seq: 3, time: 1700000000000, surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: '回复' }] } } },
+      { type: 'turn/end', seq: 4, time: 1700000000000, data: { turn: 1 } },
+    )
+  }
+  const text = Buffer.from(lines.map((l) => JSON.stringify(l)).join('\n'))
+  const file = join(dir, fileName)
+  writeFileSync(file, compress ? zstdCompressSync(text) : text)
+  return file
+}
+
+test('REQ-41 /api-import/import handler：DSH 源 .zstd 日志必须解压后导入（面板不能丢 spec.readText）', async () => {
+  // 回归：面板/命令的 importDiscoveryItem 曾漏传 spec.readText，.zstd 被当二进制读 →
+  // 转换出 0 轮 → skipped（「只会归档旧会话、不导入新会话」的直接成因）。
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-panel-zstd-'))
+  const file = writeDshLog(dir, 'session.v3.jsonl.zstd', 'sess-panel-zstd', { compress: true })
+  const { ctx, persistence, webRoutes } = makeCtx({})
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+  assert.ok(route)
+
+  const out = await invokeImportRoute(route, { items: [{ source: 'dsh', sourcePath: file, sessionId: 'sess-panel-zstd' }], target: 'dsh4' })
+  assert.equal(out.data.ok, true, JSON.stringify(out.data))
+  assert.equal(out.data.results[0].status, 'imported', JSON.stringify(out.data.results))
+  const stored = persistence.sessions.get('import-sess-panel-zstd')
+  assert.ok(stored, [...persistence.sessions.keys()].join(','))
+  assert.equal(stored.meta.version, 4)
+  assert.equal(stored.events.filter((e) => e.type === 'user/message').length, 1)
+})
+
+test('REQ-41 面板「导入并归档」：导入未成功的源会话绝不归档（不两头落空）', async () => {
+  // 归档是不可逆的隐藏动作（平台无取消归档面），只有确实建出/续写/已存在新会话的
+  // 源会话才允许归档；skipped / failed 的条目归档会让用户既看不到旧会话、也没有新会话。
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-panel-arch-'))
+  // 两条都压缩（真实宿主形态）：空日志 → skipped，正常日志 → imported
+  const empty = writeDshLog(dir, 'session.v3.jsonl.zstd', 'sess-empty-001', { withEvents: false, compress: true })
+  const good = writeDshLog(dir, 'session.v4.jsonl.zstd', 'sess-good-001', { compress: true })
+  const { ctx, persistence, webRoutes } = makeCtx({})
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+  const out = await invokeImportRoute(route, {
+    items: [
+      { source: 'dsh', sourcePath: empty, sessionId: 'sess-empty-001' },
+      { source: 'dsh4', sourcePath: good, sessionId: 'sess-good-001' },
+    ],
+    target: 'dsh3',
+    archiveSources: true,
+  })
+  assert.equal(out.data.ok, true, JSON.stringify(out.data))
+  assert.equal(out.data.archived, 1, JSON.stringify(out.data))
+  assert.equal(out.data.archiveSkipped, 1, JSON.stringify(out.data))
+  assert.deepEqual(ctx.get('workspaceRegistry').archivedSessionIds, ['sess-good-001'])
+  assert.ok(persistence.sessions.has('import-sess-good-001'))
+})
+
 test('REQ-41 /api-import/import handler：多选同源去重（同 sourcePath 只导一次）+ 空 items 400 + 未知来源 400', async () => {
   const root = 'D:\\demo\\claude\\projects'
   const src = root + '\\proj-a\\sess-aaa.jsonl'

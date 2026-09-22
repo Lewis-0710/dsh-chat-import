@@ -272,11 +272,17 @@
             const summary = data.target && !String(data.target).startsWith("dsh")
               ? fmtTransferResult(data.results, data.target, t)
               : fmtImportResult(data.results, t);
-            // 归档旧会话的结果如实附在摘要后（宿主没有归档 API 时点名，不假装成功）
+            // 归档旧会话的结果如实附在摘要后（宿主没有归档 API 时点名，不假装成功；
+            // 导入未成功的条目不会被归档，条数经 archiveSkipped 单独说明——归档不可逆，
+            // 不能让用户以为「已归档」等于「已迁移」）
             const archiveNote = archiveSources
-              ? (data.archiveUnsupported
-                ? "\n" + t("archive.unsupported")
-                : typeof data.archived === "number" ? "\n" + t("archive.done", { n: data.archived }) : "")
+              ? [
+                data.archiveUnsupported
+                  ? t("archive.unsupported")
+                  : typeof data.archived === "number" ? t("archive.done", { n: data.archived }) : "",
+                typeof data.archiveSkipped === "number" && data.archiveSkipped > 0
+                  ? t("archive.skipped", { n: data.archiveSkipped }) : "",
+              ].filter(Boolean).map((line) => "\n" + line).join("")
               : "";
             setResult(summary + archiveNote);
             // 兜底不再静默：被幂等跳过（already-imported）的条目单独出 Toast，用户点
