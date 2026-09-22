@@ -240,8 +240,14 @@
       // 来源/搜索词/工作区变化 → 清空跨页选择（换页/刷新保留选择，支持跨页多选）
       useEffect(() => { setSelected(new Map()); }, [source, query, workspaceFilter, timeFilter]);
 
+      // 显式选了 DSH 来源与 DSH 目标且**代次不同**（V3 ↔ V4）→ 底部多一个「导入所选并
+      // 归档旧会话」按钮：导入按目标代次建新会话，同时把源会话在宿主里归档（迁移的收尾）。
+      const srcVersion = source === "dsh" ? 3 : source === "dsh4" ? 4 : 0;
+      const targetVersion = target === "dsh3" ? 3 : target === "dsh4" ? 4 : 0;
+      const migrate = srcVersion !== 0 && targetVersion !== 0 && srcVersion !== targetVersion;
+
       // 执行导入（单选/多选共用）：POST /api-import/import → 摘要 → 重取列表刷新状态
-      const doImport = async (items, { replace = false, force = false } = {}) => {
+      const doImport = async (items, { replace = false, force = false, archiveSources = false } = {}) => {
         if (!items || items.length === 0 || importing) return;
         setImporting(true);
         setResult(null);
@@ -249,13 +255,20 @@
           const resp = await fetch("/api-import/import", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ items, replace: replace === true, force: force === true, target }),
+            body: JSON.stringify({ items, replace: replace === true, force: force === true, archiveSources: archiveSources === true, target }),
           });
           const data = await readJson(resp);
           if (data && data.ok === true) {
-            setResult(data.target && !String(data.target).startsWith("dsh")
+            const summary = data.target && !String(data.target).startsWith("dsh")
               ? fmtTransferResult(data.results, data.target, t)
-              : fmtImportResult(data.results, t));
+              : fmtImportResult(data.results, t);
+            // 归档旧会话的结果如实附在摘要后（宿主没有归档 API 时点名，不假装成功）
+            const archiveNote = archiveSources
+              ? (data.archiveUnsupported
+                ? "\n" + t("archive.unsupported")
+                : typeof data.archived === "number" ? "\n" + t("archive.done", { n: data.archived }) : "")
+              : "";
+            setResult(summary + archiveNote);
             // 兜底不再静默：被幂等跳过（already-imported）的条目单独出 Toast，用户点
             // 「忽略警告」即用 force 再导一次（另铸新会话）。force 轮本身不再重复提示。
             const alreadyPaths = new Set((data.results || [])
@@ -685,6 +698,18 @@
               },
             }, t("toast.ignore"))),
           React.createElement("div", { style: style.importBar },
+            migrate && React.createElement("button", {
+              style: {
+                ...style.primaryBtn,
+                background: colors.accentForeground,
+                color: colors.accent,
+                border: "1px solid " + colors.accent,
+                opacity: selected.size === 0 || importing ? 0.55 : 1,
+              },
+              disabled: selected.size === 0 || importing,
+              title: t("import.selectedArchive.title"),
+              onClick: () => doImport([...selected.values()].map(toItem), { archiveSources: true }),
+            }, importing ? t("importing") : t("import.selectedArchive", { n: selected.size })),
             React.createElement("button", {
               style: { ...style.primaryBtn, opacity: selected.size === 0 || importing ? 0.55 : 1 },
               disabled: selected.size === 0 || importing,
