@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, stat, readFile, readdir, open, rm } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { Buffer } from 'node:buffer'
+import { randomBytes } from 'node:crypto'
+import { zstdCompressSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { convertDshJsonl } from '../lib/convert/dsh.mjs'
@@ -232,18 +234,55 @@ test('discoverSessions format=dsh：超过阈值的 .zstd 不解压，按目录�
   }
 })
 
-test('decodeZstdText：原生异步解码与 fzstd 回退产出同一文本（Node < 22.15 回退路径）', async () => {
+test('decodeZstdText：单帧夹具解出全部记录（session/turn/user/title）', async () => {
   const fixture = fileURLToPath(new URL('./fixtures/session.jsonl.zstd', import.meta.url))
   const buf = await readFile(fixture)
-  const native = await decodeZstdText(buf)
-  const fallback = await decodeZstdText(buf, { preferNative: false })
-  assert.equal(native, fallback, '两条解码路径必须给出同一 UTF-8 文本')
-  assert.match(native, /"id": "session-zstd-test"/)
-  assert.equal(native.split('\n').filter(Boolean).length, 4)
+  const text = await decodeZstdText(buf)
+  assert.match(text, /"id": "session-zstd-test"/)
+  assert.equal(text.split('\n').filter(Boolean).length, 4)
 })
 
 test('decodeZstdText：非法载荷大声抛错（不静默返回空文本）', async () => {
   await assert.rejects(() => decodeZstdText(Buffer.from('not a zstd frame')), /./)
+})
+
+test('decodeZstdText：多帧拼接日志全解（宿主逐事件 flush；只解首帧会丢光对话）', async () => {
+  // 回归：宿主按「一条事件一次 flush」写日志，磁盘上的 .zstd 是多帧拼接（本机实测一条
+  // 6.5MB 压缩 / 33MB 明文日志 1962 帧）。node:zlib 的 zstdDecompress /
+  // createZstdDecompress 只解第一帧、其余静默丢弃——只解首帧就只剩 session 头那一行，
+  // 转换出 0 轮，整份导入按「无可导入内容」跳过（表现为「只归档旧会话、不建新会话」）。
+  const lines = [
+    '{"type":"session","id":"multi-frame","createdAt":1700000000000}',
+    '{"type":"turn/start","seq":0,"time":1700000000000,"data":{"turn":1}}',
+    '{"type":"user/message","seq":1,"time":1700000000000,"surfaceOp":"append","data":{"role":"user","content":[{"type":"text","text":"多帧"}]}}',
+    '{"type":"turn/end","seq":2,"time":1700000000000,"data":{"turn":1}}',
+  ]
+  const buf = Buffer.concat(lines.map((l) => zstdCompressSync(Buffer.from(l + '\n'))))
+  const text = await decodeZstdText(buf)
+  assert.equal(text.split('\n').filter(Boolean).length, lines.length)
+  const out = convertDshJsonl(text, { sourcePath: '/tmp/multi/session.v3.jsonl.zstd' })
+  assert.equal(out.meta.id, 'import-multi-frame')
+  assert.equal(out.turns.length, 1)
+  assert.equal(out.messages, 1)
+  assert.ok(out.events.length > 0, '多帧日志的事件必须全部解出')
+})
+
+test('decodeZstdText：帧内出现魔数字节序列（raw block）时后续帧仍完整解出', async () => {
+  // 不可压缩载荷会被 zstd 存成 raw block，字节原样出现在压缩正文里——4 字节帧魔数
+  // 0x28B52FFD 因此可能在帧内“假阳性”出现。解码器必须仍能解出后续帧（按魔数切分
+  // 逐帧解 + 静默截断的实现会在这里丢内容）。
+  const magic = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
+  const raw = Buffer.concat([randomBytes(65536), magic, randomBytes(65536)])
+  const first = zstdCompressSync(raw)
+  const tail = '{"type":"session","id":"after-raw","createdAt":1700000000000}\n'
+  assert.ok(first.indexOf(magic, 1) > 0, '夹具必须在帧内制造魔数（raw block 原样存储）')
+  const text = await decodeZstdText(Buffer.concat([first, zstdCompressSync(Buffer.from(tail))]))
+  assert.ok(text.includes('"after-raw"'), '帧内魔数不得吞掉后续帧')
+})
+
+test('decodeZstdText：截断的帧大声抛错（不静默返回半份日志）', async () => {
+  const frame = zstdCompressSync(Buffer.from('{"type":"session","id":"cut"}\n'))
+  await assert.rejects(() => decodeZstdText(frame.subarray(0, Math.floor(frame.length / 2))), /./)
 })
 
 test('discoverSessions format=dsh：导入产物目录（import-<id>）也列出（代次迁移要用）', async () => {
@@ -267,8 +306,8 @@ test('discoverSessions format=dsh：导入产物目录（import-<id>）也列出
 // session/turn/user/title 四条 JSONL 记录生成，raw 431B → zstd 243B），
 // 以二进制文件存放避免 dsh.so 把超长 base64 字面量判为疑似混淆载荷。
 // 路线 A 用 zstd 解压替代系统 zstd 二进制（child_process 判为 critical）：
-// decodeZstdText 优先 node:zlib 原生异步解码（不占事件循环），Node < 22.15 回退 fzstd。
-test('readDshText 解压 session.jsonl.zstd（原生 zstd / fzstd 回退同一文本）', async () => {
+// decodeZstdText 走 fzstd（自带多帧；node:zlib 原生只解首帧，见上方回归用例）。
+test('readDshText 解压 session.jsonl.zstd 并转换出会话', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-zstd-test-'))
   try {
     const file = join(root, 'session.jsonl.zstd')
