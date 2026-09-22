@@ -1,8 +1,9 @@
     // 来源下拉（'' = 全部来源；与 lib/discovery.mjs 的 FORMATS 对应，claude-code →
     // claude）。chatgpt 无默认数据根，仅显式 path 可发现。
     const SOURCES = [
-      "", "claude-code", "codex", "chatgpt", "cursor", "gemini", "antigravity", "reasonix",
-      "opencode", "mimocode", "teleagent", "kilocode", "zcode", "grokbuild", "openclaw", "pi", "hermes", "kimi", "qoder", "workbuddy", "qwen", "continue", "cline", "goose", "zed", "crush", "dsh", "dsh4",
+      // DSH 两代置顶（紧随「全部来源」）：这是本插件自己的会话格式，最常被用来做迁移/续聊
+      "", "dsh", "dsh4", "claude-code", "codex", "chatgpt", "cursor", "gemini", "antigravity", "reasonix",
+      "opencode", "mimocode", "teleagent", "kilocode", "zcode", "grokbuild", "openclaw", "pi", "hermes", "kimi", "qoder", "workbuddy", "qwen", "continue", "cline", "goose", "zed", "crush",
     ];
     // 「导入到」下拉：'dsh' = 照常建可继续的 DSH 会话（默认）；其余 = 转投到该工具自己的
     // 格式（服务端 lib/transfer.mjs，与 export_chat 的目标保持一致）。值顺序 = 展示顺序。
