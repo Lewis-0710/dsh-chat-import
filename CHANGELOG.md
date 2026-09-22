@@ -2,6 +2,34 @@
 
 All notable changes to `dsh-chat-import` are documented here, newest first.
 
+## [Unreleased]
+
+[中文](#cn-unreleased) | [English](#en-unreleased)
+
+<h3 id="cn-unreleased">新增功能</h3>
+
+- 导入面板的设置偏好响应（`/api-import/prefs`）新增只读 **`probe` 自检块**：宿主设置服务的关键事实（`hasSettings` / `hasDescribe` / `hasRegister`、命名空间名单、`namespaceState`）一次看全，供 0.1.5 / 0.1.7 设置模型差异排障。
+- 新增 [docs/SETTINGS-MIGRATION.md](docs/SETTINGS-MIGRATION.md)（[中文](docs/SETTINGS-MIGRATION.zh-CN.md)）：DSH 0.1.5 → 0.1.7 设置页迁移说明，含实测报错原文，可直接转发给其他插件作者。
+
+### 问题修复
+
+- 修复 **0.1.7 宿主上导入偏好设置整体失效**：0.1.7 删除了 `settings.register()`（命名空间改为 profile 条目 id、schema 改为插件导出的 `Config`），插件此前仍走旧注册路径，注册直接抛错。现在一套代码兼容两版：宿主设置服务有 `describe()` 且名单含本插件的**裸条目 id** → 按条目 id 读写（0.1.7）；只有 `register` / `get` → 自持命名空间 `chat-import`（0.1.5）；两者皆无 → 读默认、写不持久化（`available:false`）。
+- 修复**设置命名空间带种类前缀导致每次保存都 409 `settings-conflict`**：0.1.7 的 loader 把 `ctx.fiber.entry.id` 报成 `<kind>:<id>`，而设置服务按裸 id 建索引；现在剥离前缀（拿不到时回退 patch 声明的 `import-claude`）。
+- 修复**插件以软链 / 本地 link 安装时 `@deepseek-ai/schemastery` 解析不到**：解析锚点改为运行中的 harness bin，再退回普通解析；并对 `.volatile()` 做能力探测——旧宿主（无 volatile）不再在模块加载期抛错报废整个插件。
+- 插件入口导出 `Config`（三个字段标 `volatile`）并声明 `settings.configure({ auto: false })`（本插件自带面板，不生成宿主自动页）；`package.json` 增补 `icon`（相对路径、包内、约 1 KB、带彩度，适配宿主 `<img>` 渲染拿不到 `currentColor`）。
+
+<h3 id="en-unreleased">New Features</h3>
+
+- The import panel's settings response (`/api-import/prefs`) gained a read-only **`probe` self-check block**: the host settings service's key facts (`hasSettings` / `hasDescribe` / `hasRegister`, the namespace list, `namespaceState`) in one response, for diagnosing the 0.1.5 / 0.1.7 settings-model difference.
+- New [docs/SETTINGS-MIGRATION.md](docs/SETTINGS-MIGRATION.md) ([中文](docs/SETTINGS-MIGRATION.zh-CN.md)): a DSH 0.1.5 → 0.1.7 settings-page migration guide with the verbatim measured errors, ready to forward to other plugin authors.
+
+### Bug Fixes
+
+- Fix **import preferences being entirely broken on a 0.1.7 host**: 0.1.7 removed `settings.register()` (the namespace became the profile entry id and the schema the plugin's exported `Config`), while the plugin still took the old registration path and threw on registration. One codebase now supports both: when the host settings service has `describe()` and its list contains the plugin's **bare entry id** → read/write by entry id (0.1.7); only `register` / `get` → the plugin-owned namespace `chat-import` (0.1.5); neither → defaults are read and writes are not persisted (`available:false`).
+- Fix **every save returning 409 `settings-conflict` because the namespace carried a kind prefix**: the 0.1.7 loader reports `ctx.fiber.entry.id` as `<kind>:<id>`, while the settings service indexes by the bare id; the prefix is now stripped (falling back to the patch-declared `import-claude`).
+- Fix **`@deepseek-ai/schemastery` not resolving when the plugin is installed as a symlink / local link**: the resolution anchor is now the running harness bin, with ordinary resolution as a fallback; `.volatile()` is capability-probed, so an older host (no volatile) no longer throws at module load and takes the whole plugin down.
+- The plugin entry now exports `Config` (all three fields marked `volatile`) and declares `settings.configure({ auto: false })` (this plugin ships its own panel, so no host auto page is generated); `package.json` gained `icon` (relative path, inside the package, ~1 KB, coloured, since the host renders it as `<img>` and never provides `currentColor`).
+
 ## [0.19.1] - 2026-09-22
 
 [中文](#cn-0.19.1) | [English](#en-0.19.1)

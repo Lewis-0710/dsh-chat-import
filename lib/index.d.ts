@@ -12,6 +12,11 @@
 
 export declare const name: string
 export declare const inject: string[]
+/**
+ * 0.1.7 设置模型：条目 Config（三个字段均 volatile，命名空间 = profile 条目 id）。
+ * 旧宿主（无 schemastery.volatile）为 undefined，走 legacy 命名空间注册。
+ */
+export declare const Config: unknown
 
 /** 本插件消费的 host 公开服务最小面（sessionPersistence / fs / tools / workspaceRegistry）。 */
 export interface HostContext {
