@@ -512,7 +512,8 @@
 
       const body = React.createElement(React.Fragment, null,
           // 来源与落点读成一行：「从 全部来源 导入到 DSH 会话环境」——「从」与「导入到」都是
-          // 连接词，两个下拉只显文本（品牌标只在下拉弹层里出现）
+          // 连接词，两个下拉的触发器只显文本（品牌标 / 锁标只在下拉弹层里出现），否则这句话
+          // 会被两段 logo 切成读不通的碎片
           React.createElement("div", { style: style.rowPlain },
             React.createElement("span", { style: style.rowJoin }, t("from")),
             React.createElement(SearchableSelect, {
@@ -520,7 +521,9 @@
               disabled: importing,
               searchPlaceholder: t("combobox.search.source"),
               noMatchLabel: t("combobox.noMatch"),
-              options: SOURCES.map((s) => ({ value: s, label: s ? (SOURCE_LABELS[s] || s) : t("allSources"), mark: s || null })),
+              // lockup: true —— 来源行画品牌锁标（mark + 字标），只有这个下拉开：导入目标
+              // 与工作区行仍然只画「品牌标 + 文本」（目标的 DSH 不是品牌名，工作区没有品牌）
+              options: SOURCES.map((s) => ({ value: s, label: s ? (SOURCE_LABELS[s] || s) : t("allSources"), mark: s || null, lockup: true })),
               onChange: (v) => {
                 setSource(v);
                 setWorkspaceFilter("");

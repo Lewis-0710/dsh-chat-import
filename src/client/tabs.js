@@ -251,23 +251,31 @@
           searchable ? React.createElement("div", { style: style.selectDivider }) : null,
           React.createElement("div", { style: { ...style.selectList, maxHeight: listMax + "px" }, role: "listbox" },
             shown.length === 0 && React.createElement("div", { style: style.selectEmpty }, noMatchLabel),
-            shown.map((o) => React.createElement("button", {
-              key: o.value, type: "button", role: "option", "aria-selected": o.value === value,
-              onClick: () => pick(o.value),
-              onMouseEnter: () => setHover(o.value),
-              onMouseLeave: () => setHover((h) => (h === o.value ? null : h)),
-              style: {
-                ...style.selectRow,
-                fontWeight: o.value === value ? 500 : 400,
-                background: hover === o.value ? colors.hover : "transparent",
+            shown.map((o) => {
+              // 来源行画品牌锁标（mark + 字标，整块替换名称文本）；没有官方品牌标、或该下拉
+              // 没开锁标（导入目标 / 工作区）的行保持「槽位 + 文本」
+              const lockup = o.lockup === true && o.mark ? sourceLogo(o.mark) : null;
+              return React.createElement("button", {
+                key: o.value, type: "button", role: "option", "aria-selected": o.value === value,
+                onClick: () => pick(o.value),
+                onMouseEnter: () => setHover(o.value),
+                onMouseLeave: () => setHover((h) => (h === o.value ? null : h)),
+                style: {
+                  ...style.selectRow,
+                  fontWeight: o.value === value ? 500 : 400,
+                  background: hover === o.value ? colors.hover : "transparent",
+                },
               },
-            },
-              hasMarks
-                ? React.createElement("span", { style: style.selectMarkSlot },
-                  o.mark ? React.createElement(BrandMark, { id: o.mark, size: 16 }) : null)
-                : null,
-              React.createElement("span", { style: style.selectRowText }, o.label),
+                lockup
+                  ? React.createElement(SourceLockup, { id: o.mark, label: o.label })
+                  : React.createElement(React.Fragment, null,
+                    hasMarks
+                      ? React.createElement("span", { style: style.selectMarkSlot },
+                        o.mark ? React.createElement(BrandMark, { id: o.mark, size: 16 }) : null)
+                      : null,
+                    React.createElement("span", { style: style.selectRowText }, o.label)),
               o.sub ? React.createElement("span", { style: style.selectRowSub, title: o.sub }, o.sub) : null,
               React.createElement("span", { style: style.selectCheck },
-                o.value === value ? React.createElement(Icon, { name: "check", size: 13 }) : null))))));
+                o.value === value ? React.createElement(Icon, { name: "check", size: 13 }) : null));
+            }))));
     }
