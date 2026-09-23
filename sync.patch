@@ -1,5 +1,5 @@
 diff --git a/README.md b/README.md
-index 1dfec49..567a979 100644
+index 6f1fe98..c3d76c3 100644
 --- a/README.md
 +++ b/README.md
 @@ -1,3 +1,14 @@
@@ -7,10 +7,10 @@ index 1dfec49..567a979 100644
 +> **Fork 维护版本** | 本仓库是 [Nwflower/dsh-chat-import](https://github.com/Nwflower/dsh-chat-import) 的维护分支。
 +> 
 +> **与上游差异**：
-+> 1. **导入面板删除增强**：扩展 `lib/client.js` 导入面板，支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
++> 1. **导入面板删除增强**：扩展客户端面板（`src/client/` 与编译产物 `lib/client.js`），支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
 +> 2. **源文件清理接口**：新增 `POST /api-import/delete-source` 路由与 `deleteSourceFile` 清理方法（`lib/purge.mjs`、`lib/panel.mjs`），支持物理删除源文件并自动清理 registry 记录及扫描缓存。
-+> 3. **跨平台单测修复**：修复 `test/goose.test.mjs` 在 macOS（`darwin`）平台下的 Goose 数据目录路径解析断言。
-+> 4. **上游同步保障**：内置 `sync.sh`（Patch-First, Smart-Merge 同步脚本）与 `sync.patch` 补丁文件，便于持续跟踪上游更新。
++> 3. **跨平台单测修复**：修复相关单测在 macOS（`darwin`）环境下的路径解析兼容性。
++> 4. **上游同步保障**：内置 `sync.sh` 与 `sync.patch` 补丁文件，保持与上游最新版本（v0.19.3）同步。
 +> 
 +> 详见 [sync.patch](./sync.patch)。
 +
@@ -18,7 +18,7 @@ index 1dfec49..567a979 100644
  
  <img src="./assets/dci-promo.png" alt="DSH Chat Import" width="100%" />
 diff --git a/README.zh-CN.md b/README.zh-CN.md
-index c6eb7e0..a2dab08 100644
+index 638e858..c487d42 100644
 --- a/README.zh-CN.md
 +++ b/README.zh-CN.md
 @@ -1,3 +1,14 @@
@@ -26,10 +26,10 @@ index c6eb7e0..a2dab08 100644
 +> **Fork 维护版本** | 本仓库是 [Nwflower/dsh-chat-import](https://github.com/Nwflower/dsh-chat-import) 的维护分支。
 +> 
 +> **与上游差异**：
-+> 1. **导入面板删除增强**：扩展 `lib/client.js` 导入面板，支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
++> 1. **导入面板删除增强**：扩展客户端面板（`src/client/` 与编译产物 `lib/client.js`），支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
 +> 2. **源文件清理接口**：新增 `POST /api-import/delete-source` 路由与 `deleteSourceFile` 清理方法（`lib/purge.mjs`、`lib/panel.mjs`），支持物理删除源文件并自动清理 registry 记录及扫描缓存。
-+> 3. **跨平台单测修复**：修复 `test/goose.test.mjs` 在 macOS（`darwin`）平台下的 Goose 数据目录路径解析断言。
-+> 4. **上游同步保障**：内置 `sync.sh`（Patch-First, Smart-Merge 同步脚本）与 `sync.patch` 补丁文件，便于持续跟踪上游更新。
++> 3. **跨平台单测修复**：修复相关单测在 macOS（`darwin`）环境下的路径解析兼容性。
++> 4. **上游同步保障**：内置 `sync.sh` 与 `sync.patch` 补丁文件，保持与上游最新版本（v0.19.3）同步。
 +> 
 +> 详见 [sync.patch](./sync.patch)。
 +
@@ -40,48 +40,34 @@ diff --git a/bin/dsh-chat-import.mjs b/bin/dsh-chat-import.mjs
 old mode 100644
 new mode 100755
 diff --git a/lib/client.js b/lib/client.js
-index 13153e0..ec550d6 100644
+index 596476c..50fd2d4 100644
 --- a/lib/client.js
 +++ b/lib/client.js
-@@ -61,6 +61,9 @@ window.__ModuleLoader__.load({
-         "selected.count": "已选 {n}",
+@@ -85,6 +85,11 @@ window.__ModuleLoader__.load({
+         "refresh.title": "重新扫描；源文件未改时复用 scan-cache，通常几秒完成",
          "importing": "导入中…",
          "import.selected": "导入所选 ({n})",
 +        "delete.selected": "删除所选 ({n})",
 +        "delete.selected.title": "批量删除选中的会话（不可逆）",
 +        "delete.confirm.batch": "将删除 {n} 个选中的会话/源文件。此操作不可撤销，确定继续？",
-         "pageSize": "每页",
-         "search": "搜索",
-         "previous": "上一页",
-@@ -75,6 +78,8 @@ window.__ModuleLoader__.load({
-         "history.confirm.title": "确认删除",
-         "history.confirm.all": "将删除 {n} 个本插件导入的会话及其工件，并清理空工作区。此操作不可撤销，确定继续？",
-         "history.confirm.one": "将删除会话 {id} 及其工件。此操作不可撤销，确定继续？",
 +        "delete.source.title": "删除该源文件（原始 .jsonl 记录）",
 +        "delete.confirm.source": "将删除源文件 {path}。此操作不可撤销，确定继续？",
-         "history.confirm.ok": "确认删除",
-         "history.confirm.cancel": "取消",
-         "history.purge.done": "删除完成：成功 {deleted}，失败 {failed}",
-@@ -196,6 +201,9 @@ window.__ModuleLoader__.load({
-         "selected.count": "{n} selected",
+         "import.selectedArchive": "导入所选并归档旧会话 ({n})",
+         "import.selectedArchive.short": "导入并归档 ({n})",
+         "import.selectedArchive.title": "按目标代次导入所选会话，并在宿主里归档对应的源会话（迁移收尾）",
+@@ -242,6 +247,11 @@ window.__ModuleLoader__.load({
+         "refresh.title": "Rescan; unchanged files reuse scan-cache and finish in seconds",
          "importing": "Importing…",
          "import.selected": "Import selected ({n})",
 +        "delete.selected": "Delete selected ({n})",
 +        "delete.selected.title": "Batch delete selected sessions (irreversible)",
 +        "delete.confirm.batch": "Will delete {n} selected sessions/source files. This action cannot be undone. Continue?",
-         "pageSize": "Per page",
-         "search": "Search",
-         "previous": "Previous",
-@@ -210,6 +218,8 @@ window.__ModuleLoader__.load({
-         "history.confirm.title": "Confirm deletion",
-         "history.confirm.all": "This will delete {n} plugin-imported sessions and their artifacts, and clean up empty workspaces. This cannot be undone. Continue?",
-         "history.confirm.one": "This will delete session {id} and its artifacts. This cannot be undone. Continue?",
 +        "delete.source.title": "Delete the source file (original .jsonl record)",
 +        "delete.confirm.source": "This will delete the source file {path}. This cannot be undone. Continue?",
-         "history.confirm.ok": "Delete",
-         "history.confirm.cancel": "Cancel",
-         "history.purge.done": "Removal done: {deleted} succeeded, {failed} failed",
-@@ -624,6 +634,10 @@ window.__ModuleLoader__.load({
+         "import.selectedArchive": "Import selected and archive old sessions ({n})",
+         "import.selectedArchive.short": "Import & archive ({n})",
+         "import.selectedArchive.title": "Import the selected sessions in the target generation and archive the matching source sessions in the host",
+@@ -872,6 +882,10 @@ window.__ModuleLoader__.load({
          flex: "1", background: C.accent, color: C.accentForeground, border: "none", borderRadius: "8px",
          padding: "7px 10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
        },
@@ -89,20 +75,82 @@ index 13153e0..ec550d6 100644
 +        flex: "1", background: C.error, color: "#fff", border: "none", borderRadius: "8px",
 +        padding: "7px 10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
 +      },
-       result: { padding: "7px 12px", fontSize: "12px", color: C.dim, borderBottom: "1px solid " + C.border, background: C.field },
-       // 顶部不留 padding：工作区分组头 sticky 到 top:0 后与列表顶缘齐平，背景
-       // 完整盖住背后滚过的行，不再在顶部露出 8px 缝隙泄漏列表背后的内容。
-@@ -1377,6 +1391,9 @@ window.__ModuleLoader__.load({
-       const [page, setPage] = useState(0); // 当前页（0 基）
-       const [pageSize, setPageSize] = useState(50); // 每页条数（50/100/500）
-       const [collapsed, setCollapsed] = useState(new Set()); // 已折叠的工作区分组名
+       // Toast（面板底部浮层）：跳过提示 + 强调色动作（「忽略警告」= force 重导）
+       toast: {
+         position: "absolute", left: "12px", right: "12px", bottom: "12px", zIndex: 40,
+@@ -1772,8 +1786,8 @@ window.__ModuleLoader__.load({
+      *  元素树，不再重建（大档位下这是主要开销）。比较字段全是标量，回调由父级 useCallback
+      *  固定引用。 */
+     const SessionRow = React.memo(function SessionRow(props) {
+-      const { s, style, colors, badgeOverlay, label, time, tip, checked, hot, importing, onToggle, onImport, groupName } = props;
+-      const imported = s.importStatus === "imported";
++      const { s, style, colors, badgeOverlay, label, time, tip, checked, hot, importing, onToggle, onImport, groupName, onDelete, deleteBusy } = props;
++      const imported = s.importStatus === "imported" || s.importStatus === "partial" || s.importStatus === "archived";
+       const lit = hot || checked;
+       const key = itemKey(s);
+       // 勾选入口 = **整行**（点行内任意处，含来源标 / 时间 / 空白），不再要求瞄准 22px 的
+@@ -1803,7 +1817,7 @@ window.__ModuleLoader__.load({
+         onMouseLeave: () => props.onHot(null, key, groupName),
+       },
+         React.createElement(SourceBadge, {
+-          format: s.format, checked, disabled: importing, size: 22,
++          format: s.format, checked, disabled: importing || deleteBusy, size: 22,
+           title: label,
+           palette: { border: colors.border, accent: colors.accent, text: colors.text, overlay: badgeOverlay },
+         }),
+@@ -1813,19 +1827,34 @@ window.__ModuleLoader__.load({
+           }, s.title || props.noTitle)),
+         React.createElement("div", { style: style.rowSlot },
+           hot ? null : React.createElement("span", { style: style.rowTime }, time),
+-          React.createElement("button", {
+-            style: hot ? (imported ? style.syncBtn : style.importBtn) : style.rowBtnIdle,
+-            disabled: importing,
+-            // 行本身可勾选 → 按钮必须拦住冒泡，否则「点导入」会顺带勾上这一行
++          hot ? React.createElement("div", { style: { display: "flex", gap: "4px", alignItems: "center" } },
++            React.createElement("button", {
++              style: imported ? style.syncBtn : style.importBtn,
++              disabled: importing || deleteBusy,
++              onClick: (e) => { e.stopPropagation(); onImport(s); },
++              onFocus: () => props.onHot(key, null, groupName),
++              onBlur: () => props.onHot(null, key, groupName),
++              title: imported ? props.syncTitle : props.importTitle,
++            }, imported ? props.syncLabel : props.importLabel),
++            React.createElement("button", {
++              style: { ...style.syncBtn, color: colors.error, borderColor: colors.error, padding: "0 6px" },
++              disabled: importing || deleteBusy,
++              onClick: (e) => { e.stopPropagation(); onDelete(s); },
++              onFocus: () => props.onHot(key, null, groupName),
++              onBlur: () => props.onHot(null, key, groupName),
++              title: imported ? props.purgeTitle : props.deleteSourceTitle,
++            }, React.createElement(Icon, { name: "x", size: 12 })))
++          : React.createElement("button", {
++            style: style.rowBtnIdle,
++            disabled: importing || deleteBusy,
+             onClick: (e) => { e.stopPropagation(); onImport(s); },
+-            onFocus: () => props.onHot(key, null, groupName),
+-            onBlur: () => props.onHot(null, key, groupName),
+             title: imported ? props.syncTitle : props.importTitle,
+           }, imported ? props.syncLabel : props.importLabel)));
+     }, (a, b) => a.s === b.s && a.checked === b.checked && a.hot === b.hot && a.importing === b.importing
++      && a.deleteBusy === b.deleteBusy
+       && a.label === b.label && a.time === b.time && a.tip === b.tip
+       && a.colors === b.colors && a.badgeOverlay === b.badgeOverlay && a.style === b.style
+-      && a.onToggle === b.onToggle && a.onImport === b.onImport && a.onHot === b.onHot);
++      && a.onToggle === b.onToggle && a.onImport === b.onImport && a.onDelete === b.onDelete && a.onHot === b.onHot);
+ 
+     /** 发现 + 导入面板：来源过滤 + 按工作区文件夹分组 + 单选/多选导入 */
+     function DiscoveryPanel() {
+@@ -1849,6 +1878,9 @@ window.__ModuleLoader__.load({
+       const [error, setError] = useState(null);
+       const [selected, setSelected] = useState(new Map()); // key → 会话条目
+       const [importing, setImporting] = useState(false);
 +      const [deleteBusy, setDeleteBusy] = useState(false);
 +      const [deleteConfirm, setDeleteConfirm] = useState(null); // { sessionId, title, sourcePath, isImported }
 +      const [selectedDeleteSelected, setSelectedDeleteSelected] = useState(null); // 批量删除确认：选中的会话数组
- 
-       // 流式加载：后台扫描 + after 游标轮询——会话按发现顺序逐条 append 到缓冲，
-       // 首屏不被全量扫描阻塞；每次请求只取 cursor 之后的增量（服务端 seq 去重）。
-@@ -1476,6 +1493,77 @@ window.__ModuleLoader__.load({
+       const [result, setResult] = useState(null);
+       // 已导入跳过的会话 → Toast（「忽略警告」用 force 再导一次）
+       const [skippedToast, setSkippedToast] = useState(null);
+@@ -2035,6 +2067,76 @@ window.__ModuleLoader__.load({
          }
        };
  
@@ -140,14 +188,13 @@ index 13153e0..ec550d6 100644
 +        }
 +      };
 +
-+      // 批量删除：对选中项逐条调用删除，计数成功/失败
 +      const doDeleteSelected = async (items) => {
 +        setDeleteBusy(true);
 +        setResult(null);
 +        let deleted = 0, failed = 0;
 +        try {
 +          for (const s of items) {
-+            const isImported = s.importStatus === "imported" || s.importStatus === "partial";
++            const isImported = s.importStatus === "imported" || s.importStatus === "partial" || s.importStatus === "archived";
 +            let resp;
 +            if (isImported) {
 +              resp = await fetch("/api-import/purge", {
@@ -177,115 +224,89 @@ index 13153e0..ec550d6 100644
 +        }
 +      };
 +
-       const toggle = (s) => {
-         const key = itemKey(s);
-         setSelected((prev) => {
-@@ -1561,8 +1649,7 @@ window.__ModuleLoader__.load({
-           const key = itemKey(s);
-           const checked = selected.has(key);
-           const ts = s.lastActiveAt || s.createdAt;
--          const badgeColor = statusColor(s.importStatus, colors);
--          const imported = s.importStatus === "imported";
-+          const imported = s.importStatus === "imported" || s.importStatus === "partial" || s.importStatus === "archived";
-           const ctxTok = fmtTokenCount(s.contextTokens);
-           return React.createElement("div", {
-             key,
-@@ -1571,7 +1658,7 @@ window.__ModuleLoader__.load({
-             onMouseLeave: (e) => { e.currentTarget.style.background = "transparent"; },
-           },
-             React.createElement(SourceBadge, {
--              format: s.format, checked, disabled: importing,
-+              format: s.format, checked, disabled: importing || deleteBusy,
-               onClick: () => toggle(s),
-               title: sourceLabel(s.format),
-               ariaLabel: sourceLabel(s.format) + " · " + t("multiSelect.title"),
-@@ -1584,19 +1671,33 @@ window.__ModuleLoader__.load({
-                   ? React.createElement("span", { title: String(s.contextTokens) }, t("count.contextTokens", { n: ctxTok }))
-                   : React.createElement("span", null, t("count.messages", { n: typeof s.messageCount === "number" ? s.messageCount : "—" })),
-                 ...(s.gitBranch ? [React.createElement("span", { style: style.git }, s.gitBranch + (s.gitDirty ? " ✗" : ""))] : []),
--                React.createElement("span", { title: fmtTime(ts) }, relTime(ts, t) || t("timeUnknown")),
--                React.createElement("span", { style: { ...style.badge, color: badgeColor, borderColor: badgeColor } }, statusLabel(s.importStatus, t)))),
--            imported
--              ? React.createElement("button", {
--                style: style.syncBtn, disabled: importing,
--                onClick: () => doImport([toItem(s)]),
--                title: t("sync.title"),
--              }, t("sync"))
--              : React.createElement("button", {
--                style: style.importBtn, disabled: importing,
--                onClick: () => doImport([toItem(s)]),
--                title: t("import.one.title"),
--              }, t("import.one")));
-+                React.createElement("span", { title: fmtTime(ts) }, relTime(ts, t) || t("timeUnknown")))),
-+            React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", flex: "none" } },
-+              imported
-+                ? React.createElement("div", { style: { display: "flex", gap: "4px" } },
-+                  React.createElement("button", {
-+                    style: style.syncBtn, disabled: importing || deleteBusy,
-+                    onClick: () => doImport([toItem(s)]),
-+                    title: t("sync.title"),
-+                  }, t("sync")),
-+                  React.createElement("button", {
-+                    style: { ...style.syncBtn, color: colors.error, borderColor: colors.error },
-+                    disabled: importing || deleteBusy,
-+                    onClick: () => setDeleteConfirm({ sessionId: s.sessionId, title: s.title, sourcePath: s.sourcePath, isImported: true }),
-+                    title: t("history.purgeOne.title"),
-+                  }, React.createElement(Icon, { name: "x", size: 12 })))
-+                : React.createElement("div", { style: { display: "flex", gap: "4px" } },
-+                  React.createElement("button", {
-+                    style: style.importBtn, disabled: importing || deleteBusy,
-+                    onClick: () => doImport([toItem(s)]),
-+                    title: t("import.one.title"),
-+                  }, t("import.one")),
-+                  React.createElement("button", {
-+                    style: { ...style.syncBtn, color: colors.error, borderColor: colors.error },
-+                    disabled: importing || deleteBusy,
-+                    onClick: () => setDeleteConfirm({ sessionId: s.sessionId, title: s.title, sourcePath: s.sourcePath, isImported: false }),
-+                    title: t("delete.source.title"),
-+                  }, React.createElement(Icon, { name: "x", size: 12 })))));
+       const toggleAll = () => {
+         if (!sessions || sessions.length === 0) return;
+         const allKeys = sessions.map(itemKey);
+@@ -2090,6 +2192,7 @@ window.__ModuleLoader__.load({
+           setHotKeyGroup((current) => (only && current === null ? null : current));
+         },
+         toggle: (key) => {
++          if (deleteBusy) return;
+           setSelected((prev) => {
+             const next = new Map(prev);
+             if (next.has(key)) { next.delete(key); return next; }
+@@ -2099,11 +2202,17 @@ window.__ModuleLoader__.load({
+             return next;
+           });
+         },
+-        import: (s) => doImport([toItem(s)]),
++        import: (s) => { if (!deleteBusy) doImport([toItem(s)]); },
++        delete: (s) => {
++          if (deleteBusy) return;
++          const isImported = s.importStatus === "imported" || s.importStatus === "partial" || s.importStatus === "archived";
++          setDeleteConfirm({ sessionId: s.sessionId, title: s.title, sourcePath: s.sourcePath, isImported });
++        },
+       };
+       const onHot = useCallback((key, only, group) => rowActions.current.hot(key, only, group), []);
+       const onToggle = useCallback((key) => rowActions.current.toggle(key), []);
+       const onImport = useCallback((s) => rowActions.current.import(s), []);
++      const onDelete = useCallback((s) => rowActions.current.delete(s), []);
+ 
+       // 路径筛选（工作区）+ 时间筛选（最后活跃/创建时间落在窗口内）叠加
+       const filteredItems = useMemo(() => {
+@@ -2233,8 +2342,10 @@ window.__ModuleLoader__.load({
+             checked: selected.has(key),
+             hot: hotKey === key,
+             importing,
++            deleteBusy,
+             onToggle,
+             onImport,
++            onDelete,
+             onHot,
+             noTitle: t("noTitle"),
+             multiSelectTitle: t("multiSelect.title"),
+@@ -2242,6 +2353,8 @@ window.__ModuleLoader__.load({
+             syncTitle: t("sync.title"),
+             importLabel: t("import.one"),
+             importTitle: t("import.one.title"),
++            purgeTitle: t("history.purgeOne.title"),
++            deleteSourceTitle: t("delete.source.title"),
+           });
          });
-         return React.createElement(React.Fragment, { key: group.name },
-           React.createElement("div", {
-@@ -1691,7 +1792,13 @@ window.__ModuleLoader__.load({
+         // 分组头：与皮肤一致——悬停（或组内任意行悬停）时文字变亮并露出折叠箭头，
+@@ -2466,9 +2579,70 @@ window.__ModuleLoader__.load({
                style: { ...style.primaryBtn, opacity: selected.size === 0 || importing ? 0.55 : 1 },
                disabled: selected.size === 0 || importing,
                onClick: () => doImport([...selected.values()].map(toItem)),
--            }, importing ? t("importing") : t("import.selected", { n: selected.size }))),
+-            }, importing ? t("importing") : t("import.selected", { n: selected.size }))));
 +            }, importing ? t("importing") : t("import.selected", { n: selected.size })),
 +            React.createElement("button", {
-+              style: { ...style.dangerBtn, opacity: selected.size === 0 || importing ? 0.55 : 1 },
-+              disabled: selected.size === 0 || importing,
++              style: { ...style.dangerBtn, opacity: selected.size === 0 || importing || deleteBusy ? 0.55 : 1 },
++              disabled: selected.size === 0 || importing || deleteBusy,
 +              onClick: () => setSelectedDeleteSelected([...selected.values()]),
 +              title: t("delete.selected.title"),
-+            }, t("delete.selected", { n: selected.size }))),
-           result && React.createElement("div", { style: style.result }, result),
-           scanHint && React.createElement("div", { style: style.scanning }, scanHint),
-           !stream.started && !error && !scanHint && React.createElement("div", { style: style.status }, t("loading")),
-@@ -1723,8 +1830,64 @@ window.__ModuleLoader__.load({
-               disabled: importing,
-               onChange: (e) => { setPageSize(Number(e.target.value)); setPage(0); },
-             }, PAGE_SIZES.map((n) => React.createElement("option", { key: n, value: n }, String(n))))));
++            }, t("delete.selected", { n: selected.size }))));
 +
 +      const deleteDialog = deleteConfirm && React.createElement("div", {
 +        style: {
-+          position: "absolute", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 2,
++          position: "absolute", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 50,
 +          display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
 +        },
 +      },
 +        React.createElement("div", {
 +          style: {
-+            background: colors.bg, border: "1px solid " + colors.border, borderRadius: "12px",
-+            padding: "16px", maxWidth: "360px", width: "100%",
++            background: colors.surface, border: "1px solid " + colors.border, borderRadius: "12px",
++            padding: "16px", maxWidth: "360px", width: "100%", boxShadow: colors.elevation,
 +          },
 +        },
-+          React.createElement("div", { style: { fontWeight: 600, marginBottom: "8px" } }, t("history.confirm.title")),
++          React.createElement("div", { style: { fontWeight: 600, marginBottom: "8px", color: colors.text } }, t("history.confirm.title")),
 +          React.createElement("div", { style: { fontSize: "13px", color: colors.dim, marginBottom: "14px", lineHeight: 1.5 } },
 +            deleteConfirm.isImported
 +              ? t("history.confirm.one", { id: deleteConfirm.sessionId || "" })
 +              : t("delete.confirm.source", { path: deleteConfirm.sourcePath || "" })),
 +          React.createElement("div", { style: { display: "flex", gap: "8px", justifyContent: "flex-end" } },
 +            React.createElement("button", {
-+              style: style.toolBtn, disabled: deleteBusy,
++              style: style.pageBtn, disabled: deleteBusy,
 +              onClick: () => setDeleteConfirm(null),
 +            }, t("history.confirm.cancel")),
 +            React.createElement("button", {
@@ -294,25 +315,24 @@ index 13153e0..ec550d6 100644
 +              onClick: () => doDelete(deleteConfirm.sessionId, deleteConfirm.sourcePath, deleteConfirm.isImported),
 +            }, t("history.confirm.ok")))));
 +
-+      // 批量删除确认对话框
 +      const deleteBatchDialog = selectedDeleteSelected && React.createElement("div", {
 +        style: {
-+          position: "absolute", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 2,
++          position: "absolute", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 50,
 +          display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
 +        },
 +      },
 +        React.createElement("div", {
 +          style: {
-+            background: colors.bg, border: "1px solid " + colors.border, borderRadius: "12px",
-+            padding: "16px", maxWidth: "360px", width: "100%",
++            background: colors.surface, border: "1px solid " + colors.border, borderRadius: "12px",
++            padding: "16px", maxWidth: "360px", width: "100%", boxShadow: colors.elevation,
 +          },
 +        },
-+          React.createElement("div", { style: { fontWeight: 600, marginBottom: "8px" } }, t("history.confirm.title")),
++          React.createElement("div", { style: { fontWeight: 600, marginBottom: "8px", color: colors.text } }, t("history.confirm.title")),
 +          React.createElement("div", { style: { fontSize: "13px", color: colors.dim, marginBottom: "14px", lineHeight: 1.5 } },
 +            t("delete.confirm.batch", { n: selectedDeleteSelected.length })),
 +          React.createElement("div", { style: { display: "flex", gap: "8px", justifyContent: "flex-end" } },
 +            React.createElement("button", {
-+              style: style.toolBtn, disabled: deleteBusy,
++              style: style.pageBtn, disabled: deleteBusy,
 +              onClick: () => setSelectedDeleteSelected(null),
 +            }, t("history.confirm.cancel")),
 +            React.createElement("button", {
@@ -328,19 +348,19 @@ index 13153e0..ec550d6 100644
  
      /** 插件 logo（assets/import.svg 内联，跟随 currentColor 适配明暗主题） */
 diff --git a/lib/panel.mjs b/lib/panel.mjs
-index 5f8d470..370998d 100644
+index 2edd607..be8d2b7 100644
 --- a/lib/panel.mjs
 +++ b/lib/panel.mjs
 @@ -25,7 +25,7 @@ import { makeDiscoveryHost } from './discovery-host.mjs'
  import { IMPORT_SPECS } from './toolkit.mjs'
- import { importTranscript, importDirectory } from './import-core.mjs'
+ import { withHostFormatVersion, hostSessionFormatVersion, importTranscript, importDirectory } from './import-core.mjs'
  import { describeImportPrefs, readImportPrefs, updateImportPrefs, INJECT_MODES } from './import-prefs.mjs'
 -import { listImportHistory, purgeAllImports, purgeBySourcePath, deleteImportedSession } from './purge.mjs'
 +import { listImportHistory, purgeAllImports, purgeBySourcePath, deleteImportedSession, deleteSourceFile } from './purge.mjs'
  import { isTransferTarget, transferDiscoveryItem } from './transfer.mjs'
  
  // 客户端来源 id（claude-code 等）→ discovery format 短名（权威清单见 discovery 的 FORMATS）。
-@@ -402,6 +402,40 @@ export function registerPanelRoutes(ctx, ws, registryDir) {
+@@ -461,6 +461,40 @@ export function registerPanelRoutes(ctx, ws, registryDir) {
        }
      },
    })
@@ -382,7 +402,7 @@ index 5f8d470..370998d 100644
      kind: 'exact',
      path: '/api-import/prefs',
 diff --git a/lib/purge.mjs b/lib/purge.mjs
-index 1b59ad0..170b3c5 100644
+index 9315639..d842c2c 100644
 --- a/lib/purge.mjs
 +++ b/lib/purge.mjs
 @@ -7,10 +7,11 @@
@@ -395,10 +415,10 @@ index 1b59ad0..170b3c5 100644
  import { join } from 'node:path'
  import { loadImports, removeImport, saveImports, unwrapRecord, readSessionEvents, canReadSessionEvents } from './imports.mjs'
 +import { clearScanCache, SCAN_CACHE_FILE } from './discovery.mjs'
+ import { rememberIgnore, sourceIgnoreKey } from './ignore.mjs'
  
  // DSH 会话 id 合法字符：支持字母、数字、连字符以及下划线（mintSessionId 会引入下划线），长 1~128。
- const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
-@@ -367,3 +368,27 @@ export async function purgeBySourcePath(ctx, registryDir, sourcePath, { confirm
+@@ -376,3 +377,27 @@ export async function purgeBySourcePath(ctx, registryDir, sourcePath, { confirm
    await removeImport(registryDir, sourcePath)
    return { sourcePath, deleted, failed, results }
  }
@@ -426,6 +446,762 @@ index 1b59ad0..170b3c5 100644
 +  }
 +  return { sourcePath, sourceDeleted }
 +}
+diff --git a/package-lock.json b/package-lock.json
+index bfae4e3..e9aed95 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1382,35 +1382,6 @@
+         "@deepseek-ai/dsh-tools": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-base/node_modules/@deepseek-ai/dsh-agent-presets": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-agent-presets/-/dsh-agent-presets-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-h0j7IfuHPYh/oJR7SDxh6pzSgUeaHwaaAIg5X0RNL6Z2oQrq0oUmjtArCVVw7nkgt48DjdBwx4EwJ9IdNrHxug==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "js-yaml": "^4.1.0",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/cordis-plugin-include": "^1.0.7",
+-        "@deepseek-ai/cordis-plugin-loader": "^1.0.3",
+-        "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-atomic-write": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-home-paths": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-scope": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-settings": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-system-prompt": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-tools": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-base/node_modules/@deepseek-ai/dsh-anonymous-user-id": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-anonymous-user-id/-/dsh-anonymous-user-id-0.1.5-rc.2.tgz",
+@@ -4430,35 +4401,6 @@
+         "@deepseek-ai/dsh-util-values": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-agent-presets": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-agent-presets/-/dsh-agent-presets-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-h0j7IfuHPYh/oJR7SDxh6pzSgUeaHwaaAIg5X0RNL6Z2oQrq0oUmjtArCVVw7nkgt48DjdBwx4EwJ9IdNrHxug==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "js-yaml": "^4.1.0",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/cordis-plugin-include": "^1.0.7",
+-        "@deepseek-ai/cordis-plugin-loader": "^1.0.3",
+-        "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-atomic-write": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-home-paths": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-scope": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-settings": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-system-prompt": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-tools": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-anonymous-user-id": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-anonymous-user-id/-/dsh-anonymous-user-id-0.1.5-rc.2.tgz",
+@@ -4563,21 +4505,6 @@
+         "@deepseek-ai/cordis": "^4.0.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-jobs": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-jobs/-/dsh-jobs-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-C3rBEuWhtDBlxMeKykFvSfBwjSPxkLsvKCFq8BrFdjDmZC1lI9GooMjPZkPxXVbogVrcOBaYVtJdOYJ4+rIpQg==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-brand": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-llm": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-llm/-/dsh-llm-0.1.5-rc.2.tgz",
+@@ -4701,23 +4628,6 @@
+         "@deepseek-ai/dsh-scope": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-session-persistence": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-persistence/-/dsh-session-persistence-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-0nDeM+H+3YR0CH/IVlhjNL9bDx2G4QbliaLekVxY0jdZHM7RqdN/fWPKjeCKbXcRq6qdn9QcmvXU3uWZdErlIw==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/dsh-util-values": "^0.1.5-rc.2"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-brand": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-timeout": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-session-projection": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-projection/-/dsh-session-projection-0.1.5-rc.2.tgz",
+@@ -4732,77 +4642,6 @@
+         "@deepseek-ai/dsh-session": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-session-projection-cache": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-projection-cache/-/dsh-session-projection-cache-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-dS4GGlgZBBHv0U7C4+pQssApxao8Jbt3tMSGQeRU3xpmR5wP8PucR20wTiFThNrsUjdIs2Q/2IKw5bcnkaHwCw==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/dsh-util-values": "^0.1.5-rc.2",
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-storage-domain": "^0.1.5-rc.2"
+-      }
+-    },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-session-query": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-query/-/dsh-session-query-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-Ntv/yYwhRhhXO3UkRKc1RIIk4RMLVR6jR8mdphRILEZoxPGjZxMJR95RuZg8TuLERbmGH8AkPAEKD6HWHqWh1g==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-brand": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-llm": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-persistence": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection-cache": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-title": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-tool-todo": "^0.1.5-rc.2"
+-      },
+-      "peerDependenciesMeta": {
+-        "@deepseek-ai/dsh-session-persistence": {
+-          "optional": true
+-        },
+-        "@deepseek-ai/dsh-session-projection": {
+-          "optional": true
+-        },
+-        "@deepseek-ai/dsh-session-projection-cache": {
+-          "optional": true
+-        }
+-      }
+-    },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-session-title": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-title/-/dsh-session-title-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-lQ1PzIdySxANbhVM9blxCSlqR0iF2GVCiE9R1Qm0VJJue/G9ZUasz+jGQJeAVZi7PHjVWCALljtqpcnaOZq+6g==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/dsh-util-values": "^0.1.5-rc.2",
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-brand": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-llm": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-settings": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-settings/-/dsh-settings-0.1.5-rc.2.tgz",
+@@ -4820,34 +4659,6 @@
+         "@deepseek-ai/schemastery": "^3.18.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-storage": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-storage/-/dsh-storage-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-mYt6+JSRxA5fSUcYnI3JFvYw9/TKUyykz5JWoZZ3MxWudItfhw+CV6T3kn3/bpTbWIQnGesSeY+0pJJVz0xBAA==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2"
+-      }
+-    },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-storage-domain": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-storage-domain/-/dsh-storage-domain-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-NZ9U14kqcCnF4F+ynrTlBLb+S9FEOwSLkfdjDgdfrFdHh4c2WsRKWxyeYbL8AME1rB+XxLp4YQBx8LQ0Kiy62A==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-storage": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-subagent": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-subagent/-/dsh-subagent-0.1.5-rc.2.tgz",
+@@ -4938,26 +4749,6 @@
+         "@deepseek-ai/cordis": "^4.0.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-tool-todo": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-tool-todo/-/dsh-tool-todo-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-TmyoAthal1pOCQ/XwlohcxDXdI5pq5GlZiQpLaI7e+rAruqneBPz/0Zjv6/rlOMrseoENMx+H0sazwoL9LufTQ==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-tools": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-app/node_modules/@deepseek-ai/dsh-tools": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-tools/-/dsh-tools-0.1.5-rc.2.tgz",
+@@ -5094,35 +4885,6 @@
+         "@deepseek-ai/dsh-tools": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-agent-presets": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-agent-presets/-/dsh-agent-presets-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-h0j7IfuHPYh/oJR7SDxh6pzSgUeaHwaaAIg5X0RNL6Z2oQrq0oUmjtArCVVw7nkgt48DjdBwx4EwJ9IdNrHxug==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "js-yaml": "^4.1.0",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/cordis-plugin-include": "^1.0.7",
+-        "@deepseek-ai/cordis-plugin-loader": "^1.0.3",
+-        "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-atomic-write": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-home-paths": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-scope": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-settings": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-system-prompt": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-tools": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-anonymous-user-id": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-anonymous-user-id/-/dsh-anonymous-user-id-0.1.5-rc.2.tgz",
+@@ -5568,55 +5330,6 @@
+         "@deepseek-ai/dsh-session": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-session-projection-cache": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-projection-cache/-/dsh-session-projection-cache-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-dS4GGlgZBBHv0U7C4+pQssApxao8Jbt3tMSGQeRU3xpmR5wP8PucR20wTiFThNrsUjdIs2Q/2IKw5bcnkaHwCw==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/dsh-util-values": "^0.1.5-rc.2",
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-storage-domain": "^0.1.5-rc.2"
+-      }
+-    },
+-    "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-session-query": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-query/-/dsh-session-query-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-Ntv/yYwhRhhXO3UkRKc1RIIk4RMLVR6jR8mdphRILEZoxPGjZxMJR95RuZg8TuLERbmGH8AkPAEKD6HWHqWh1g==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-brand": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-llm": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-persistence": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection-cache": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-title": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-tool-todo": "^0.1.5-rc.2"
+-      },
+-      "peerDependenciesMeta": {
+-        "@deepseek-ai/dsh-session-persistence": {
+-          "optional": true
+-        },
+-        "@deepseek-ai/dsh-session-projection": {
+-          "optional": true
+-        },
+-        "@deepseek-ai/dsh-session-projection-cache": {
+-          "optional": true
+-        }
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-session-title": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-title/-/dsh-session-title-0.1.5-rc.2.tgz",
+@@ -5668,34 +5381,6 @@
+         "@deepseek-ai/dsh-subprocess": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-storage": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-storage/-/dsh-storage-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-mYt6+JSRxA5fSUcYnI3JFvYw9/TKUyykz5JWoZZ3MxWudItfhw+CV6T3kn3/bpTbWIQnGesSeY+0pJJVz0xBAA==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2"
+-      }
+-    },
+-    "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-storage-domain": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-storage-domain/-/dsh-storage-domain-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-NZ9U14kqcCnF4F+ynrTlBLb+S9FEOwSLkfdjDgdfrFdHh4c2WsRKWxyeYbL8AME1rB+XxLp4YQBx8LQ0Kiy62A==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-storage": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-subagent": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-subagent/-/dsh-subagent-0.1.5-rc.2.tgz",
+@@ -5872,26 +5557,6 @@
+         "@deepseek-ai/dsh-tools": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-tool-todo": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-tool-todo/-/dsh-tool-todo-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-TmyoAthal1pOCQ/XwlohcxDXdI5pq5GlZiQpLaI7e+rAruqneBPz/0Zjv6/rlOMrseoENMx+H0sazwoL9LufTQ==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-invariants": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-tools": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh-sdk-minimal/node_modules/@deepseek-ai/dsh-tools": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-tools/-/dsh-tools-0.1.5-rc.2.tgz",
+@@ -7653,25 +7318,6 @@
+         "@deepseek-ai/dsh-session": "^0.1.5-rc.2"
+       }
+     },
+-    "node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-session-projection-cache": {
+-      "version": "0.1.5-rc.2",
+-      "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-projection-cache/-/dsh-session-projection-cache-0.1.5-rc.2.tgz",
+-      "integrity": "sha512-dS4GGlgZBBHv0U7C4+pQssApxao8Jbt3tMSGQeRU3xpmR5wP8PucR20wTiFThNrsUjdIs2Q/2IKw5bcnkaHwCw==",
+-      "license": "MIT",
+-      "optional": true,
+-      "peer": true,
+-      "dependencies": {
+-        "@deepseek-ai/dsh-util-values": "^0.1.5-rc.2",
+-        "@deepseek-ai/schemastery": "^3.18.2",
+-        "zod": "^4.4.3"
+-      },
+-      "peerDependencies": {
+-        "@deepseek-ai/cordis": "^4.0.2",
+-        "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
+-        "@deepseek-ai/dsh-storage-domain": "^0.1.5-rc.2"
+-      }
+-    },
+     "node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-session-query": {
+       "version": "0.1.5-rc.2",
+       "resolved": "https://registry.npmjs.org/@deepseek-ai/dsh-session-query/-/dsh-session-query-0.1.5-rc.2.tgz",
+diff --git a/src/client/discovery.js b/src/client/discovery.js
+index 2a06c35..f1895ca 100644
+--- a/src/client/discovery.js
++++ b/src/client/discovery.js
+@@ -54,8 +54,8 @@
+      *  元素树，不再重建（大档位下这是主要开销）。比较字段全是标量，回调由父级 useCallback
+      *  固定引用。 */
+     const SessionRow = React.memo(function SessionRow(props) {
+-      const { s, style, colors, badgeOverlay, label, time, tip, checked, hot, importing, onToggle, onImport, groupName } = props;
+-      const imported = s.importStatus === "imported";
++      const { s, style, colors, badgeOverlay, label, time, tip, checked, hot, importing, onToggle, onImport, groupName, onDelete, deleteBusy } = props;
++      const imported = s.importStatus === "imported" || s.importStatus === "partial" || s.importStatus === "archived";
+       const lit = hot || checked;
+       const key = itemKey(s);
+       // 勾选入口 = **整行**（点行内任意处，含来源标 / 时间 / 空白），不再要求瞄准 22px 的
+@@ -85,7 +85,7 @@
+         onMouseLeave: () => props.onHot(null, key, groupName),
+       },
+         React.createElement(SourceBadge, {
+-          format: s.format, checked, disabled: importing, size: 22,
++          format: s.format, checked, disabled: importing || deleteBusy, size: 22,
+           title: label,
+           palette: { border: colors.border, accent: colors.accent, text: colors.text, overlay: badgeOverlay },
+         }),
+@@ -95,19 +95,34 @@
+           }, s.title || props.noTitle)),
+         React.createElement("div", { style: style.rowSlot },
+           hot ? null : React.createElement("span", { style: style.rowTime }, time),
+-          React.createElement("button", {
+-            style: hot ? (imported ? style.syncBtn : style.importBtn) : style.rowBtnIdle,
+-            disabled: importing,
+-            // 行本身可勾选 → 按钮必须拦住冒泡，否则「点导入」会顺带勾上这一行
++          hot ? React.createElement("div", { style: { display: "flex", gap: "4px", alignItems: "center" } },
++            React.createElement("button", {
++              style: imported ? style.syncBtn : style.importBtn,
++              disabled: importing || deleteBusy,
++              onClick: (e) => { e.stopPropagation(); onImport(s); },
++              onFocus: () => props.onHot(key, null, groupName),
++              onBlur: () => props.onHot(null, key, groupName),
++              title: imported ? props.syncTitle : props.importTitle,
++            }, imported ? props.syncLabel : props.importLabel),
++            React.createElement("button", {
++              style: { ...style.syncBtn, color: colors.error, borderColor: colors.error, padding: "0 6px" },
++              disabled: importing || deleteBusy,
++              onClick: (e) => { e.stopPropagation(); onDelete(s); },
++              onFocus: () => props.onHot(key, null, groupName),
++              onBlur: () => props.onHot(null, key, groupName),
++              title: imported ? props.purgeTitle : props.deleteSourceTitle,
++            }, React.createElement(Icon, { name: "x", size: 12 })))
++          : React.createElement("button", {
++            style: style.rowBtnIdle,
++            disabled: importing || deleteBusy,
+             onClick: (e) => { e.stopPropagation(); onImport(s); },
+-            onFocus: () => props.onHot(key, null, groupName),
+-            onBlur: () => props.onHot(null, key, groupName),
+             title: imported ? props.syncTitle : props.importTitle,
+           }, imported ? props.syncLabel : props.importLabel)));
+     }, (a, b) => a.s === b.s && a.checked === b.checked && a.hot === b.hot && a.importing === b.importing
++      && a.deleteBusy === b.deleteBusy
+       && a.label === b.label && a.time === b.time && a.tip === b.tip
+       && a.colors === b.colors && a.badgeOverlay === b.badgeOverlay && a.style === b.style
+-      && a.onToggle === b.onToggle && a.onImport === b.onImport && a.onHot === b.onHot);
++      && a.onToggle === b.onToggle && a.onImport === b.onImport && a.onDelete === b.onDelete && a.onHot === b.onHot);
+ 
+     /** 发现 + 导入面板：来源过滤 + 按工作区文件夹分组 + 单选/多选导入 */
+     function DiscoveryPanel() {
+@@ -131,6 +146,9 @@
+       const [error, setError] = useState(null);
+       const [selected, setSelected] = useState(new Map()); // key → 会话条目
+       const [importing, setImporting] = useState(false);
++      const [deleteBusy, setDeleteBusy] = useState(false);
++      const [deleteConfirm, setDeleteConfirm] = useState(null); // { sessionId, title, sourcePath, isImported }
++      const [selectedDeleteSelected, setSelectedDeleteSelected] = useState(null); // 批量删除确认：选中的会话数组
+       const [result, setResult] = useState(null);
+       // 已导入跳过的会话 → Toast（「忽略警告」用 force 再导一次）
+       const [skippedToast, setSkippedToast] = useState(null);
+@@ -317,6 +335,76 @@
+         }
+       };
+ 
++      const doDelete = async (sessionId, sourcePath, isImported) => {
++        setDeleteBusy(true);
++        setResult(null);
++        try {
++          let resp;
++          if (isImported) {
++            resp = await fetch("/api-import/purge", {
++              method: "POST",
++              headers: { "Content-Type": "application/json" },
++              body: JSON.stringify({ confirm: true, sessionId }),
++            });
++          } else {
++            resp = await fetch("/api-import/delete-source", {
++              method: "POST",
++              headers: { "Content-Type": "application/json" },
++              body: JSON.stringify({ confirm: true, sourcePath }),
++            });
++          }
++          const data = await readJson(resp);
++          if (data && data.ok === true) {
++            setResult(t("history.purge.done", { deleted: 1, failed: 0 }));
++            setSelected(new Map());
++            setEpoch((n) => n + 1);
++          } else {
++            setResult((data && data.error) || t("error.route"));
++          }
++        } catch (err) {
++          setResult(t("error.import", { msg: String((err && err.message) || err) }));
++        } finally {
++          setDeleteBusy(false);
++          setDeleteConfirm(null);
++        }
++      };
++
++      const doDeleteSelected = async (items) => {
++        setDeleteBusy(true);
++        setResult(null);
++        let deleted = 0, failed = 0;
++        try {
++          for (const s of items) {
++            const isImported = s.importStatus === "imported" || s.importStatus === "partial" || s.importStatus === "archived";
++            let resp;
++            if (isImported) {
++              resp = await fetch("/api-import/purge", {
++                method: "POST",
++                headers: { "Content-Type": "application/json" },
++                body: JSON.stringify({ confirm: true, sessionId: s.sessionId }),
++              });
++            } else {
++              resp = await fetch("/api-import/delete-source", {
++                method: "POST",
++                headers: { "Content-Type": "application/json" },
++                body: JSON.stringify({ confirm: true, sourcePath: s.sourcePath }),
++              });
++            }
++            const data = await readJson(resp);
++            if (data && data.ok === true) deleted++;
++            else failed++;
++          }
++          setResult(t("history.purge.done", { deleted, failed }));
++          setSelected(new Map());
++          setEpoch((n) => n + 1);
++        } catch (err) {
++          setResult(t("error.import", { msg: String((err && err.message) || err) }));
++        } finally {
++          setDeleteBusy(false);
++          setSelectedDeleteSelected(null);
++        }
++      };
++
+       const toggleAll = () => {
+         if (!sessions || sessions.length === 0) return;
+         const allKeys = sessions.map(itemKey);
+@@ -372,6 +460,7 @@
+           setHotKeyGroup((current) => (only && current === null ? null : current));
+         },
+         toggle: (key) => {
++          if (deleteBusy) return;
+           setSelected((prev) => {
+             const next = new Map(prev);
+             if (next.has(key)) { next.delete(key); return next; }
+@@ -381,11 +470,17 @@
+             return next;
+           });
+         },
+-        import: (s) => doImport([toItem(s)]),
++        import: (s) => { if (!deleteBusy) doImport([toItem(s)]); },
++        delete: (s) => {
++          if (deleteBusy) return;
++          const isImported = s.importStatus === "imported" || s.importStatus === "partial" || s.importStatus === "archived";
++          setDeleteConfirm({ sessionId: s.sessionId, title: s.title, sourcePath: s.sourcePath, isImported });
++        },
+       };
+       const onHot = useCallback((key, only, group) => rowActions.current.hot(key, only, group), []);
+       const onToggle = useCallback((key) => rowActions.current.toggle(key), []);
+       const onImport = useCallback((s) => rowActions.current.import(s), []);
++      const onDelete = useCallback((s) => rowActions.current.delete(s), []);
+ 
+       // 路径筛选（工作区）+ 时间筛选（最后活跃/创建时间落在窗口内）叠加
+       const filteredItems = useMemo(() => {
+@@ -515,8 +610,10 @@
+             checked: selected.has(key),
+             hot: hotKey === key,
+             importing,
++            deleteBusy,
+             onToggle,
+             onImport,
++            onDelete,
+             onHot,
+             noTitle: t("noTitle"),
+             multiSelectTitle: t("multiSelect.title"),
+@@ -524,6 +621,8 @@
+             syncTitle: t("sync.title"),
+             importLabel: t("import.one"),
+             importTitle: t("import.one.title"),
++            purgeTitle: t("history.purgeOne.title"),
++            deleteSourceTitle: t("delete.source.title"),
+           });
+         });
+         // 分组头：与皮肤一致——悬停（或组内任意行悬停）时文字变亮并露出折叠箭头，
+@@ -748,7 +847,68 @@
+               style: { ...style.primaryBtn, opacity: selected.size === 0 || importing ? 0.55 : 1 },
+               disabled: selected.size === 0 || importing,
+               onClick: () => doImport([...selected.values()].map(toItem)),
+-            }, importing ? t("importing") : t("import.selected", { n: selected.size }))));
++            }, importing ? t("importing") : t("import.selected", { n: selected.size })),
++            React.createElement("button", {
++              style: { ...style.dangerBtn, opacity: selected.size === 0 || importing || deleteBusy ? 0.55 : 1 },
++              disabled: selected.size === 0 || importing || deleteBusy,
++              onClick: () => setSelectedDeleteSelected([...selected.values()]),
++              title: t("delete.selected.title"),
++            }, t("delete.selected", { n: selected.size }))));
++
++      const deleteDialog = deleteConfirm && React.createElement("div", {
++        style: {
++          position: "absolute", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 50,
++          display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
++        },
++      },
++        React.createElement("div", {
++          style: {
++            background: colors.surface, border: "1px solid " + colors.border, borderRadius: "12px",
++            padding: "16px", maxWidth: "360px", width: "100%", boxShadow: colors.elevation,
++          },
++        },
++          React.createElement("div", { style: { fontWeight: 600, marginBottom: "8px", color: colors.text } }, t("history.confirm.title")),
++          React.createElement("div", { style: { fontSize: "13px", color: colors.dim, marginBottom: "14px", lineHeight: 1.5 } },
++            deleteConfirm.isImported
++              ? t("history.confirm.one", { id: deleteConfirm.sessionId || "" })
++              : t("delete.confirm.source", { path: deleteConfirm.sourcePath || "" })),
++          React.createElement("div", { style: { display: "flex", gap: "8px", justifyContent: "flex-end" } },
++            React.createElement("button", {
++              style: style.pageBtn, disabled: deleteBusy,
++              onClick: () => setDeleteConfirm(null),
++            }, t("history.confirm.cancel")),
++            React.createElement("button", {
++              style: { ...style.primaryBtn, flex: "none", width: "auto", padding: "6px 14px" },
++              disabled: deleteBusy,
++              onClick: () => doDelete(deleteConfirm.sessionId, deleteConfirm.sourcePath, deleteConfirm.isImported),
++            }, t("history.confirm.ok")))));
++
++      const deleteBatchDialog = selectedDeleteSelected && React.createElement("div", {
++        style: {
++          position: "absolute", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 50,
++          display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
++        },
++      },
++        React.createElement("div", {
++          style: {
++            background: colors.surface, border: "1px solid " + colors.border, borderRadius: "12px",
++            padding: "16px", maxWidth: "360px", width: "100%", boxShadow: colors.elevation,
++          },
++        },
++          React.createElement("div", { style: { fontWeight: 600, marginBottom: "8px", color: colors.text } }, t("history.confirm.title")),
++          React.createElement("div", { style: { fontSize: "13px", color: colors.dim, marginBottom: "14px", lineHeight: 1.5 } },
++            t("delete.confirm.batch", { n: selectedDeleteSelected.length })),
++          React.createElement("div", { style: { display: "flex", gap: "8px", justifyContent: "flex-end" } },
++            React.createElement("button", {
++              style: style.pageBtn, disabled: deleteBusy,
++              onClick: () => setSelectedDeleteSelected(null),
++            }, t("history.confirm.cancel")),
++            React.createElement("button", {
++              style: { ...style.dangerBtn, flex: "none", width: "auto", padding: "6px 14px" },
++              disabled: deleteBusy,
++              onClick: () => doDeleteSelected(selectedDeleteSelected),
++            }, t("history.confirm.ok")))));
++
+       return React.createElement("div", { ref: rootRef, style: { display: "flex", flexDirection: "column", minHeight: 0, flex: 1, position: "relative" } },
+-        body);
++        body, deleteDialog, deleteBatchDialog);
+     }
+diff --git a/src/client/i18n.js b/src/client/i18n.js
+index ac81048..c19ef0d 100644
+--- a/src/client/i18n.js
++++ b/src/client/i18n.js
+@@ -71,6 +71,11 @@
+         "refresh.title": "重新扫描；源文件未改时复用 scan-cache，通常几秒完成",
+         "importing": "导入中…",
+         "import.selected": "导入所选 ({n})",
++        "delete.selected": "删除所选 ({n})",
++        "delete.selected.title": "批量删除选中的会话（不可逆）",
++        "delete.confirm.batch": "将删除 {n} 个选中的会话/源文件。此操作不可撤销，确定继续？",
++        "delete.source.title": "删除该源文件（原始 .jsonl 记录）",
++        "delete.confirm.source": "将删除源文件 {path}。此操作不可撤销，确定继续？",
+         "import.selectedArchive": "导入所选并归档旧会话 ({n})",
+         "import.selectedArchive.short": "导入并归档 ({n})",
+         "import.selectedArchive.title": "按目标代次导入所选会话，并在宿主里归档对应的源会话（迁移收尾）",
+@@ -228,6 +233,11 @@
+         "refresh.title": "Rescan; unchanged files reuse scan-cache and finish in seconds",
+         "importing": "Importing…",
+         "import.selected": "Import selected ({n})",
++        "delete.selected": "Delete selected ({n})",
++        "delete.selected.title": "Batch delete selected sessions (irreversible)",
++        "delete.confirm.batch": "Will delete {n} selected sessions/source files. This action cannot be undone. Continue?",
++        "delete.source.title": "Delete the source file (original .jsonl record)",
++        "delete.confirm.source": "This will delete the source file {path}. This cannot be undone. Continue?",
+         "import.selectedArchive": "Import selected and archive old sessions ({n})",
+         "import.selectedArchive.short": "Import & archive ({n})",
+         "import.selectedArchive.title": "Import the selected sessions in the target generation and archive the matching source sessions in the host",
+diff --git a/src/client/styles.js b/src/client/styles.js
+index 34e1c00..a24f59b 100644
+--- a/src/client/styles.js
++++ b/src/client/styles.js
+@@ -156,6 +156,10 @@
+         flex: "1", background: C.accent, color: C.accentForeground, border: "none", borderRadius: "8px",
+         padding: "7px 10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+       },
++      dangerBtn: {
++        flex: "1", background: C.error, color: "#fff", border: "none", borderRadius: "8px",
++        padding: "7px 10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
++      },
+       // Toast（面板底部浮层）：跳过提示 + 强调色动作（「忽略警告」= force 重导）
+       toast: {
+         position: "absolute", left: "12px", right: "12px", bottom: "12px", zIndex: 40,
 diff --git a/test/goose.test.mjs b/test/goose.test.mjs
 index 20599f3..a11c142 100644
 --- a/test/goose.test.mjs
