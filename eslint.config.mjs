@@ -30,4 +30,15 @@ export default [
       'no-constant-condition': 'error',
     },
   },
+  {
+    // src/client/ 是 lib/client.js 的分片源：片段共享 bundle 的 factory 作用域
+    //（禁 import/export，跨片直接引用彼此的顶层声明），逐文件 lint 必然误报
+    // no-undef / no-unused-vars——这两条的检查职责由 scripts/build-client.mjs 的
+    // 整体语法门禁承担。其余规则（eqeqeq / no-constant-condition）照常生效。
+    files: ['src/client/**'],
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+    },
+  },
 ]

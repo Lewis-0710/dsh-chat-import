@@ -12,6 +12,11 @@
 
 export declare const name: string
 export declare const inject: string[]
+/**
+ * 0.1.7 设置模型：条目 Config（三个字段均 volatile，命名空间 = profile 条目 id）。
+ * 旧宿主（无 schemastery.volatile）为 undefined，走 legacy 命名空间注册。
+ */
+export declare const Config: unknown
 
 /** 本插件消费的 host 公开服务最小面（sessionPersistence / fs / tools / workspaceRegistry）。 */
 export interface HostContext {
@@ -78,7 +83,7 @@ export type LocalJsonlFormat =
 export type ChatFormat =
   | 'claude' | 'codex' | 'chatgpt' | 'cursor' | 'gemini' | 'antigravity' | 'reasonix' | 'opencode'
   | 'mimocode' | 'kilocode' | 'zcode' | 'grokbuild' | 'openclaw' | 'hermes' | 'pi' | 'kimi'
-  | 'qoder' | 'workbuddy' | 'qwen' | 'dsh' | 'local-jsonl'
+  | 'qoder' | 'workbuddy' | 'qwen' | 'dsh' | 'dsh4' | 'local-jsonl'
 
 /** import_chat 参数：公共导入参数（ImportOptions）+ 源格式 + 源专属参数。 */
 export interface ImportChatOptions extends ImportOptions {
@@ -536,7 +541,7 @@ export interface RetractResult {
 export type ScanFormat =
   | 'claude' | 'codex' | 'cursor' | 'gemini' | 'antigravity' | 'reasonix' | 'opencode' | 'mimocode'
   | 'kilocode' | 'zcode' | 'grokbuild' | 'openclaw' | 'pi' | 'hermes' | 'kimi'
-  | 'qoder' | 'chatgpt' | 'workbuddy' | 'qwen' | 'dsh'
+  | 'qoder' | 'chatgpt' | 'workbuddy' | 'qwen' | 'dsh' | 'dsh4'
 
 export type ImportStatusLabel = 'imported' | 'partial' | 'not-imported' | 'archived'
 
@@ -557,7 +562,6 @@ export interface DiscoveredSession {
   cwd?: string | null
   createdAt?: number | null
   lastActiveAt?: number | null
-  messageCount?: number | null
   sourcePath: string
   gitBranch?: string | null
   gitDirty?: boolean | null

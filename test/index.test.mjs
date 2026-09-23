@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { zstdCompressSync } from 'node:zlib'
 import { Buffer } from 'node:buffer'
-import { apply, readOpencodeDb, exportClaudeSession } from '../index.mjs'
+import { apply, readOpencodeDb, exportClaudeSession } from '../lib/index.mjs'
 import { discoverSessions } from '../lib/discovery.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { resolveRegistryDir, loadImports, rememberImport, listPersistedIds, readSessionRecord, readSessionEvents, writeSession } from '../lib/imports.mjs'
@@ -18,8 +18,8 @@ import { syncClaudeSession, evaluateWritebackGuards, readFileTailUuid } from '..
 import { clearScanCache } from '../lib/discovery.mjs'
 import { clearWorkspacePathCache, slugifyClaudeCwd } from '../lib/cwd-map.mjs'
 import { restampSession, sanitizeJsonValue, prepareHostMeta } from '../lib/import-core.mjs'
-import { SESSION_FORMAT_VERSION } from '../convert.mjs'
-import { verifyOpencodeImportJson } from '../export.mjs'
+import { SESSION_FORMAT_VERSION } from '../lib/convert/index.mjs'
+import { verifyOpencodeImportJson } from '../lib/export/index.mjs'
 import { hostAbs, hostAbsText } from './_support/host-path.mjs'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
@@ -409,8 +409,9 @@ test('scan_discover：目录探测 claude、注入过滤、schema 稳定、零�
   assert.equal(aaa.title, '帮我重构这个模块')
   assert.equal(aaa.project, 'claude-proj') // 记录内 cwd basename（REQ-40 项目名提取）
   assert.equal(aaa.importStatus, 'not-imported') // registry 为空
-  assert.equal(aaa.messageCount, null) // claude 只读文件头，不计数
   assert.equal(aaa.sourcePath, root + '\\proj-a\\sess-aaa.jsonl')
+  // 面板不再展示消息条数 → 发现条目不带 messageCount（schema 同步剔除）
+  assert.ok(!('messageCount' in aaa))
 
   const bbb = first.sessions.find((s) => s.sessionId === 'sess-bbb')
   assert.equal(bbb.title, '真实问题') // 注入首行被过滤（REQ-40 标题提取）
@@ -841,7 +842,7 @@ function continueSession(history, over = {}) {
   })
 }
 const continueIndex = JSON.stringify([
-  { sessionId: CID, title: '修登录页分页', dateCreated: String(CONTINUE_TS), workspaceDirectory: CCWD, messageCount: 2 },
+  { sessionId: CID, title: '修登录页分页', dateCreated: String(CONTINUE_TS), workspaceDirectory: CCWD},
 ])
 
 test('import_continue 单文件导入：落盘、归组、索引带出的创建时间、返回值符合 schema', async () => {
@@ -1072,7 +1073,7 @@ test('import_cline legacy：taskHistory 元数据 + api history 经真实工具�
 
 // ---- import_goose 集成（真实 SQLite 临时库） ----
 
-// 合成 Goose 会话库（sessions/messages 两表，schema 对齐 lib/goose.mjs 头部契约）。
+// 合成 Goose 会话库（sessions/messages 两表，schema 对齐 lib/sources/goose.mjs 头部契约）。
 const GOOSE_CWD = hostAbs('D:/demo/goose-proj')
 const GOOSE_TS = 1745343730 // Unix 秒（goose 的 created_timestamp 是整数）
 function gooseFixtureSessions() {
@@ -4581,7 +4582,7 @@ test('REQ-36 守卫：源文件被外部修改（size/version 变化）→ skipp
   const v = await syncClaudeSession(ctx, { sessionId: 'import-sync-sess-001' }, { registryDir: resolveRegistryDir() })
   assert.equal(v.status, 'skipped')
   assert.equal(v.conflictDetected, 'source-modified-externally')
-  assert.equal(v.writeback.lastWrittenSeq, 8) // 导入记录事件数（含 session/title，无标记）
+  assert.equal(v.writeback.lastWrittenSeq, 9) // 导入记录事件数（含 system head 与 session/title，无标记）
 })
 
 test('REQ-36 守卫：源文件缩小 → skipped + sourceShrunk', async () => {
@@ -4652,7 +4653,7 @@ test('REQ-36 CAS 竞态：写入瞬间版本失配 → write-version-mismatch，
   assert.equal(v.conflictDetected, 'write-version-mismatch')
   assert.ok(!tree[src].includes('竞态提问')) // 尾行未写入
   const reg = await loadImports(resolveRegistryDir())
-  assert.equal(reg.imports[src].writeback.lastWrittenSeq, 8) // 水印未推进（导入记录事件数）
+  assert.equal(reg.imports[src].writeback.lastWrittenSeq, 9) // 水印未推进（导入记录事件数，含 system head）
 })
 
 test('REQ-36 预检失败回滚：目标文件不符合严格布局（无 mode 头）→ 写后回滚，水印不推进', async () => {
@@ -4675,7 +4676,7 @@ test('REQ-36 预检失败回滚：目标文件不符合严格布局（无 mode �
   assert.equal(tree[src], before) // 回滚：文件恢复为写前内容
   assert.equal(writes.length, wCount + 2) // 前向写 + 回滚写
   const reg = await loadImports(resolveRegistryDir())
-  assert.equal(reg.imports[src].writeback.lastWrittenSeq, 8) // 水印未推进（导入记录事件数）
+  assert.equal(reg.imports[src].writeback.lastWrittenSeq, 9) // 水印未推进（导入记录事件数，含 system head）
 })
 
 test('REQ-36 写回后重导幂等：sync 后 import_claude → already-imported 无重复 append', async () => {
@@ -4763,7 +4764,7 @@ test('REQ-36 dryRun：完整计算 + 预检但不写盘、不更新 registry', a
   assert.equal(v.status, 'synced')
   assert.equal(v.dryRun, true)
   assert.equal(v.appendedTurns, 1)
-  assert.equal(v.writeback.lastWrittenSeq, 14) // 将写入的水印（未持久化；含 session/title）
+  assert.equal(v.writeback.lastWrittenSeq, 15) // 将写入的水印（未持久化；含 system head 与 session/title）
   assert.equal(tree[src], before) // 不写盘
   const reg = await loadImports(resolveRegistryDir())
   assert.equal(reg.imports[src].writeback, undefined) // 不更新 registry
@@ -5647,6 +5648,169 @@ test('REQ-41 /api-import/import handler：单选导入（claude 夹具）→ imp
   assert.equal(again.data.ok, true)
   assert.equal(again.data.results[0].status, 'already-imported')
   assert.equal(persistence.sessions.size, 1)
+})
+
+test('REQ-41 /api-import/sessions handler：source dsh4 是已知来源（来源列表拆代次后不能漏）', async () => {
+  // 面板的 SOURCE_FORMAT 与 discovery 的 FORMATS 必须同步：漏掉 dsh4 时面板会回
+  // 「未知来源: dsh4」→ 列表空、默认「导入到」也拿不到 dshVersion。
+  const { ctx, webRoutes } = makeCtx({})
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/sessions')
+  assert.ok(route)
+  const { res, data } = await invokeImportRoute(route, { source: 'dsh4', after: 0 })
+  assert.equal(res.status, 200, JSON.stringify(data))
+  assert.equal(data.ok, true)
+  assert.equal(typeof data.dshVersion, 'number')
+  const dsh = await invokeImportRoute(route, { source: 'dsh', after: 0 })
+  assert.equal(dsh.res.status, 200, JSON.stringify(dsh.data))
+  // 未知来源仍 400
+  const bad = await invokeImportRoute(route, { source: 'dsh9', after: 0 })
+  assert.equal(bad.res.status, 400)
+})
+
+test('REQ-41 /api-import/import handler：target dsh3 / dsh4 显式指定会话日志代次（header.version）', async () => {
+  // 宿主按 header.version 落盘（sessionPersistence.create(header) 认它），所以面板的
+  // 「导入到 → DSH（V3/V4 会话格式）」要能把 header 与事件形状一起按该代次产出。
+  const root = 'D:\\demo\\claude\\projects'
+  const mk = (name) => [
+    '{"sessionId":"' + name + '","type":"user","cwd":"/demo/claude-proj","message":{"role":"user","content":"代次目标"}}',
+    '{"sessionId":"' + name + '","type":"assistant","message":{"role":"assistant","content":"好"}}',
+  ].join('\n')
+  const src3 = root + '\\proj-v3\\sess-v3.jsonl'
+  const src4 = root + '\\proj-v4\\sess-v4.jsonl'
+  const tree = { [root]: 'dir', [root + '\\proj-v3']: 'dir', [root + '\\proj-v4']: 'dir', [src3]: mk('sess-v3'), [src4]: mk('sess-v4') }
+  const { ctx, persistence, webRoutes } = makeCtx(tree)
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  const v3 = await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: src3 }], target: 'dsh3' })
+  assert.equal(v3.data.ok, true, JSON.stringify(v3.data))
+  assert.equal(v3.data.target, 'dsh3')
+  // 会话 id 由转换层按源 id 派生；这里只认「落盘了且 header.version = 3」
+  const idsV3 = [...persistence.sessions.keys()]
+  assert.equal(idsV3.length, 1, JSON.stringify(v3.data.results))
+  assert.equal(persistence.sessions.get(idsV3[0]).meta.version, 3)
+  assert.equal(persistence.sessions.get(idsV3[0]).events[0].type, 'turn/start')
+
+  const v4 = await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: src4 }], target: 'dsh4' })
+  assert.equal(v4.data.ok, true, JSON.stringify(v4.data))
+  const idsV4 = [...persistence.sessions.keys()].filter((id) => !idsV3.includes(id))
+  assert.equal(idsV4.length, 1, JSON.stringify([...persistence.sessions.keys()]))
+  assert.equal(persistence.sessions.get(idsV4[0]).meta.version, 4)
+
+  // 未知目标仍 400（dsh3 / dsh4 是 DSH 目标，不是转投目标）
+  const bad = await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: src3 }], target: 'dsh9' })
+  assert.equal(bad.res.status, 400)
+})
+
+test('REQ-41 面板显式目标代次 = 宿主原生代次 → 走 agents.create（会话即时进列表，无需刷新）', async () => {
+  // 面板「导入到」的默认目标取自扫描到的 dshVersion（= 宿主原生代次）。此时代次覆盖与
+  // 原生一致，必须走 agents.create：它会 enter + announce 会话，宿主 api-session-controller
+  // 据此转发 api-session/added，客户端会话列表无需刷新即出现新会话。sessionPersistence.create
+  // 只落盘、不进内存会话表，因此此前默认路径（覆盖恒生效）导入后必须刷新页面。
+  // 目标代次与原生不一致（此处 V4 宿主上的 target=dsh3）时才只能直写——原生 store 只认
+  // 原生形状，塞旧代次会被拒。
+  const root = 'D:\\demo\\claude\\projects'
+  const mk = (name) => [
+    '{"sessionId":"' + name + '","type":"user","cwd":"/demo/claude-proj","message":{"role":"user","content":"代次目标"}}',
+    '{"sessionId":"' + name + '","type":"assistant","message":{"role":"assistant","content":"好"}}',
+  ].join('\n')
+  const src4 = root + '\\proj-v4\\sess-v4.jsonl'
+  const src3 = root + '\\proj-v3\\sess-v3.jsonl'
+  const tree = { [root]: 'dir', [root + '\\proj-v4']: 'dir', [root + '\\proj-v3']: 'dir', [src4]: mk('sess-v4'), [src3]: mk('sess-v3') }
+  const agentsCalls = []
+  const services = {
+    agents: {
+      async create({ sessionId, meta, seed }) {
+        agentsCalls.push({ sessionId, meta, seed })
+        await persistence.create(meta)
+        await persistence.append(sessionId, seed)
+      },
+    },
+  }
+  const { ctx, persistence, webRoutes } = makeCtx(tree, { services })
+  // 宿主原生代次由存量会话 header 推断（插件不 import 宿主包）：空库时默认常量是 V3，
+  // 会掩盖「原生 = 4」的分支。先落一条 V4 存量会话，模拟真实的 V4 宿主。
+  persistence.sessions.set('host-existing-v4', { meta: { id: 'host-existing-v4', version: 4, createdAt: 1, isSeeded: false, delegationDepth: 0 }, events: [] })
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+
+  const v4 = await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: src4 }], target: 'dsh4' })
+  assert.equal(v4.data.ok, true, JSON.stringify(v4.data))
+  assert.equal(agentsCalls.length, 1, '目标代次 = 原生代次必须走 agents.create（发 session/created）')
+  assert.equal(agentsCalls[0].meta.version, 4)
+
+  const v3 = await invokeImportRoute(route, { items: [{ source: 'claude-code', sourcePath: src3 }], target: 'dsh3' })
+  assert.equal(v3.data.ok, true, JSON.stringify(v3.data))
+  assert.equal(agentsCalls.length, 1, '目标代次 ≠ 原生代次不得走 agents.create（store 只认原生形状）')
+  assert.ok([...persistence.sessions.values()].some((s) => s.meta.version === 3), [...persistence.sessions.keys()].join(','))
+})
+
+// DSH 会话日志夹具（真实文件）：宿主落盘是 session.vN.jsonl.zstd，fs.readText 不解压，
+// 只有 spec.readText（readDshText）会走 zstd 解码。withEvents=false 造「只有 session
+// 记录、没有可导入事件」的日志（导入应 skipped）。
+function writeDshLog(dir, fileName, id, { withEvents = true, compress = false } = {}) {
+  const lines = [{ type: 'session', id, cwd: hostAbs('D:/demo/proj'), createdAt: 1700000000000 }]
+  if (withEvents) {
+    lines.push(
+      { type: 'turn/start', seq: 0, time: 1700000000000, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 1700000000000, data: { turn: 1, step: 1 } },
+      { type: 'user/message', seq: 2, time: 1700000000000, surfaceOp: 'append', data: { role: 'user', content: [{ type: 'text', text: '你好' }] } },
+      { type: 'assistant/message', seq: 3, time: 1700000000000, surfaceOp: 'append', data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: '回复' }] } } },
+      { type: 'turn/end', seq: 4, time: 1700000000000, data: { turn: 1 } },
+    )
+  }
+  const text = Buffer.from(lines.map((l) => JSON.stringify(l)).join('\n'))
+  const file = join(dir, fileName)
+  // compress=true 写成宿主形态：**一条事件一帧**的多帧拼接 zstd（单帧夹具测不出
+  // 「只解首帧」的截断问题——真实日志恒为多帧，见 test/dsh.test.mjs 的回归用例）
+  writeFileSync(file, compress ? Buffer.concat(lines.map((l) => zstdCompressSync(Buffer.from(JSON.stringify(l) + '\n')))) : text)
+  return file
+}
+
+test('REQ-41 /api-import/import handler：DSH 源 .zstd 日志必须解压后导入（面板不能丢 spec.readText）', async () => {
+  // 回归：面板/命令的 importDiscoveryItem 曾漏传 spec.readText，.zstd 被当二进制读 →
+  // 转换出 0 轮 → skipped（「只会归档旧会话、不导入新会话」的直接成因）。
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-panel-zstd-'))
+  const file = writeDshLog(dir, 'session.v3.jsonl.zstd', 'sess-panel-zstd', { compress: true })
+  const { ctx, persistence, webRoutes } = makeCtx({})
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+  assert.ok(route)
+
+  const out = await invokeImportRoute(route, { items: [{ source: 'dsh', sourcePath: file, sessionId: 'sess-panel-zstd' }], target: 'dsh4' })
+  assert.equal(out.data.ok, true, JSON.stringify(out.data))
+  assert.equal(out.data.results[0].status, 'imported', JSON.stringify(out.data.results))
+  assert.equal(out.data.results[0].turns, 1, '多帧 zstd 日志的对话必须全部解出（只解首帧会 0 轮 → skipped）')
+  const stored = persistence.sessions.get('import-sess-panel-zstd')
+  assert.ok(stored, [...persistence.sessions.keys()].join(','))
+  assert.equal(stored.meta.version, 4)
+  assert.equal(stored.events.filter((e) => e.type === 'user/message').length, 1)
+})
+
+test('REQ-41 面板「导入并归档」：导入未成功的源会话绝不归档（不两头落空）', async () => {
+  // 归档是不可逆的隐藏动作（平台无取消归档面），只有确实建出/续写/已存在新会话的
+  // 源会话才允许归档；skipped / failed 的条目归档会让用户既看不到旧会话、也没有新会话。
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-panel-arch-'))
+  // 两条都压缩（真实宿主形态）：空日志 → skipped，正常日志 → imported
+  const empty = writeDshLog(dir, 'session.v3.jsonl.zstd', 'sess-empty-001', { withEvents: false, compress: true })
+  const good = writeDshLog(dir, 'session.v4.jsonl.zstd', 'sess-good-001', { compress: true })
+  const { ctx, persistence, webRoutes } = makeCtx({})
+  apply(ctx)
+  const route = webRoutes.find((r) => r.path === '/api-import/import')
+  const out = await invokeImportRoute(route, {
+    items: [
+      { source: 'dsh', sourcePath: empty, sessionId: 'sess-empty-001' },
+      { source: 'dsh4', sourcePath: good, sessionId: 'sess-good-001' },
+    ],
+    target: 'dsh3',
+    archiveSources: true,
+  })
+  assert.equal(out.data.ok, true, JSON.stringify(out.data))
+  assert.equal(out.data.archived, 1, JSON.stringify(out.data))
+  assert.equal(out.data.archiveSkipped, 1, JSON.stringify(out.data))
+  assert.deepEqual(ctx.get('workspaceRegistry').archivedSessionIds, ['sess-good-001'])
+  assert.ok(persistence.sessions.has('import-sess-good-001'))
 })
 
 test('REQ-41 /api-import/import handler：多选同源去重（同 sourcePath 只导一次）+ 空 items 400 + 未知来源 400', async () => {

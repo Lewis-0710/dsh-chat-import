@@ -2,10 +2,10 @@
 > **Fork 维护版本** | 本仓库是 [Nwflower/dsh-chat-import](https://github.com/Nwflower/dsh-chat-import) 的维护分支。
 > 
 > **与上游差异**：
-> 1. **导入面板删除增强**：扩展 `lib/client.js` 导入面板，支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
+> 1. **导入面板删除增强**：扩展客户端面板（`src/client/` 与编译产物 `lib/client.js`），支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
 > 2. **源文件清理接口**：新增 `POST /api-import/delete-source` 路由与 `deleteSourceFile` 清理方法（`lib/purge.mjs`、`lib/panel.mjs`），支持物理删除源文件并自动清理 registry 记录及扫描缓存。
-> 3. **跨平台单测修复**：修复 `test/goose.test.mjs` 在 macOS（`darwin`）平台下的 Goose 数据目录路径解析断言。
-> 4. **上游同步保障**：内置 `sync.sh`（Patch-First, Smart-Merge 同步脚本）与 `sync.patch` 补丁文件，便于持续跟踪上游更新。
+> 3. **跨平台单测修复**：修复相关单测在 macOS（`darwin`）环境下的路径解析兼容性。
+> 4. **上游同步保障**：内置 `sync.sh` 与 `sync.patch` 补丁文件，保持与上游最新版本（v0.19.3）同步。
 > 
 > 详见 [sync.patch](./sync.patch)。
 
@@ -65,7 +65,7 @@
   </tr>
   <tr>
     <td align="center" width="20%"><a href="https://github.com/zed-industries/zed"><img src="./assets/agents/zed.svg" width="56" height="56" alt="Zed" /><br /><b>Zed</b></a></td>
-    <td align="center" width="20%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity CLI" /><br /><b>Antigravity CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity" /><br /><b>Antigravity</b></a></td>
     <td align="center" width="20%"><a href="https://chatgpt.com"><img src="./assets/agents/chatgpt.svg" width="56" height="56" alt="ChatGPT" /><br /><b>ChatGPT</b></a></td>
     <td align="center" width="20%"><a href="https://github.com/gabotechs/workbuddy"><img src="./assets/agents/workbuddy.svg" width="56" height="56" alt="WorkBuddy" /><br /><b>WorkBuddy</b></a></td>
     <td align="center" width="20%"><a href="https://github.com/QwenLM/qwen-code"><img src="./assets/agents/qwen.svg" width="56" height="56" alt="Qwen" /><br /><b>Qwen</b></a></td>
@@ -95,6 +95,16 @@ dsh plugin --profile web add dsh-chat-import                    # npm 包
 
 1. 通过GUI导入会话
   从左侧栏底部的「导入会话」按钮打开导入窗口，选择你想导入的会话并一键导入。
+
+  <table>
+    <tr>
+      <td align="center" width="50%"><img src="./docs/panel-light.png" alt="导入会话面板 —— 亮色" /></td>
+      <td align="center" width="50%"><img src="./docs/panel-dark.png" alt="导入会话面板 —— 暗色" /></td>
+    </tr>
+  </table>
+
+  > 截图界面同时使用了作者的另外一个主题插件 [DSH Claude Style](https://github.com/Nwflower/dsh-claude-style) ：在DSH内复刻 Claude Code Desktop 的视觉和交互体验。如果你对默认主题不太习惯，不妨来尝试一下。
+
 2. 通过Agent调用工具进行导入
 
 ```
@@ -118,6 +128,7 @@ import_chat({ format: "local-jsonl", path: "D:\downloads\session.jsonl" })
 | 撤回导入 | 侧边栏面板「历史」页 | 展示导入记录，一键删除本插件创建的会话。 |
 | 导出 | 上下文工具 | DSH 会话序列化回外部Agents |
 | 同步 | 面板「同步」页 | 外部Agents ↔ DSH 双向增量同步，默认关闭 |
+| 忽略 | 自动 + `/ignores` 命令 | 归档 / 删除 / 删工作区自动登记源，重扫与同步跳过；`/ignore`、`/unignore` 管理忽略表 |
 
 ## 文档
 
@@ -125,9 +136,10 @@ import_chat({ format: "local-jsonl", path: "D:\downloads\session.jsonl" })
 | --- | --- |
 | [使用详解](docs/USAGE.zh-CN.md) | 每个工具 / 命令的完整参数、示例与边界行为 |
 | [互转协议](docs/INTERCHANGE.md) | Interchange v1 协议与 bundle 格式 |
+| [设置页迁移](docs/SETTINGS-MIGRATION.zh-CN.md) | DSH 0.1.5 → 0.1.7 插件设置页迁移（实测报错、兼容写法） |
 | [更新日志](CHANGELOG.md) | 版本历史（英文） |
-| [路线图](ROADMAP.md) | 已实现 / 规划 |
-| [贡献指南](CONTRIBUTING.md) | 开发环境、提交规范、安全与隐私 |
+| [路线图](docs/ROADMAP.md) | 已实现 / 规划 |
+| [贡献指南](docs/CONTRIBUTING.md) | 开发环境、提交规范、安全与隐私 |
 
 ## 友链
 

@@ -254,3 +254,27 @@ test('convertAntigravityJsonl: 伴生 messages 回执补齐未配对调用', () 
   const result = out.events.find((e) => e.type === 'tool/result')
   assert.match(result.data.message.content[0].content[0].text, /real output/)
 })
+
+// 跨平台绝对路径判据：Antigravity 在工具参数里逐次记 Cwd，此前只认 POSIX 绝对路径
+//（startsWith('/')），Windows 上推不出工作目录 → meta.cwd 为空 → 宿主 header 无 cwd →
+// attachToWorkspace 只能回退源目录，再被宿主以「header 无 cwd」拒掉（真机复现）。
+test('convertAntigravityJsonl: 工具参数里的 Windows 绝对 Cwd 也算工作目录（跨平台判据）', () => {
+  const win = 'C:/proj/demo'
+  const raw = jsonl(
+    userInput(0, '<USER_REQUEST>\nfix the build\n</USER_REQUEST>'),
+    planner(1, { toolCalls: [{ args: { Cwd: win } }] }),
+    generic(2, 'DONE', 'done'),
+  )
+  const out = convertAntigravityJsonl(raw, { antigravityId: 'conv-cwd' })
+  assert.equal(out.meta.cwd, win)
+})
+
+test('convertAntigravityJsonl: 相对 Cwd 不算工作目录（宿主 header 只收绝对路径）', () => {
+  const raw = jsonl(
+    userInput(0, '<USER_REQUEST>\nfix the build\n</USER_REQUEST>'),
+    planner(1, { toolCalls: [{ args: { Cwd: 'proj/demo' } }] }),
+    generic(2, 'DONE', 'done'),
+  )
+  const out = convertAntigravityJsonl(raw, { antigravityId: 'conv-cwd-rel' })
+  assert.equal(out.meta.cwd, undefined)
+})

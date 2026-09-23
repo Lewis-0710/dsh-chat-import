@@ -14,9 +14,10 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.mjs'
+import { apply } from '../lib/index.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { resolveRegistryDir, loadImports, rememberImport, removeImport } from '../lib/imports.mjs'
+import { forgetIgnore } from '../lib/ignore.mjs'
 import { hostAbs } from './_support/host-path.mjs'
 
 const T0 = 1710000000000 // 固定毫秒时间戳（导入时间）
@@ -339,7 +340,7 @@ function claudeTranscript(sessionId) {
     + JSON.stringify({ sessionId, type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '回答1' }] } })
 }
 
-test('撤回后重导：registry 记录移除后，副本仍在 → backfill 回填；手动删工件后 → 全新导入', async () => {
+test('撤回后重导：墓碑拦截；解除忽略后副本仍在 → backfill 回填；手动删工件后 → 全新导入', async () => {
   const src = 'D:\\demo\\reimport\\sess-reimport-001.jsonl'
   const tree = { [src]: claudeTranscript('sess-reimport-001') }
   const persistence = makePersistence()
@@ -352,12 +353,18 @@ test('撤回后重导：registry 记录移除后，副本仍在 → backfill 回
   assert.equal(first.sessionId, 'import-sess-reimport-001')
   assert.ok(src in (await loadImports(resolveRegistryDir())).imports)
 
-  // 撤回：registry 记录移除，会话仍在
+  // 撤回：registry 记录移除，会话仍在；同时登记永久墓碑
   const ret = ctx.tools.registered('retract_import')
   await ret.execute({ sessionId: 'import-sess-reimport-001' })
   assert.ok(!(src in (await loadImports(resolveRegistryDir())).imports))
 
-  // 副本仍在时重导：标记仍在 → legacy 回填基线（幂等跳过，不重复建副本）
+  // 新语义：重导被墓碑忽略（不重建副本，也不覆盖已有副本）
+  const blocked = await imp.execute({ path: src })
+  assert.equal(blocked.status, 'ignored')
+  assert.equal(blocked.skipReason, 'ignored:retracted')
+
+  // 手动解除忽略：既有语义恢复——副本仍在时重导走 legacy 回填基线（幂等跳过）
+  await forgetIgnore(resolveRegistryDir(), src)
   const backfilled = await imp.execute({ path: src })
   assert.equal(backfilled.alreadyImported, true)
   assert.equal(backfilled.backfilled, true)
@@ -384,7 +391,9 @@ test('撤回后重导：宿主残留幽灵会话（list 仍暴露、日志不可
   await ctx.tools.registered('retract_import').execute({ sessionId: 'import-sess-ghost-001' })
   persistence.ghost('import-sess-ghost-001')
 
-  const again = await imp.execute({ path: src })
+  // 默认被墓碑忽略；force 显式越权重导才进入幽灵避让路径
+  assert.equal((await imp.execute({ path: src })).status, 'ignored')
+  const again = await imp.execute({ path: src, force: true })
   assert.equal(again.status, 'imported')
   assert.equal(again.sessionId, 'import-sess-ghost-001-1')
   assert.deepEqual(again.staleGhost, { previous: 'import-sess-ghost-001', current: 'import-sess-ghost-001-1' })
@@ -412,7 +421,9 @@ test('撤回后重导：宿主 create 拒绝幽灵 id（list 已不暴露）→ 
   //（真实 DSH 0.1.1-rc.2：内存索引残留，无 delete/forget 面）
   persistence.hostReject('import-sess-ghost2-001')
 
-  const again = await imp.execute({ path: src })
+  // 默认被墓碑忽略；force 显式越权重导才进入 hostReject 避让路径
+  assert.equal((await imp.execute({ path: src })).status, 'ignored')
+  const again = await imp.execute({ path: src, force: true })
   assert.equal(again.status, 'imported')
   assert.equal(again.sessionId, 'import-sess-ghost2-001-1')
   assert.deepEqual(again.staleGhost, { previous: 'import-sess-ghost2-001', current: 'import-sess-ghost2-001-1' })

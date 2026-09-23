@@ -2,9 +2,9 @@
 
 Thanks for considering a contribution! `dsh-chat-import` imports external agent
 conversation histories into DeepSeek Harness as full-fidelity, resumable
-sessions. The user-facing contract lives in [README.md](README.md) (bilingual),
+sessions. The user-facing contract lives in [README.md](../README.md) (bilingual),
 and the repo's engineering rules — layout, commit discipline, DSH plugin
-constraints, quality conventions — live in [AGENTS.md](AGENTS.md).
+constraints, quality conventions — live in [AGENTS.md](../AGENTS.md).
 
 ## Dev setup
 
@@ -29,6 +29,25 @@ constraints, quality conventions — live in [AGENTS.md](AGENTS.md).
   history events; surface events carry `surfaceOp: 'append'`.
 - **Fail loudly**: malformed lines and suspected secrets are counted and
   reported, never silently swallowed.
+
+## CHANGELOG
+
+Release notes are taken verbatim from the matching CHANGELOG section, so the
+section **is** the release note — write it for users, not for the diff. Since
+0.19.0 every section follows the dsh release-note layout: a
+`[中文](#cn-x.y.z) | [English](#en-x.y.z)` switch line, an
+`<h3 id="cn-x.y.z">新增功能</h3>` block in Chinese, then an
+`<h3 id="en-x.y.z">New Features</h3>` block in English. Within each language the
+groups are `### 体验优化` / `### 问题修复` / `### 其他变更` (English:
+`### Improvements` / `### Bug Fixes` / `### Chores`) in that order, whole groups
+are omitted when empty, and the section ends with
+`**Full Changelog**: [v-prev...v-this](compare url)`.
+
+One bullet = one verifiable behavior or contract, not an implementation diary.
+Call out contract changes explicitly (tool names, output schema, whether a source
+is still supported), attach measured numbers to performance work, and keep
+user-facing behavior in sync with the READMEs. Anchor ids carry the version so
+multiple sections can coexist on the one page.
 
 ## Commits & PRs
 

@@ -4,8 +4,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { convertClaudeJsonl, convertCodexJsonl, convertChatgptJson, convertCursorJsonl, convertGeminiJson, convertReasonixJsonl, convertPiJsonl, convertOpencodeJson, convertQoderJsonl, reasonixStemTime, mintSessionId, parseTime, SESSION_FORMAT_VERSION, tailSessionEvents, codexCustomToolArguments, jsObjectLiteralToJson, estimateTokens, cropContentBlocks, trimTurns, applyBudgetTrim, TEXT_BLOCK_CHAR_LIMIT, TOOL_RESULT_CHAR_LIMIT, validateSessionEvents, isEnvInjectionEvent } from '../convert.mjs'
+import { convertClaudeJsonl, convertCodexJsonl, convertChatgptJson, convertCursorJsonl, convertGeminiJson, convertReasonixJsonl, convertPiJsonl, convertOpencodeJson, convertQoderJsonl, reasonixStemTime, mintSessionId, parseTime, SESSION_FORMAT_VERSION, tailSessionEvents, codexCustomToolArguments, jsObjectLiteralToJson, estimateTokens, cropContentBlocks, trimTurns, applyBudgetTrim, TEXT_BLOCK_CHAR_LIMIT, TOOL_RESULT_CHAR_LIMIT, validateSessionEvents, isEnvInjectionEvent } from '../lib/convert/index.mjs'
 import { pinSourcedSessionTitle } from '../lib/sourced-title.mjs'
+import { synthesizeSession } from '../lib/convert/core.mjs'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const load = (name) => readFileSync(join(fixtures, name), 'utf8')
@@ -94,7 +95,7 @@ test('convertClaudeJsonl: 简单问答合成平衡回合', () => {
 
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    'turn/start', 'step/start', 'system/message', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
   // seq 连续从 0 开始；环境变更声明（plugin 注入）在首个 step/start 之后、真实提问之前
   out.events.forEach((e, i) => assert.equal(e.seq, i))
@@ -178,7 +179,7 @@ test('convertClaudeJsonl: 未回答的提问也成回合', () => {
   assert.equal(out.messages, 1)
   const types = out.events.map((e) => e.type)
   // 首轮无 step（只有提问、没有回复）：无 step/start 可锚 → 环境变更声明不注入
-  assert.deepEqual(types, ['turn/start', 'user/message', 'turn/end'])
+  assert.deepEqual(types, ['turn/start', 'step/start', 'system/message', 'step/end', 'user/message', 'turn/end'])
 })
 
 test('convertClaudeJsonl: 数组格式 user content（纯文本块）开新轮（issue #21 复现）', () => {
@@ -431,7 +432,10 @@ test('parseTime: 解析 ISO 时间戳', () => {
   const t = parseTime('2026-08-01T10:00:00.000Z')
   assert.equal(typeof t, 'number')
   assert.ok(t > 0)
-  assert.equal(parseTime(undefined), Date.now())
+  // 缺时间戳回退到当前时间：两次 Date.now() 之间可能跨毫秒，给窗口而不是等值比较
+  const before = Date.now()
+  const fallback = parseTime(undefined)
+  assert.ok(fallback >= before && fallback - before < 1000)
 })
 
 // ---- Codex / ChatGPT CLI rollout ----
@@ -449,7 +453,7 @@ test('convertCodexJsonl: 简单问答合成平衡回合（元数据来自 sessio
 
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    'turn/start', 'step/start', 'system/message', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
   // seq 连续从 0 开始；最后一个事件是 turn/end（平衡）
   out.events.forEach((e, i) => assert.equal(e.seq, i))
@@ -2309,3 +2313,126 @@ test('codex：无 summary 的 reasoning 不产生空块，也不自开步骤', (
   assert.equal(out.messages, 2)
   assert.ok(!JSON.stringify(out).includes('fixture-blob'))
 })
+
+// ---- 工具配对归位（wire 顺序 + V4 迁移合法性，见 synthesizeSession 配对预扫描）----
+
+test('synthesizeSession: 跨 step 到达的异步结果归位到调用的 step', () => {
+  const out = synthesizeSession({
+    meta: { id: 't1', createdAt: 1700000000000 },
+    turns: [{
+      prompt: 'q',
+      steps: [
+        { content: [{ type: 'tool-call', id: 'c1', name: 'Bash', arguments: '{}' }], toolCalls: [{ id: 'c1', name: 'Bash', arguments: '{}' }], toolResults: [] },
+        { content: [{ type: 'text', text: 'running' }], toolCalls: [], toolResults: [] },
+        { content: [{ type: 'text', text: 'later' }], toolCalls: [], toolResults: [{ toolCallId: 'c1', content: [{ type: 'text', text: 'done' }] }] },
+      ],
+    }],
+  })
+  const call = out.events.find((e) => e.type === 'tool/call')
+  const result = out.events.find((e) => e.type === 'tool/result')
+  const firstStepEnd = out.events.find((e) => e.type === 'step/end')
+  assert.ok(result, '异步结果仍被发射')
+  assert.ok(result.seq < firstStepEnd.seq, '结果必须闭合在调用的 step 内（step/end 前配平）')
+  assert.deepEqual(result.data.message.content[0].content, [{ type: 'text', text: 'done' }])
+  assert.deepEqual(result.sourceEventSeqs, [call.seq], 'sourceEventSeqs 仍指向其 tool/call')
+  assert.equal(out.events.filter((e) => e.type === 'tool/result').length, 1, '后续 step 不再重复该结果')
+  assert.equal(out.orphanToolResults, undefined)
+  assert.equal(out.duplicateToolResults, undefined)
+  assertToolPairing(out.events)
+  assertMessageOrderLegal(out.events)
+})
+
+test('synthesizeSession: 跨轮到达的异步结果归位到调用的轮', () => {
+  const out = synthesizeSession({
+    meta: { id: 't2', createdAt: 1700000000000 },
+    turns: [
+      {
+        prompt: 'q1',
+        steps: [{ content: [{ type: 'tool-call', id: 'c1', name: 'Bash', arguments: '{}' }], toolCalls: [{ id: 'c1', name: 'Bash', arguments: '{}' }], toolResults: [] }],
+      },
+      {
+        prompt: 'q2',
+        steps: [{ content: [{ type: 'text', text: 'next' }], toolCalls: [], toolResults: [{ toolCallId: 'c1', content: [{ type: 'text', text: 'late' }] }] }],
+      },
+    ],
+  })
+  const result = out.events.find((e) => e.type === 'tool/result')
+  const firstTurnEnd = out.events.find((e) => e.type === 'turn/end')
+  assert.ok(result && result.seq < firstTurnEnd.seq, '结果归位到调用所在轮的 step 内')
+  assert.deepEqual(result.data.message.content[0].content, [{ type: 'text', text: 'late' }])
+  assertToolPairing(out.events)
+  assertMessageOrderLegal(out.events)
+})
+
+test('synthesizeSession: 无广告调用的孤儿结果丢弃并计数', () => {
+  const out = synthesizeSession({
+    meta: { id: 't3', createdAt: 1700000000000 },
+    turns: [{
+      prompt: 'q',
+      steps: [{ content: [{ type: 'text', text: 'hi' }], toolCalls: [], toolResults: [{ toolCallId: 'ghost', content: [{ type: 'text', text: 'orphan-body' }] }] }],
+    }],
+  })
+  assert.equal(out.events.filter((e) => e.type === 'tool/result').length, 0)
+  assert.equal(out.orphanToolResults, 1)
+  assert.equal(out.duplicateToolResults, undefined)
+  assert.ok(!JSON.stringify(out.events).includes('orphan-body'), '孤儿结果正文不进入日志')
+  assertToolPairing(out.events)
+})
+
+test('synthesizeSession: 同一调用的重复结果保留首条并计数', () => {
+  const out = synthesizeSession({
+    meta: { id: 't4', createdAt: 1700000000000 },
+    turns: [{
+      prompt: 'q',
+      steps: [{
+        content: [{ type: 'tool-call', id: 'c1', name: 'Bash', arguments: '{}' }],
+        toolCalls: [{ id: 'c1', name: 'Bash', arguments: '{}' }],
+        toolResults: [
+          { toolCallId: 'c1', content: [{ type: 'text', text: 'first' }] },
+          { toolCallId: 'c1', content: [{ type: 'text', text: 'second' }], isError: true },
+        ],
+      }],
+    }],
+  })
+  const results = out.events.filter((e) => e.type === 'tool/result')
+  assert.equal(results.length, 1)
+  assert.deepEqual(results[0].data.message.content[0].content, [{ type: 'text', text: 'first' }])
+  assert.equal(results[0].data.message.content[0].isError, undefined, '首条无 isError 时不虚构')
+  assert.equal(out.duplicateToolResults, 1)
+  assert.equal(out.orphanToolResults, undefined)
+  assertToolPairing(out.events)
+  assertMessageOrderLegal(out.events)
+})
+
+test('synthesizeSession: 首个 surface 事件是首个 step 内的 system head（宿主 v3→v4 迁移的 protected head）', () => {
+  // 宿主 v3→v4 迁移要求 surface 的第一个事件是 system/message（protected head），
+  // 否则宿主续聊写自己的 system/message 时整份日志被拒载：
+  // "system/message requires a protected first surface head"。导入会话此前不写 head。
+  const out = convertClaudeJsonl(load('sess-simple-001.jsonl'), { sourcePath: 'D:\\demo\\proj\\sess-simple-001.jsonl' })
+  const surface = out.events.filter((e) => e.surfaceOp !== undefined)
+  assert.equal(surface[0].type, 'system/message')
+  assert.equal(surface[0].surfaceOp, 'append')
+  assert.equal(surface[0].data.message.role, 'system')
+  assert.deepEqual(surface[0].data.message.content, [], 'head 内容留空：真正的提示词由宿主在下一步替换')
+  // 宿主 agents.create 的 seed 校验：system/message 必须来自 system-prompt 生产者
+  //（"seed system/message at index 2 message must have system-prompt source"）
+  assert.deepEqual(surface[0].data.message.source, { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' })
+  // 必须落在已打开的 step 内，且是第一个 step/start 之后的第一条（宿主锚点同位置）
+  const stepIdx = out.events.findIndex((e) => e.type === 'step/start')
+  assert.equal(out.events[stepIdx + 1].type, 'system/message')
+  assert.deepEqual([out.events[stepIdx + 1].data.turn, out.events[stepIdx + 1].data.step], [1, 1])
+  assert.equal(validateSessionEvents(out.events).ok, true)
+})
+
+test('synthesizeSession: 首轮无 step 时 head 自补一个只装 head 的 step（否则没有可锚的 step）', () => {
+  const out = convertClaudeJsonl(load('sess-empty-001.jsonl'), { sourcePath: 'D:\\demo\\proj\\sess-empty-001.jsonl' })
+  assert.deepEqual(out.events.map((e) => e.type), [
+    'turn/start', 'step/start', 'system/message', 'step/end', 'user/message', 'turn/end',
+  ])
+  assert.equal(out.events[2].data.message.role, 'system')
+  assert.equal(validateSessionEvents(out.events).ok, true)
+})
+
+// attachConversionDetails 的计数透传断言在 verify-migration.test.mjs：本文件不引
+// 宿主编排模块（check:linux 对引用它的测试文件启用 cwd 盘符纪律），本文件的盘符
+// 字面量是纯转换层的原样透传夹具，属该规则的例外面。

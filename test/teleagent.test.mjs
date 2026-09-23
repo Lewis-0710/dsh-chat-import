@@ -13,10 +13,10 @@ import { mkdtempSync, statSync, readdirSync, readFileSync, writeFileSync, mkdirS
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { apply } from '../index.mjs'
-import { convertTeleagentJson } from '../convert.mjs'
+import { apply } from '../lib/index.mjs'
+import { convertTeleagentJson } from '../lib/convert/index.mjs'
 import { mintSessionId } from '../lib/convert/core.mjs'
-import { readTeleagentDb, teleagentDataDir, teleagentUsersDir, teleagentDbPath, TELEAGENT_DB_NAME, TELEAGENT_USERS_DIR } from '../lib/teleagent.mjs'
+import { readTeleagentDb, teleagentDataDir, teleagentUsersDir, teleagentDbPath, TELEAGENT_DB_NAME, TELEAGENT_USERS_DIR } from '../lib/sources/teleagent.mjs'
 import { discoverSessions } from '../lib/discovery.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { hostAbs } from './_support/host-path.mjs'
@@ -266,7 +266,7 @@ test('readTeleagentDb：无 model 列 schema 兼容（PRAGMA 探测），会话�
 
 // 发现层 host：真实临时目录的 stat/readDir/readText/readHead + readSessions（内联
 // discovery-host 的 dbSummary 同款映射——扫描器只消费
-// id/title/directory/createdAt/lastActiveAt/messageCount）
+// id/title/directory/createdAt/lastActiveAt）
 function discoveryHost() {
   return {
     async stat(path) {
@@ -294,7 +294,6 @@ function discoveryHost() {
       return readTeleagentDb(dbPath).map((s) => ({
         id: s.id, title: s.title, directory: s.directory,
         createdAt: s.createdAt, lastActiveAt: lastMsgTime(s.messages),
-        messageCount: s.messages.length,
       }))
     },
   }

@@ -9,7 +9,7 @@ import { Buffer } from 'node:buffer'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { readZedThreads, readZedDb } from '../lib/zed.mjs'
+import { readZedThreads, readZedDb } from '../lib/sources/zed.mjs'
 
 // 上游 db.rs 的建表 + 3×ALTER（老库可能缺后 4 列）
 const CREATE = `CREATE TABLE IF NOT EXISTS threads (
@@ -82,7 +82,6 @@ test('readZedThreads：标题取 summary 列、cwd 取 folder_paths 首项、时
     assert.deepEqual(first.folderPaths, ['/home/u/proj'])
     assert.equal(first.createdAt, TS)
     assert.equal(first.updatedAt, TS)
-    assert.equal(first.messageCount, null) // 线程库没有消息数列，发现层不为此解压 blob
     const multi = rows.find((r) => r.id === 'multi')
     assert.equal(multi.cwd, '/a') // order=1,0 → /a 在前
     assert.deepEqual(multi.folderPaths, ['/a', '/b'])

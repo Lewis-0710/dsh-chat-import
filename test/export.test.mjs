@@ -2,7 +2,7 @@
 // 合成事件直接构造（禁止真实 transcript）；uuid 注入确定性序列断言链式关系。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { serializeClaudeJsonl, slugifyClaudeCwd, serializeClaudeJsonlTail, tailClaudeEvents, verifyClaudeJsonl } from '../export.mjs'
+import { serializeClaudeJsonl, slugifyClaudeCwd, serializeClaudeJsonlTail, tailClaudeEvents, verifyClaudeJsonl } from '../lib/export/index.mjs'
 
 const T = 1786000000000 // 固定毫秒时间戳
 const ISO = new Date(T).toISOString()

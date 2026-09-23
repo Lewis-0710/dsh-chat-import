@@ -3,11 +3,13 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, stat, readFile, readdir, open, rm } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { Buffer } from 'node:buffer'
+import { randomBytes } from 'node:crypto'
+import { zstdCompressSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { convertDshJsonl } from '../lib/convert/dsh.mjs'
 import { defaultRoots, discoverSessions } from '../lib/discovery.mjs'
-import { dshSessionLogVersion, isDshSessionFile, readDshText } from '../lib/dsh.mjs'
+import { dshSessionLogVersion, isDshSessionFile, readDshText, decodeZstdText } from '../lib/sources/dsh.mjs'
 
 const SESSION_LINES = [
   { type: 'session', id: 'session-dsh-test', cwd: '/tmp/proj', createdAt: 1700000000000 },
@@ -169,7 +171,6 @@ test('discoverSessions format=dsh 发现 session.jsonl 会话', async () => {
     assert.equal(found.sessions[0].format, 'dsh')
     assert.equal(found.sessions[0].sessionId, 'session-dsh-test')
     assert.equal(found.sessions[0].title, 'DSH 导入测试')
-    assert.equal(found.sessions[0].messageCount, 2)
     assert.equal(found.sessions[0].sourcePath, file)
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -225,7 +226,6 @@ test('discoverSessions format=dsh：超过阈值的 .zstd 不解压，按目录�
     const big = found.sessions.find((s) => s.sessionId === 'session-large-test')
     assert.ok(big, '大文件按目录名兜底出现在列表')
     assert.equal(big.title, null)
-    assert.equal(big.messageCount, 0)
     assert.equal(big.project, 'big-proj')
     // 小文件 sessionId 来自日志头（权威）；大文件兜底目录名——DSH 布局两者同构
     assert.equal(found.sessions.find((s) => s.sessionId === 'session-dsh-test').title, 'DSH 导入测试')
@@ -234,15 +234,69 @@ test('discoverSessions format=dsh：超过阈值的 .zstd 不解压，按目录�
   }
 })
 
-test('discoverSessions format=dsh：导入产物目录（import-<id>）不当源扫出', async () => {
+test('decodeZstdText：单帧夹具解出全部记录（session/turn/user/title）', async () => {
+  const fixture = fileURLToPath(new URL('./fixtures/session.jsonl.zstd', import.meta.url))
+  const buf = await readFile(fixture)
+  const text = await decodeZstdText(buf)
+  assert.match(text, /"id": "session-zstd-test"/)
+  assert.equal(text.split('\n').filter(Boolean).length, 4)
+})
+
+test('decodeZstdText：非法载荷大声抛错（不静默返回空文本）', async () => {
+  await assert.rejects(() => decodeZstdText(Buffer.from('not a zstd frame')), /./)
+})
+
+test('decodeZstdText：多帧拼接日志全解（宿主逐事件 flush；只解首帧会丢光对话）', async () => {
+  // 回归：宿主按「一条事件一次 flush」写日志，磁盘上的 .zstd 是多帧拼接（本机实测一条
+  // 6.5MB 压缩 / 33MB 明文日志 1962 帧）。node:zlib 的 zstdDecompress /
+  // createZstdDecompress 只解第一帧、其余静默丢弃——只解首帧就只剩 session 头那一行，
+  // 转换出 0 轮，整份导入按「无可导入内容」跳过（表现为「只归档旧会话、不建新会话」）。
+  const lines = [
+    '{"type":"session","id":"multi-frame","createdAt":1700000000000}',
+    '{"type":"turn/start","seq":0,"time":1700000000000,"data":{"turn":1}}',
+    '{"type":"user/message","seq":1,"time":1700000000000,"surfaceOp":"append","data":{"role":"user","content":[{"type":"text","text":"多帧"}]}}',
+    '{"type":"turn/end","seq":2,"time":1700000000000,"data":{"turn":1}}',
+  ]
+  const buf = Buffer.concat(lines.map((l) => zstdCompressSync(Buffer.from(l + '\n'))))
+  const text = await decodeZstdText(buf)
+  assert.equal(text.split('\n').filter(Boolean).length, lines.length)
+  const out = convertDshJsonl(text, { sourcePath: '/tmp/multi/session.v3.jsonl.zstd' })
+  assert.equal(out.meta.id, 'import-multi-frame')
+  assert.equal(out.turns.length, 1)
+  assert.equal(out.messages, 1)
+  assert.ok(out.events.length > 0, '多帧日志的事件必须全部解出')
+})
+
+test('decodeZstdText：帧内出现魔数字节序列（raw block）时后续帧仍完整解出', async () => {
+  // 不可压缩载荷会被 zstd 存成 raw block，字节原样出现在压缩正文里——4 字节帧魔数
+  // 0x28B52FFD 因此可能在帧内“假阳性”出现。解码器必须仍能解出后续帧（按魔数切分
+  // 逐帧解 + 静默截断的实现会在这里丢内容）。
+  const magic = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
+  const raw = Buffer.concat([randomBytes(65536), magic, randomBytes(65536)])
+  const first = zstdCompressSync(raw)
+  const tail = '{"type":"session","id":"after-raw","createdAt":1700000000000}\n'
+  assert.ok(first.indexOf(magic, 1) > 0, '夹具必须在帧内制造魔数（raw block 原样存储）')
+  const text = await decodeZstdText(Buffer.concat([first, zstdCompressSync(Buffer.from(tail))]))
+  assert.ok(text.includes('"after-raw"'), '帧内魔数不得吞掉后续帧')
+})
+
+test('decodeZstdText：截断的帧大声抛错（不静默返回半份日志）', async () => {
+  const frame = zstdCompressSync(Buffer.from('{"type":"session","id":"cut"}\n'))
+  await assert.rejects(() => decodeZstdText(frame.subarray(0, Math.floor(frame.length / 2))), /./)
+})
+
+test('discoverSessions format=dsh：导入产物目录（import-<id>）也列出（代次迁移要用）', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-imported-test-'))
   try {
-    // 产物目录里的会话头 id 也是 import- 前缀（与目录名同构），两者都不得入列表
+    // 已导入的会话（目录名与头部 id 都是 import- 前缀）要能被列出来：把一条已导入的会话
+    // 迁移到另一代次（V3 ↔ V4）正是这个来源的用途；重导不会覆盖原会话（新 id 变成
+    // import-import-…），幂等判定与 Toast「忽略警告」照常兜底。
     const dir = join(root, 'sessions', 'encoded', 'import-session-dsh-test')
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'session.jsonl'), RAW + '\n')
     const found = await discoverSessions({ format: 'dsh', path: join(root, 'sessions'), host: makeDshHost(), imports: {} })
-    assert.equal(found.total, 0)
+    assert.equal(found.total, 1)
+    assert.equal(found.sessions[0].sessionId, 'session-dsh-test')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -251,8 +305,9 @@ test('discoverSessions format=dsh：导入产物目录（import-<id>）不当源
 // session.jsonl.zstd 的最小 zstd 帧 fixture（Python zstandard 压缩
 // session/turn/user/title 四条 JSONL 记录生成，raw 431B → zstd 243B），
 // 以二进制文件存放避免 dsh.so 把超长 base64 字面量判为疑似混淆载荷。
-// 路线 A 用 fzstd 纯 JS 解压替代系统 zstd 二进制（child_process 判为 critical）。
-test('readDshText 用 fzstd 纯 JS 解压 session.jsonl.zstd', async () => {
+// 路线 A 用 zstd 解压替代系统 zstd 二进制（child_process 判为 critical）：
+// decodeZstdText 走 fzstd（自带多帧；node:zlib 原生只解首帧，见上方回归用例）。
+test('readDshText 解压 session.jsonl.zstd 并转换出会话', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-zstd-test-'))
   try {
     const file = join(root, 'session.jsonl.zstd')
@@ -352,4 +407,26 @@ test('discoverSessions format=dsh 发现当前代次 session.v3.jsonl.zstd', asy
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+// 兼容我们自己的历史产物：导入会话的日志里有插件注入的「环境变更声明」（V3 形状
+// source.kind='plugin'，V4 形状 kind='plugin:chat-import'）与 system head。重导这些会话时
+// 注入声明不是用户提问——否则标题与每轮 prompt 都会变成那段声明。
+test('convertDshJsonl：跳过本插件注入的环境变更声明（V3 / V4 两种 source 形状）', async () => {
+  const { convertDshJsonl } = await import('../lib/convert/index.mjs')
+  const lines = [
+    { type: 'session', version: 3, id: 'session-own-1', cwd: '/demo/proj', createdAt: 1700000000000 },
+    { type: 'turn/start', seq: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 2, data: { turn: 1, step: 1 } },
+    { type: 'system/message', seq: 3, surfaceOp: 'append', data: { turn: 1, step: 1, message: { id: 'import:session-own-1:sys', role: 'system', content: [], source: { kind: 'plugin', plugin: 'chat-import' } } } },
+    { type: 'user/message', seq: 4, surfaceOp: 'append', data: { id: 'import:session-own-1:env', role: 'user', content: [{ type: 'text', text: '环境变更声明：本会话由 dsh-chat-import 从 claude 导入' }], source: { kind: 'plugin', plugin: 'chat-import' } } },
+    { type: 'user/message', seq: 5, surfaceOp: 'append', data: { id: 'u1', role: 'user', content: [{ type: 'text', text: '真实提问' }], source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 6, surfaceOp: 'append', data: { turn: 1, step: 1, stream: [], message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: '好' }], source: { kind: 'model', provider: 'p', model: 'm' } } } },
+    { type: 'step/end', seq: 7, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 8, data: { turn: 1, reason: { kind: 'completed' } } },
+  ]
+  const out = convertDshJsonl(lines.map((l) => JSON.stringify(l)).join('\n'), { sourcePath: '/demo/proj/session-own-1/session.v3.jsonl' })
+  assert.equal(out.turns.length, 1)
+  assert.equal(out.turns[0].prompt, '真实提问', '注入声明不能顶掉真实提问')
+  assert.equal(out.title, '真实提问', '标题回退同样跳过注入声明')
 })

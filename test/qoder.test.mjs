@@ -151,7 +151,10 @@ test('导入归属外置 registry：日志无标记，环境变更声明在首�
   ])
   const out = convertQoderJsonl(raw, { sourcePath: '/home/u/.qoder/projects/p/' + SID + '.jsonl' })
   assert.ok(out.events.every((e) => e.type !== 'session/imported'))
-  // issue #66：声明不再早于首个 step/start（宿主 v2→v3 迁移对该形状 fail-closed）
-  assert.deepEqual(out.events.slice(0, 3).map((e) => e.type), ['turn/start', 'step/start', 'user/message'])
-  assert.equal(out.events[2].data.source.kind, 'plugin')
+  // 首个 step/start 之后依次是 system head（宿主 v3→v4 迁移要求 surface 首事件是它）
+  // 与环境变更声明（issue #66：声明不再早于首个 step/start，宿主 v2→v3 迁移对该形状 fail-closed）
+  assert.deepEqual(out.events.slice(0, 4).map((e) => e.type), ['turn/start', 'step/start', 'system/message', 'user/message'])
+  assert.equal(out.events[2].data.message.role, 'system')
+  assert.equal(out.events[2].data.message.source.kind, 'plugin')
+  assert.equal(out.events[3].data.source.kind, 'plugin')
 })

@@ -107,7 +107,6 @@ test('claude：注入过滤标题、记录 cwd 项目名、主 transcript 判定
   assert.equal(a.project, 'claude-proj') // 记录内 cwd basename（REQ-40 项目名）
   assert.equal(a.importStatus, 'imported')
   assert.equal(a.lastActiveAt, 1786000002000) // 文件 mtime
-  assert.equal(a.messageCount, null) // 只读文件头不计数
   const b = sessions.find((s) => s.sessionId === 'sess-002')
   assert.equal(b.title, '真实提问') // 注入首行被过滤
   assert.equal(b.project, 'proj-a') // 无 cwd → 布局 slug 回退
@@ -382,7 +381,6 @@ test('pi：会话头签名（version 字段）、session_info 名称标题、cwd
   assert.equal(s.project, 'pi-proj') // 记录内 cwd basename
   assert.equal(s.createdAt, Date.parse('2026-06-01T10:00:00.000Z'))
   assert.equal(s.lastActiveAt, 1786000002000)
-  assert.equal(s.messageCount, null)
 })
 
 test('hermes：state.db 恒批量（复用读取器）+ db 不可用回退 JSONL', async () => {
@@ -391,7 +389,7 @@ test('hermes：state.db 恒批量（复用读取器）+ db 不可用回退 JSONL
   const files = new Map([[root, { type: 'dir' }], [dbPath, { type: 'file', text: '' }]])
   const host = mockHost(files)
   host.dbSessions = (kind) => (kind === 'hermes'
-    ? [{ id: 'hm-a', title: 'Fix hermes build', directory: 'E:/demo/hermes', createdAt: 1786000000000, lastActiveAt: 1786000000100, messageCount: 3 }]
+    ? [{ id: 'hm-a', title: 'Fix hermes build', directory: 'E:/demo/hermes', createdAt: 1786000000000, lastActiveAt: 1786000000100}]
     : null)
 
   const { sessions, total } = await discoverSessions({ path: root, format: 'hermes', host, imports: {} })
@@ -399,7 +397,6 @@ test('hermes：state.db 恒批量（复用读取器）+ db 不可用回退 JSONL
   assert.equal(sessions[0].sessionId, 'hm-a')
   assert.equal(sessions[0].title, 'Fix hermes build')
   assert.equal(sessions[0].project, 'hermes') // directory basename
-  assert.equal(sessions[0].messageCount, 3)
   assert.equal(sessions[0].lastActiveAt, 1786000000100)
 
   // db 不可用（readHermesDb null）→ 回退扫 sessions/*.jsonl（flat 形态）
@@ -451,7 +448,6 @@ test('kimi：wire.jsonl 会话目录发现、custom_title 标题、kimi.json md5
   assert.equal(s.project, 'kimi-proj') // kimi.json md5 映射 cwd 的 basename
   assert.equal(s.createdAt, 1786000000000) // 首条记录 timestamp（秒 → 毫秒）
   assert.equal(s.lastActiveAt, 1786000002000) // wire.jsonl mtime
-  assert.equal(s.messageCount, null)
 })
 
 test('kimi：上下文 token 数取 usage 记录的 inputOther + inputCacheRead', async () => {
@@ -509,7 +505,6 @@ test('kimi：新 Kimi Code ~/.kimi-code agents/main/wire.jsonl 发现、state.js
   assert.equal(s.cwd, 'C:/Users/u/proj')
   assert.equal(s.createdAt, 1786000000500) // 新 wire metadata created_at（毫秒）
   assert.equal(s.lastActiveAt, 1786000002000) // agents/main/wire.jsonl mtime
-  assert.equal(s.messageCount, null)
 
   // 直接把单个新会话目录作为 path 也应识别为会话（不自拒、不误收 agents/main）
   const direct = await discoverSessions({ path: sessDir, format: 'kimi', host, imports: {} })
@@ -576,8 +571,8 @@ test('kimi：state.json 缺失时按 workspaces.json 的 workspace-id 回退 cwd
   assert.equal(sessions[0].project, 'genius-invokation')
 })
 
-test('antigravity：~/.gemini/antigravity-cli 每会话一目录发现、annotation 标题、cwd、缺 transcript 自拒', async () => {
-  const root = join(HOME, '.gemini', 'antigravity-cli')
+test('antigravity：~/.gemini/antigravity 每会话一目录发现、.db/.pb 同 id 去重、annotation 标题、cwd、缺 transcript 自拒', async () => {
+  const root = join(HOME, '.gemini', 'antigravity')
   const convDir = join(root, 'conversations')
   const brainDir = join(root, 'brain')
   const annoDir = join(root, 'annotations')
@@ -596,32 +591,72 @@ test('antigravity：~/.gemini/antigravity-cli 每会话一目录发现、annotat
       j({ step_index: 1, source: 'MODEL', type: 'PLANNER_RESPONSE', status: 'DONE', created_at: '2026-01-02T03:04:06Z', content: '回复', tool_calls: [{ name: 'run_command', args: { CommandLine: '"ls"', Cwd: '"/home/u/demo"' } }] }),
     ].join('\n') + '\n' }],
     [join(annoDir, 'conv-1.pbtxt'), { type: 'file', text: 'title:"权威标题"' }],
+    // 新旧会话文件并存（SQLite *.db + protobuf *.pb）：同 id 只发现一次
+    [join(convDir, 'conv-1.db'), { type: 'file', text: '' }],
+    [join(convDir, 'conv-1.pb'), { type: 'file', text: '' }],
+    // 只有 .pb 的会话同样可发现（新布局下 protobuf 文件仍旧存在）
+    [join(convDir, 'conv-3.pb'), { type: 'file', text: '' }],
+    [join(brainDir, 'conv-3', '.system_generated', 'logs'), { type: 'dir' }],
+    [join(brainDir, 'conv-3', '.system_generated', 'logs', 'transcript.jsonl'), { type: 'file', text: j({ step_index: 0, source: 'USER_EXPLICIT', type: 'USER_INPUT', status: 'DONE', content: '<USER_REQUEST>pb 会话</USER_REQUEST>' }) + '\n' }],
     // 有 .db 但无 transcript 的会话：无正文可导 → 不产出条目
     [join(convDir, 'conv-2.db'), { type: 'file', text: '' }],
-    [join(convDir, 'conv-1.db'), { type: 'file', text: '' }],
   ])
   const host = mockHost(files)
 
   const { sessions, total } = await discoverSessions({ path: root, format: 'antigravity', host, imports: {} })
-  assert.equal(total, 1)
-  const s = sessions[0]
+  assert.equal(total, 2)
+  const s = sessions.find((x) => x.sessionId === 'conv-1')
   assert.equal(s.format, 'antigravity')
-  assert.equal(s.sessionId, 'conv-1')
   assert.equal(s.title, '权威标题') // annotations/*.pbtxt 权威标题
   assert.equal(s.project, 'antigravity')
   assert.equal(s.cwd, '/home/u/demo') // 工具参数 Cwd 推断
   assert.equal(s.lastActiveAt, 1786000002000)
-  assert.equal(s.messageCount, 2)
   assert.equal(s.sourcePath, transcript) // 导入输入指向 transcript.jsonl
+  const p = sessions.find((x) => x.sessionId === 'conv-3')
+  assert.equal(p.title, 'pb 会话')
+  assert.equal(join(p.sourcePath, ''), join(brainDir, 'conv-3', '.system_generated', 'logs', 'transcript.jsonl'))
+})
+
+test('antigravity：默认根同时覆盖 ~/.gemini/antigravity 与旧 antigravity-cli（双根扫描）', async () => {
+  const roots = defaultRoots({ home: HOME }).antigravity
+  assert.deepEqual(roots, [
+    join(HOME, '.gemini', 'antigravity'),
+    join(HOME, '.gemini', 'antigravity-cli'),
+    join(HOME, '.gemini', 'antigravity-ide'),
+  ])
+  // 新旧两棵根各放一个会话：缺省的默认根扫描应把两棵都发现（缺失根静默落空）
+  const mkTree = (root, id) => {
+    const t = join(root, 'brain', id, '.system_generated', 'logs', 'transcript.jsonl')
+    return [t, [
+      [root, { type: 'dir' }],
+      [join(root, 'conversations'), { type: 'dir' }],
+      [join(root, 'conversations', id + '.db'), { type: 'file', text: '' }],
+      [join(root, 'brain'), { type: 'dir' }],
+      [join(root, 'brain', id), { type: 'dir' }],
+      [join(root, 'brain', id, '.system_generated'), { type: 'dir' }],
+      [join(root, 'brain', id, '.system_generated', 'logs'), { type: 'dir' }],
+      [t, { type: 'file', text: j({ step_index: 0, source: 'USER_EXPLICIT', type: 'USER_INPUT', status: 'DONE', content: '<USER_REQUEST>' + id + ' 提问</USER_REQUEST>' }) + '\n' }],
+    ]]
+  }
+  const fileMap = new Map()
+  for (const [root, id] of [[roots[0], 'new-1'], [roots[1], 'old-1']]) {
+    const [, rows] = mkTree(root, id)
+    for (const [p, v] of rows) fileMap.set(p, v)
+  }
+  const host = mockHost(fileMap)
+
+  const { sessions, total } = await discoverSessions({ format: 'antigravity', home: HOME, host, imports: {} })
+  assert.equal(total, 2)
+  assert.deepEqual(sessions.map((s) => s.sessionId).sort(), ['new-1', 'old-1'])
 })
 
 test('antigravity：无 annotation 时回退首问标题（剥 <USER_REQUEST> 信封）', async () => {
-  const root = join(HOME, '.gemini', 'antigravity-cli')
+  const root = join(HOME, '.gemini', 'antigravity')
   const logsDir = join(root, 'brain', 'c9', '.system_generated', 'logs')
   const files = new Map([
     [root, { type: 'dir' }],
     [join(root, 'conversations'), { type: 'dir' }],
-    [join(root, 'conversations', 'c9.db'), { type: 'file', text: '' }],
+    [join(root, 'conversations', 'c9.pb'), { type: 'file', text: '' }],
     [join(root, 'brain'), { type: 'dir' }],
     [join(root, 'brain', 'c9'), { type: 'dir' }],
     [join(root, 'brain', 'c9', '.system_generated'), { type: 'dir' }],
@@ -665,7 +700,6 @@ test('qoder：~/.qoder/projects 发现、ai-title 标题、cwd 项目名、subag
   assert.equal(s.project, 'demo') // 记录内 cwd basename
   assert.equal(s.cwd, '/home/u/demo')
   assert.equal(s.lastActiveAt, 1786000002000)
-  assert.equal(s.messageCount, null)
 })
 
 test('workbuddy：~/.workbuddy/projects 发现、user_query 标题、cwd 项目名、路径自拒', async () => {
@@ -695,7 +729,6 @@ test('workbuddy：~/.workbuddy/projects 发现、user_query 标题、cwd 项目�
   assert.equal(s.cwd, '/home/u/demo')
   assert.equal(s.createdAt, 1787131157250)
   assert.equal(s.lastActiveAt, 1786000002000)
-  assert.equal(s.messageCount, null)
 
   // 路径自拒：指向其它目录的同一批文件，workbuddy 扫描器返回空
   const other = await discoverSessions({ path: join(HOME, 'elsewhere'), format: 'workbuddy', host, imports: {} })
@@ -748,7 +781,7 @@ test('qwen：~/.qwenworkcn/projects 发现、humanInput 首问、workspace-direc
   assert.equal(elsewhere.total, 0)
 })
 
-test('continue：sessions.json 索引驱动发现（标题/创建时间/项目/消息数）、非会话文件自拒、无索引回退整读', async () => {
+test('continue：sessions.json 索引驱动发现（标题/创建时间/项目）、非会话文件自拒、无索引回退整读', async () => {
   const root = join(HOME, '.continue', 'sessions')
   const sid = '3f2b9c14-58a7-4f6d-9c31-0d5e7a1b2c34'
   const file = join(root, sid + '.json')
@@ -757,7 +790,7 @@ test('continue：sessions.json 索引驱动发现（标题/创建时间/项目/�
     [root, { type: 'dir' }],
     [join(root, 'sessions.json'), {
       type: 'file',
-      text: j([{ sessionId: sid, title: '修登录页分页', dateCreated: '1787131157250', workspaceDirectory: '/home/u/repo', messageCount: 6 }]),
+      text: j([{ sessionId: sid, title: '修登录页分页', dateCreated: '1787131157250', workspaceDirectory: '/home/u/repo'}]),
     }],
     [file, {
       type: 'file', mtimeMs: 1786000002000,
@@ -780,7 +813,6 @@ test('continue：sessions.json 索引驱动发现（标题/创建时间/项目/�
   assert.equal(s.project, 'repo') // 记录内 workspaceDirectory basename
   assert.equal(s.cwd, '/home/u/repo')
   assert.equal(s.createdAt, 1787131157250) // 只有索引带 dateCreated（毫秒字符串）
-  assert.equal(s.messageCount, 6)
   assert.equal(s.lastActiveAt, 1786000002000)
 
   // 索引缺失（手工删改）→ 整读会话文件取标题/项目/消息数，创建时间留空由导入层兜底
@@ -800,7 +832,6 @@ test('continue：sessions.json 索引驱动发现（标题/创建时间/项目/�
   assert.equal(fallback.total, 1)
   assert.equal(fallback.sessions[0].title, '裸目录会话')
   assert.equal(fallback.sessions[0].cwd, '/home/u/repo')
-  assert.equal(fallback.sessions[0].messageCount, 2) // user + assistant（thinking 不计）
   assert.equal(fallback.sessions[0].createdAt, null)
 })
 
@@ -839,8 +870,7 @@ test('cline：DB 索引优先（cwd/时间/标题），转写缺失的会话不�
     return [
       {
         id: sid, title: '修登录页分页', prompt: '修一下登录页分页', cwd: '/home/u/repo',
-        createdAt: Date.parse('2026-04-22T17:40:00.000Z'), lastActiveAt: Date.parse('2026-04-22T17:42:10.123Z'),
-        messageCount: null, messagesPath: transcript,
+        createdAt: Date.parse('2026-04-22T17:40:00.000Z'), lastActiveAt: Date.parse('2026-04-22T17:42:10.123Z'), messagesPath: transcript,
       },
       // 转写被删/未落盘的会话：DB 里有、磁盘上没有 → 不列出（点了也导不进来）
       { id: 'ghost', title: '幽灵会话', cwd: null, createdAt: null, messagesPath: join(sessionsDir, 'ghost', 'ghost.messages.json') },
@@ -857,7 +887,6 @@ test('cline：DB 索引优先（cwd/时间/标题），转写缺失的会话不�
   assert.equal(s.cwd, '/home/u/repo')
   assert.equal(s.createdAt, Date.parse('2026-04-22T17:40:00.000Z'))
   assert.equal(s.lastActiveAt, Date.parse('2026-04-22T17:42:10.123Z'))
-  assert.equal(s.messageCount, null) // sessions 表没有 message_count 列
   assert.equal(s.sourcePath, transcript)
 })
 
@@ -918,7 +947,7 @@ test('cline legacy：globalStorage 的 taskHistory 索引发现 api history，UI
   assert.equal(result.total, 1)
   assert.deepEqual(result.sessions[0], {
     format: 'cline', sessionId: taskId, title: '标题来自 UI', project: 'repo',
-    createdAt: 1786000000000, lastActiveAt: 1786000013000, messageCount: null,
+    createdAt: 1786000000000, lastActiveAt: 1786000013000,
     contextTokens: null, sourcePath: api, cwd: hostAbs('D:/repo'), importStatus: 'not-imported',
     gitBranch: null, gitDirty: null,
   })
@@ -928,7 +957,7 @@ test('cline legacy：globalStorage 的 taskHistory 索引发现 api history，UI
   assert.equal(direct.sessions[0].sessionId, taskId)
 })
 
-test('goose：sessions.db 经 host.readSessions 发现（标题/项目/时间/消息数），旧 jsonl 不当作来源', async () => {
+test('goose：sessions.db 经 host.readSessions 发现（标题/项目/时间），旧 jsonl 不当作来源', async () => {
   const dataDir = join(HOME, '.local', 'share', 'goose')
   const sessionsDir = join(dataDir, 'sessions')
   const dbPath = join(sessionsDir, 'sessions.db')
@@ -944,11 +973,11 @@ test('goose：sessions.db 经 host.readSessions 发现（标题/项目/时间/�
     return [
       {
         id: '20260422_1', title: '修登录页分页', directory: '/home/u/repo',
-        createdAt: 1776879600000, lastActiveAt: 1776879730000, messageCount: 4,
+        createdAt: 1776879600000, lastActiveAt: 1776879730000,
       },
       {
         id: '20260422_2', title: '', directory: '/home/u/other',
-        createdAt: null, lastActiveAt: null, messageCount: null,
+        createdAt: null, lastActiveAt: null,
       },
     ]
   }
@@ -962,7 +991,6 @@ test('goose：sessions.db 经 host.readSessions 发现（标题/项目/时间/�
   assert.equal(first.cwd, '/home/u/repo')
   assert.equal(first.createdAt, 1776879600000)
   assert.equal(first.lastActiveAt, 1776879730000)
-  assert.equal(first.messageCount, 4)
   assert.equal(first.sourcePath, dbPath)
   assert.equal(sessions.some((s) => String(s.sourcePath).endsWith('.jsonl')), false)
 })
@@ -988,7 +1016,6 @@ test('zed：threads.db 经 host.readSessions 发现（标题/项目/时间）；
       id: '2f8b1c6e-0000-4000-8000-000000000001',
       title: '修登录页分页', directory: '/home/u/proj',
       createdAt: Date.parse('2026-09-15T13:38:45.123Z'), lastActiveAt: Date.parse('2026-09-15T13:40:00.000Z'),
-      messageCount: null,
     }]
   }
 
@@ -1001,7 +1028,6 @@ test('zed：threads.db 经 host.readSessions 发现（标题/项目/时间）；
   assert.equal(s.cwd, '/home/u/proj')
   assert.equal(s.createdAt, Date.parse('2026-09-15T13:38:45.123Z'))
   assert.equal(s.lastActiveAt, Date.parse('2026-09-15T13:40:00.000Z'))
-  assert.equal(s.messageCount, null)
   assert.equal(s.sourcePath, dbPath)
 
   const roots = defaultRoots({ home: HOME })
@@ -1032,9 +1058,9 @@ test('crush：经 projects.json 与宿主工作区探测项目内 crush.db（DB 
   host.dbSessions = (kind, dbPath) => {
     assert.equal(kind, 'crush')
     if (dbPath === dbA) {
-      return [{ id: 'sess-a', title: 'Add retry to fetch', directory: null, createdAt: 1768000001000, lastActiveAt: 1768000123000, messageCount: 4 }]
+      return [{ id: 'sess-a', title: 'Add retry to fetch', directory: null, createdAt: 1768000001000, lastActiveAt: 1768000123000}]
     }
-    return [{ id: 'sess-b', title: '别的项目', directory: null, createdAt: null, lastActiveAt: null, messageCount: null }]
+    return [{ id: 'sess-b', title: '别的项目', directory: null, createdAt: null, lastActiveAt: null}]
   }
 
   const { sessions, total } = await discoverSessions({ path: userDir, format: 'crush', host, imports: {} })
@@ -1044,7 +1070,6 @@ test('crush：经 projects.json 与宿主工作区探测项目内 crush.db（DB 
   assert.equal(a.project, 'proj-a') // 注册表给出的项目路径（DB 里没有 cwd）
   assert.equal(a.cwd, projA)
   assert.equal(a.createdAt, 1768000001000)
-  assert.equal(a.messageCount, 4)
   assert.equal(a.sourcePath, dbA)
   const b = sessions.find((s) => s.sessionId === 'sess-b')
   assert.equal(b.project, 'proj-b') // 宿主工作区探测到的项目
@@ -1139,7 +1164,7 @@ test('importStatus：multi 源子表命中 imported、部分导入 partial', asy
   const files = new Map([[dbPath, { type: 'file', text: '' }]])
   const host = mockHost(files)
   host.dbSessions = (kind) => (kind === 'opencode'
-    ? ['ses-a', 'ses-b', 'ses-c'].map((id) => ({ id, title: 'T ' + id, directory: 'E:/demo/op', createdAt: 1, lastActiveAt: 2, messageCount: 1 }))
+    ? ['ses-a', 'ses-b', 'ses-c'].map((id) => ({ id, title: 'T ' + id, directory: 'E:/demo/op', createdAt: 1, lastActiveAt: 2}))
     : null)
   const imports = {
     [dbPath]: { kind: 'multi', sessions: { 'ses-a': { dshId: 'import-ses-a' }, 'ses-b': { dshId: 'import-ses-b' } } },
@@ -1163,7 +1188,7 @@ test('书签 WAL 盲区：-wal 出现/增长/删除都失效重扫，未变则�
   host.dbSessions = (kind) => {
     if (kind !== 'zcode') return null
     probe++
-    return [{ id: 'zcs-a', title: 'T a', directory: 'E:/demo/z', createdAt: 1, lastActiveAt: 2, messageCount: 1 }]
+    return [{ id: 'zcs-a', title: 'T a', directory: 'E:/demo/z', createdAt: 1, lastActiveAt: 2}]
   }
   const cacheDir = mkdtempSync(join(tmpdir(), 'dsh-scanbm-'))
   // cache 传新 Map 绕过进程内 30s TTL（书签层的行为才是本用例对象）
@@ -1286,7 +1311,6 @@ test('chatgpt：无自动根；path 显式 conversations.json 才解析；默认
   const a = explicit.sessions.find((s) => s.sessionId === 'conv-001')
   assert.equal(a.title, 'Alpha')
   assert.equal(a.createdAt, 1710000000 * 1000) // 秒 → 毫秒
-  assert.equal(a.messageCount, 2)
   assert.equal(a.project, null)
 
   // 默认扫（无 path）→ chatgpt 无自动根，不参与；其余格式根指向不存在的 home → 空
@@ -1342,6 +1366,10 @@ test('isInjectedTitle / normalizeTitle / layoutProject 纯函数', () => {
   assert.equal(layoutProject('/home/u/.gemini/history/slot-a/chats/session-1.json', 'gemini'), 'slot-a')
   assert.equal(layoutProject('/home/u/.cursor/projects/slug-c/agent-transcripts/abc/abc.jsonl', 'cursor'), 'slug-c')
   assert.equal(layoutProject('/home/u/.workbuddy/projects/project-hash-1/wb-sess-0001.jsonl', 'workbuddy'), 'project-hash-1')
+  // antigravity：三套根（2.0 / 旧 CLI / IDE）同内层布局 → 恒定位 antigravity 源标签
+  assert.equal(layoutProject('/home/u/.gemini/antigravity/brain/c1/.system_generated/logs/transcript.jsonl', 'antigravity'), 'antigravity')
+  assert.equal(layoutProject('/home/u/.gemini/antigravity-cli/brain/c1/.system_generated/logs/transcript.jsonl', 'antigravity'), 'antigravity')
+  assert.equal(layoutProject('/home/u/.gemini/antigravity-ide/brain/c1/.system_generated/logs/transcript.jsonl', 'antigravity'), 'antigravity')
 })
 
 test('cursor：slug 解码为真实工作区名分组，<timestamp> 解析时间，非仓库 slug 不归组', async () => {
@@ -1420,9 +1448,10 @@ test('cursor：slug 解码为真实工作区名分组，<timestamp> 解析时间
   assert.equal(numeric.cwd, null)
 })
 
-test('FORMATS 与工具 schema enum 一致（26 种）', () => {
-  assert.equal(FORMATS.length, 26)
-  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'crush', 'cursor', 'dsh', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'teleagent', 'workbuddy', 'zcode', 'zed'])
+test('FORMATS 与工具 schema enum 一致（27 种）', () => {
+  assert.equal(FORMATS.length, 27)
+  // dsh / dsh4 是同一份会话目录的两个日志代次桶（V0–V3 / V4+），来源列表因此能分别只看
+  assert.deepEqual([...FORMATS].sort(), ['antigravity', 'chatgpt', 'claude', 'cline', 'codex', 'continue', 'crush', 'cursor', 'dsh', 'dsh4', 'gemini', 'goose', 'grokbuild', 'hermes', 'kilocode', 'kimi', 'mimocode', 'openclaw', 'opencode', 'pi', 'qoder', 'qwen', 'reasonix', 'teleagent', 'workbuddy', 'zcode', 'zed'])
 })
 
 // ── git 状态（REQ-58）──────────────────────────────────────────────────────
@@ -1621,6 +1650,27 @@ test('dsh：单文件路径自动探测（不给 format）—— 代次工件名
 
 // 项目目录名的 ~XXXX 是宿主 projectKey() 的 code-unit 转义（四位大写十六进制）。
 // 此前按 decodeURIComponent('%XXXX') 解，得到控制字符加字面量余数。
+// dsh 来源按会话日志代次拆两项：v0–v3 归 dsh（V3 会话格式），v4+ 归 dsh4（V4 会话格式）。
+// 同一份 sessions 目录、同一个扫描器，靠文件名里的代次给格式（目录扫描由 scanFormat 的
+// 请求 format 过滤，见 scanDsh 的 onlyFormat）。
+test('dsh / dsh4：按日志代次给格式（v3 → dsh，v4 → dsh4）', async () => {
+  const body = (id) => [
+    j({ type: 'session', id, cwd: '/demo/proj', createdAt: 1700000000000 }),
+    j({ type: 'user/message', seq: 1, data: { content: [{ type: 'text', text: '代次分流' }] } }),
+  ].join('\n')
+  const cases = [
+    ['D:\\demo\\dsh-home\\sessions\\--D-Build--\\session-a\\session.v3.jsonl', 'session-a', 'dsh'],
+    ['D:\\demo\\dsh-home\\sessions\\--D-Build--\\session-b\\session.v4.jsonl', 'session-b', 'dsh4'],
+  ]
+  for (const [file, id, fmt] of cases) {
+    const host = mockHost(new Map([[file, { type: 'file', mtimeMs: 1786000002000, text: body(id) }]]))
+    const { sessions, total } = await discoverSessions({ path: file, host, imports: {} })
+    assert.equal(total, 1, file)
+    assert.equal(sessions[0].sessionId, id)
+    assert.equal(sessions[0].format, fmt, file + ' 应按日志代次归到 ' + fmt)
+  }
+})
+
 test('layoutProject(dsh)：~XXXX 转义按 code unit 还原，不再解成控制字符', () => {
   assert.equal(
     layoutProject('/h/sessions/--Users-u-Documents-Github-DSH~0020Repo--/sid/session.jsonl', 'dsh'),
@@ -1636,7 +1686,7 @@ test('layoutProject(dsh)：~XXXX 转义按 code unit 还原，不再解成控制
   assert.equal(layoutProject('/h/sessions/--x--/sid/other.jsonl', 'dsh'), null)
 })
 
-test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH 自身会话不自扫）', async () => {
+test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH 自身来源例外）', async () => {
   const root = join(HOME, 'dsh-home', 'sessions')
   const proj = join(root, '--proj--')
   const sessNative = join(proj, 'session-native')
@@ -1666,7 +1716,8 @@ test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH
   }
   const persistedIds = new Set(['session-native', 'session-imported'])
 
-  // 1. 全量扫描：原生会话被过滤，已导入和外部未加载会话保留
+  // 1. DSH 来源例外：宿主自己的会话日志也要列出——「从 DSH V3 导入到 DSH V4」这类代次
+  //    迁移的对象正是宿主原生会话，按「已加载」隐藏就等于这个来源永远为空
   const res = await discoverSessions({
     path: root,
     format: 'dsh',
@@ -1674,8 +1725,8 @@ test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH
     imports,
     persistedIds,
   })
-  assert.equal(res.total, 2, '原生会话应被过滤，总数仅保留 2 条')
-  assert.ok(!res.sessions.some((s) => s.sessionId === 'session-native'), '宿主原生会话必须过滤')
+  assert.equal(res.total, 3, 'DSH 来源列出全部会话日志（含宿主原生会话）')
+  assert.ok(res.sessions.some((s) => s.sessionId === 'session-native'), 'DSH 来源必须能列出宿主原生会话')
   assert.ok(res.sessions.some((s) => s.sessionId === 'session-imported'), '已导入会话保留供同步')
   assert.ok(res.sessions.some((s) => s.sessionId === 'session-external'), '未持久化外部会话保留供导入')
 
@@ -1689,8 +1740,8 @@ test('discoverSessions：persistedIds 过滤宿主已加载的原生会话（DSH
     persistedIds,
     onEntry: (e) => streamed.push(e),
   })
-  assert.equal(streamed.length, 2, '流式条目应仅包含 2 条')
-  assert.ok(!streamed.some((s) => s.sessionId === 'session-native'), '流式推送中原生会话不应出现')
+  assert.equal(streamed.length, 3, '流式条目应含 3 条（DSH 来源不过滤原生会话）')
+  assert.ok(streamed.some((s) => s.sessionId === 'session-native'), '流式推送同样要含宿主原生会话（DSH 来源例外）')
 
   // 3. 缺省 persistedIds：不执行过滤（向后兼容）
   const fallback = await discoverSessions({

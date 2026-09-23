@@ -2,10 +2,10 @@
 > **Fork 维护版本** | 本仓库是 [Nwflower/dsh-chat-import](https://github.com/Nwflower/dsh-chat-import) 的维护分支。
 > 
 > **与上游差异**：
-> 1. **导入面板删除增强**：扩展 `lib/client.js` 导入面板，支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
+> 1. **导入面板删除增强**：扩展客户端面板（`src/client/` 与编译产物 `lib/client.js`），支持单个会话及批量多选删除已导入会话记录与原始源文件（`.jsonl` 等），包含二次确认弹窗与状态联动。
 > 2. **源文件清理接口**：新增 `POST /api-import/delete-source` 路由与 `deleteSourceFile` 清理方法（`lib/purge.mjs`、`lib/panel.mjs`），支持物理删除源文件并自动清理 registry 记录及扫描缓存。
-> 3. **跨平台单测修复**：修复 `test/goose.test.mjs` 在 macOS（`darwin`）平台下的 Goose 数据目录路径解析断言。
-> 4. **上游同步保障**：内置 `sync.sh`（Patch-First, Smart-Merge 同步脚本）与 `sync.patch` 补丁文件，便于持续跟踪上游更新。
+> 3. **跨平台单测修复**：修复相关单测在 macOS（`darwin`）环境下的路径解析兼容性。
+> 4. **上游同步保障**：内置 `sync.sh` 与 `sync.patch` 补丁文件，保持与上游最新版本（v0.19.3）同步。
 > 
 > 详见 [sync.patch](./sync.patch)。
 
@@ -65,7 +65,7 @@
   </tr>
   <tr>
     <td align="center" width="20%"><a href="https://github.com/zed-industries/zed"><img src="./assets/agents/zed.svg" width="56" height="56" alt="Zed" /><br /><b>Zed</b></a></td>
-    <td align="center" width="20%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity CLI" /><br /><b>Antigravity CLI</b></a></td>
+    <td align="center" width="20%"><a href="https://antigravity.google"><img src="./assets/agents/antigravity.svg" width="56" height="56" alt="Antigravity" /><br /><b>Antigravity</b></a></td>
     <td align="center" width="20%"><a href="https://chatgpt.com"><img src="./assets/agents/chatgpt.svg" width="56" height="56" alt="ChatGPT" /><br /><b>ChatGPT</b></a></td>
     <td align="center" width="20%"><a href="https://github.com/gabotechs/workbuddy"><img src="./assets/agents/workbuddy.svg" width="56" height="56" alt="WorkBuddy" /><br /><b>WorkBuddy</b></a></td>
     <td align="center" width="20%"><a href="https://github.com/QwenLM/qwen-code"><img src="./assets/agents/qwen.svg" width="56" height="56" alt="Qwen" /><br /><b>Qwen</b></a></td>
@@ -95,6 +95,16 @@ dsh plugin --profile web add dsh-chat-import                    # npm package
 
 1. Import conversations via GUI
   Open the import window from the "Import sessions" button at the bottom of the left sidebar, select the conversations you want to import, and import with one click.
+
+  <table>
+    <tr>
+      <td align="center" width="50%"><img src="./docs/panel-light.png" alt="Import panel — light" /></td>
+      <td align="center" width="50%"><img src="./docs/panel-dark.png" alt="Import panel — dark" /></td>
+    </tr>
+  </table>
+
+  > These screenshots also use the author's other theme plugin, [DSH Claude Style](https://github.com/Nwflower/dsh-claude-style): it recreates the look and feel of Claude Code Desktop inside DSH. If the default theme is not quite your taste, give it a try.
+
 2. Import via Agent tool calls
 
 ```
@@ -118,6 +128,7 @@ For full tool / command usage, see **[docs/USAGE.md](docs/USAGE.md)**.
 | Retract Import | Sidebar panel "History" tab | View import history and delete sessions created by this plugin with one click |
 | Export | Context tool | Serialize DSH sessions back to external agents |
 | Sync | Sidebar panel "Sync" tab | Bidirectional incremental sync between external agents and DSH, off by default |
+| Ignore | Automatic + `/ignores` commands | Archive / delete / workspace-removal auto-registers the source so rescans and sync skip it; `/ignore`, `/unignore` manage the table |
 
 ## Docs
 
@@ -125,9 +136,10 @@ For full tool / command usage, see **[docs/USAGE.md](docs/USAGE.md)**.
 | --- | --- |
 | [Usage Reference](docs/USAGE.md) | Full parameters, examples, and edge cases for every tool / command |
 | [Interchange Protocol](docs/INTERCHANGE.md) | Interchange v1 protocol and bundle format |
+| [Settings Migration](docs/SETTINGS-MIGRATION.md) | DSH 0.1.5 → 0.1.7 plugin settings-page migration (measured errors, compatibility recipe) |
 | [Changelog](CHANGELOG.md) | Version history |
-| [Roadmap](ROADMAP.md) | Shipped / planned |
-| [Contributing](CONTRIBUTING.md) | Development setup, commit rules, security & privacy |
+| [Roadmap](docs/ROADMAP.md) | Shipped / planned |
+| [Contributing](docs/CONTRIBUTING.md) | Development setup, commit rules, security & privacy |
 
 ## Related Links
 

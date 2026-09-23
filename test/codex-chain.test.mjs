@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import {
   codexThreadIdFromName, codexNameTimestamp, groupCodexThreads, sortCodexPages,
   codexChainStat, codexSessionsAncestor, resolveCodexChain,
-} from '../lib/codex.mjs'
+} from '../lib/sources/codex.mjs'
 import { convertCodexJsonl } from '../lib/convert/codex.mjs'
 
 const THREAD = '0f1e2d3c-4b5a-6978-8901-2abcdef01234'

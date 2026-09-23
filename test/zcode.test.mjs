@@ -10,9 +10,9 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, statSync } from 'n
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { apply } from '../index.mjs'
-import { convertZcodeJson, SESSION_FORMAT_VERSION } from '../convert.mjs'
-import { readZcodeDb, readZcodeTranscript } from '../lib/zcode.mjs'
+import { apply } from '../lib/index.mjs'
+import { convertZcodeJson, SESSION_FORMAT_VERSION } from '../lib/convert/index.mjs'
+import { readZcodeDb, readZcodeTranscript } from '../lib/sources/zcode.mjs'
 import { resolveRegistryDir, loadImports } from '../lib/imports.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import { hostAbs } from './_support/host-path.mjs'
@@ -290,7 +290,7 @@ test('convertZcodeJson: 简单问答、元数据、平衡回合', () => {
   assertEnvelopeHygiene(out.events)
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
+    'turn/start', 'step/start', 'system/message', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end', 'session/title',
   ])
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   for (const e of out.events.filter((e) => e.type === 'user/message' || e.type === 'assistant/message' || e.type === 'tool/result')) {
@@ -674,6 +674,21 @@ test('import_zcode sessionIds 补导：库未变时再选未导过的会话仍�
   const third = await def.execute({ path: dbPath, sessionIds: ['zcs-a'] })
   assert.equal(third.imported, 0)
   assert.equal(persistence.sessions.size, 2)
+})
+
+test('import_zcode sessionIds 补导：父 registry 保留之前已导入的会话', async () => {
+  // 选择性导入只处理本次勾选的会话；写回父记录时不能丢掉之前已登记的子会话，
+  // 否则 imports.json 会失去它们的归属，历史/撤回/增量同步无法再定位。
+  const dbPath = makeZcodeDb(zcodeTestSessions())
+  const { ctx } = makeCtx({})
+  apply(ctx)
+  const def = chatDef(ctx, 'zcode')
+  await def.execute({ path: dbPath, sessionIds: ['zcs-a'] })
+  await def.execute({ path: dbPath, sessionIds: ['zcs-b'] })
+
+  const registry = await loadImports(resolveRegistryDir())
+  const record = registry.imports[dbPath]
+  assert.deepEqual(Object.keys(record.sessions).sort(), ['zcs-a', 'zcs-b'])
 })
 
 test('import_zcode db 缺失回退 transcript.jsonl：不报错、0 skipped', async () => {

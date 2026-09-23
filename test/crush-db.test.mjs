@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { readCrushSessions, readCrushDb, crushProjectPathFor, crushDeriveArgs } from '../lib/crush.mjs'
+import { readCrushSessions, readCrushDb, crushProjectPathFor, crushDeriveArgs } from '../lib/sources/crush.mjs'
 import { crushProjectDbPath } from '../lib/convert/crush.mjs'
 
 // 上游 8 个 goose 迁移合并后的形状（列名逐字）
@@ -87,7 +87,6 @@ test('readCrushSessions：root 会话摘要 + Unix 秒时间戳；子会话与 t
     assert.deepEqual(rows.map((r) => r.id).sort(), [SID, 'second'])
     const first = rows.find((r) => r.id === SID)
     assert.equal(first.title, 'Add retry to fetch')
-    assert.equal(first.messageCount, 4)
     assert.equal(first.createdAt, CREATED * 1000) // Unix 秒 → 毫秒
     assert.equal(first.updatedAt, UPDATED * 1000)
   })

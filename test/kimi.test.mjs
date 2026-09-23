@@ -104,7 +104,7 @@ test('convertKimiWire: 简单问答（TurnBegin/StepBegin/TextPart/TurnEnd）、
   assert.ok(!out.events.some((e) => e.type === 'session/title'))
   const types = out.events.map((e) => e.type)
   assert.deepEqual(types, [
-    'turn/start', 'step/start', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
+    'turn/start', 'step/start', 'system/message', 'user/message', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   assertEnvelopeHygiene(out.events)
@@ -222,7 +222,7 @@ test('convertKimiWire: 无 StepBegin 的内容挂隐式步骤（slash 回复等�
   const asst = out.events.find((e) => e.type === 'assistant/message')
   assert.equal(asst.data.message.content[0].text, '无 StepBegin 的回复')
   // turn 外文本未进入任何事件
-  assert.ok(!out.events.some((e) => e.data && e.data.message && e.data.message.content && e.data.message.content[0].text === 'turn 外回复（忽略）'))
+  assert.ok(!out.events.some((e) => e.data?.message?.content?.[0]?.text === 'turn 外回复（忽略）'))
 })
 
 test('convertKimiWire: 中断的 ToolCall 补发空 tool/result（配对不变量）', () => {

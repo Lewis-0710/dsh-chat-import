@@ -10,8 +10,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.mjs'
-import { convertChatgptJson } from '../convert.mjs'
+import { apply } from '../lib/index.mjs'
+import { convertChatgptJson } from '../lib/convert/index.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
 beforeEach(() => {
